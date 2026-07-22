@@ -4,10 +4,14 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\ChatMessageController;
 use App\Http\Controllers\CourtController;
 use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\EvaluationController;
+use App\Http\Controllers\LivestreamController;
+use App\Http\Controllers\MatchController;
 use App\Http\Controllers\MatchmakingRequestController;
+use App\Http\Controllers\NewsController;
 use App\Http\Controllers\PlayerProfileController;
 use App\Http\Controllers\SkillLevelController;
 use App\Http\Controllers\TournamentController;
@@ -30,6 +34,14 @@ Route::get('/venues/{venue}/availability', [VenueController::class, 'availabilit
 
 Route::get('/tournaments', [TournamentController::class, 'index']);
 Route::get('/tournaments/{tournament}', [TournamentController::class, 'show']);
+Route::get('/tournaments/{tournament}/bracket', [TournamentController::class, 'bracket']);
+
+Route::get('/news', [NewsController::class, 'index']);
+Route::get('/news/{news}', [NewsController::class, 'show']);
+
+Route::get('/livestreams', [LivestreamController::class, 'index']);
+Route::get('/livestreams/{livestream}', [LivestreamController::class, 'show']);
+Route::get('/livestreams/{livestream}/messages', [ChatMessageController::class, 'index']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -98,4 +110,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/evaluations', [EvaluationController::class, 'index']);
         Route::post('/evaluations', [EvaluationController::class, 'store']);
     });
+
+    Route::middleware('role:organizer|admin')->group(function () {
+        Route::post('/tournaments', [TournamentController::class, 'store']);
+        Route::patch('/tournaments/{tournament}', [TournamentController::class, 'update']);
+        Route::post('/tournaments/{tournament}/generate-bracket', [TournamentController::class, 'generateBracket']);
+
+        Route::patch('/matches/{match}/score', [MatchController::class, 'updateScore']);
+
+        Route::post('/news', [NewsController::class, 'store']);
+        Route::patch('/news/{news}', [NewsController::class, 'update']);
+        Route::delete('/news/{news}', [NewsController::class, 'destroy']);
+
+        Route::post('/livestreams', [LivestreamController::class, 'store']);
+        Route::patch('/livestreams/{livestream}', [LivestreamController::class, 'update']);
+        Route::delete('/livestreams/{livestream}', [LivestreamController::class, 'destroy']);
+    });
+
+    Route::post('/livestreams/{livestream}/messages', [ChatMessageController::class, 'store']);
 });

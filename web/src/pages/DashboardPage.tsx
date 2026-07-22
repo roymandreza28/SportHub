@@ -43,6 +43,12 @@ export function DashboardPage() {
         </Link>
       </RoleGate>
 
+      <RoleGate roles={['organizer']}>
+        <Link to="/organizer" className="rounded bg-violet-100 p-2 text-sm text-violet-900">
+          Go to Organizer panel
+        </Link>
+      </RoleGate>
+
       <button onClick={handleLogout} className="rounded bg-gray-800 px-3 py-2 text-white">
         Log out
       </button>
