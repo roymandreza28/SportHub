@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\SystemMetricUpdated;
 use App\Models\Venue;
 use Illuminate\Http\Request;
 
@@ -38,6 +39,8 @@ class VenueController extends Controller
         ]);
 
         $venue = $request->user()->venues()->create($data);
+
+        SystemMetricUpdated::dispatch('total_venues', Venue::count());
 
         return response()->json($venue, 201);
     }

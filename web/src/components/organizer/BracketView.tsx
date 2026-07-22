@@ -1,5 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchBracket, type BracketMatch } from '../../lib/organizerApi'
+import { echo } from '../../lib/echo'
 
 function MatchCard({ match, onClick }: { match: BracketMatch; onClick?: () => void }) {
   const aName = match.participant_a?.name ?? (match.participant_a_id ? `#${match.participant_a_id}` : 'TBD')
@@ -31,11 +33,25 @@ export function BracketView({
   tournamentId: number
   onSelectMatch?: (match: BracketMatch) => void
 }) {
+  const queryClient = useQueryClient()
   const { data: bracket, isLoading } = useQuery({
     queryKey: ['organizer', 'bracket', tournamentId],
     queryFn: () => fetchBracket(tournamentId),
     retry: false,
   })
+
+  // Public channel — spectators watching the bracket see round advances and
+  // score-driven bracket changes live, without a manual refresh.
+  useEffect(() => {
+    const channel = echo.channel(`tournament.${tournamentId}`)
+    const invalidate = () => queryClient.invalidateQueries({ queryKey: ['organizer', 'bracket', tournamentId] })
+
+    channel.listen('.BracketUpdated', invalidate).listen('.RoundAdvanced', invalidate)
+
+    return () => {
+      echo.leave(`tournament.${tournamentId}`)
+    }
+  }, [tournamentId, queryClient])
 
   if (isLoading) return <p className="text-sm text-gray-500">Loading bracket...</p>
   if (!bracket) return <p className="text-sm text-gray-500">No bracket generated yet.</p>

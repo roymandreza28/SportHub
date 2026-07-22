@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\ChatMessageSent;
 use App\Models\Livestream;
 use Illuminate\Http\Request;
 
@@ -26,6 +27,10 @@ class ChatMessageController extends Controller
             'body' => $data['body'],
         ]);
 
-        return response()->json($message->load('user:id,name'), 201);
+        $message->load('user:id,name');
+
+        ChatMessageSent::dispatch($message);
+
+        return response()->json($message, 201);
     }
 }

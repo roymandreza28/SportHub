@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Events\BracketUpdated;
+use App\Events\RoundAdvanced;
 use App\Models\Bracket;
 use App\Models\GameMatch;
 use App\Models\Tournament;
@@ -27,7 +29,10 @@ class BracketService
 
         $bracket->update(['structure' => $this->buildStructure($bracket)]);
 
-        return $bracket->fresh();
+        $bracket = $bracket->fresh();
+        BracketUpdated::dispatch($bracket);
+
+        return $bracket;
     }
 
     protected function generateRoundRobin(Bracket $bracket, Collection $playerIds): void
@@ -130,6 +135,7 @@ class BracketService
         if ($nextRoundMatches->isEmpty()) {
             $tournament->update(['status' => 'completed']);
             $bracket->update(['structure' => $this->buildStructure($bracket)]);
+            BracketUpdated::dispatch($bracket->fresh());
 
             return;
         }
@@ -138,10 +144,18 @@ class BracketService
         $slot = $index % 2 === 0 ? 'participant_a_id' : 'participant_b_id';
         $nextMatch->update([$slot => $match->winner_id]);
 
+        $didAdvanceRound = $match->round + 1 > $bracket->current_round;
+
         $bracket->update([
             'current_round' => max($bracket->current_round, $match->round + 1),
             'structure' => $this->buildStructure($bracket),
         ]);
+
+        BracketUpdated::dispatch($bracket->fresh());
+
+        if ($didAdvanceRound) {
+            RoundAdvanced::dispatch($tournament->id, $match->round + 1);
+        }
     }
 
     public function buildStructure(Bracket $bracket): array

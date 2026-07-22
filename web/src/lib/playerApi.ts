@@ -66,3 +66,18 @@ export async function createVenueRegistration(input: {
   const { data } = await api.post('/api/venue-registrations', input)
   return data
 }
+
+export type MyVenueRegistration = {
+  id: number
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  starts_at: string
+  ends_at: string
+  purpose: string | null
+  venue: { id: number; name: string }
+  court: { id: number; name: string } | null
+}
+
+export async function fetchMyVenueRegistrations() {
+  const { data } = await api.get<MyVenueRegistration[]>('/api/venue-registrations/mine')
+  return data
+}

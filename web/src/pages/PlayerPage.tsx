@@ -5,6 +5,7 @@ import { VenueDirectory } from '../components/player/VenueDirectory'
 import { VenueRegistrationForm } from '../components/player/VenueRegistrationForm'
 import { PlayerProfileEditor } from '../components/player/PlayerProfileEditor'
 import { MatchmakingPanel } from '../components/player/MatchmakingPanel'
+import { MyBookings } from '../components/player/MyBookings'
 
 export function PlayerPage() {
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
@@ -20,6 +21,8 @@ export function PlayerPage() {
 
       <PlayerProfileEditor />
       <MatchmakingPanel />
+
+      <MyBookings />
 
       <VenueDirectory onSelect={setSelectedVenue} selectedId={selectedVenue?.id} />
       {selectedVenue && <VenueRegistrationForm venue={selectedVenue} />}

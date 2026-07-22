@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchVenueSchedule, updateVenueRegistration, type Venue } from '../../lib/venueApi'
+import { echo } from '../../lib/echo'
 
 export function RegistrationApprovalQueue({ venue }: { venue: Venue }) {
   const queryClient = useQueryClient()
@@ -7,6 +9,17 @@ export function RegistrationApprovalQueue({ venue }: { venue: Venue }) {
     queryKey: ['facilitator', 'schedule', venue.id],
     queryFn: () => fetchVenueSchedule(venue.id),
   })
+
+  useEffect(() => {
+    const channel = echo.private(`venue.${venue.id}.schedule`)
+    channel.listen('.VenueRegistrationUpdated', () =>
+      queryClient.invalidateQueries({ queryKey: ['facilitator', 'schedule', venue.id] })
+    )
+
+    return () => {
+      echo.leave(`venue.${venue.id}.schedule`)
+    }
+  }, [venue.id, queryClient])
 
   const respond = useMutation({
     mutationFn: ({ id, status }: { id: number; status: 'approved' | 'rejected' }) =>

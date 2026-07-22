@@ -81,6 +81,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::middleware('role:player')->group(function () {
+        Route::get('/venue-registrations/mine', [VenueRegistrationController::class, 'mine']);
         Route::post('/venue-registrations', [VenueRegistrationController::class, 'store']);
 
         Route::get('/player-profile', [PlayerProfileController::class, 'show']);

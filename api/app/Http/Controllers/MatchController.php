@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\MatchEventCreated;
+use App\Events\MatchStatusChanged;
 use App\Models\GameMatch;
 use App\Models\MatchEvent;
 use App\Services\BracketService;
@@ -21,11 +23,13 @@ class MatchController extends Controller
 
         $match->update($data);
 
-        MatchEvent::create([
+        $matchEvent = MatchEvent::create([
             'match_id' => $match->id,
             'type' => 'point',
             'payload' => ['score_a' => $match->score_a, 'score_b' => $match->score_b],
         ]);
+
+        MatchEventCreated::dispatch($matchEvent);
 
         if (($data['status'] ?? null) === 'completed') {
             $winnerId = match (true) {
@@ -40,6 +44,8 @@ class MatchController extends Controller
                 $bracketService->advanceWinner($match->fresh());
             }
         }
+
+        MatchStatusChanged::dispatch($match->fresh());
 
         return $match->fresh(['participantA:id,name', 'participantB:id,name', 'winner:id,name']);
     }

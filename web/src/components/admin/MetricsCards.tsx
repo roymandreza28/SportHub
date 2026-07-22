@@ -1,8 +1,24 @@
-import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchMetrics } from '../../lib/adminApi'
+import { echo } from '../../lib/echo'
 
 export function MetricsCards() {
+  const queryClient = useQueryClient()
   const { data, isLoading } = useQuery({ queryKey: ['admin', 'metrics'], queryFn: fetchMetrics })
+
+  // Nudges a refetch whenever a metric-affecting action happens elsewhere
+  // (e.g. a facilitator or venue is created) instead of waiting on a poll.
+  useEffect(() => {
+    const channel = echo.private('admin.monitoring')
+    channel.listen('.SystemMetricUpdated', () =>
+      queryClient.invalidateQueries({ queryKey: ['admin', 'metrics'] })
+    )
+
+    return () => {
+      echo.leave('admin.monitoring')
+    }
+  }, [queryClient])
 
   if (isLoading || !data) return <p className="text-sm text-gray-500">Loading metrics...</p>
 

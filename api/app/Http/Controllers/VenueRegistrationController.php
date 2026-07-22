@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\VenueRegistrationUpdated;
 use App\Models\Court;
 use App\Models\VenueRegistration;
 use Illuminate\Http\Request;
@@ -9,6 +10,14 @@ use Illuminate\Validation\ValidationException;
 
 class VenueRegistrationController extends Controller
 {
+    public function mine(Request $request)
+    {
+        return $request->user()->venueRegistrations()
+            ->with('venue:id,name', 'court:id,name')
+            ->orderByDesc('starts_at')
+            ->get();
+    }
+
     public function store(Request $request)
     {
         $this->authorize('create', VenueRegistration::class);
@@ -43,6 +52,8 @@ class VenueRegistrationController extends Controller
             'status' => 'pending',
         ]);
 
+        VenueRegistrationUpdated::dispatch($registration);
+
         return response()->json($registration->load('venue:id,name', 'court:id,name'), 201);
     }
 
@@ -55,6 +66,8 @@ class VenueRegistrationController extends Controller
         ]);
 
         $venueRegistration->update($data);
+
+        VenueRegistrationUpdated::dispatch($venueRegistration->fresh());
 
         return $venueRegistration->load('user:id,name,email', 'court:id,name');
     }

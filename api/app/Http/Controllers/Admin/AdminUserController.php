@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Events\SystemMetricUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Role;
 
 class AdminUserController extends Controller
 {
@@ -59,6 +61,9 @@ class AdminUserController extends Controller
         $facilitator->assignRole('venue_facilitator');
 
         AuditLog::record($request->user(), 'facilitator.created', $facilitator);
+
+        $facilitatorCount = Role::findByName('venue_facilitator')->users()->count();
+        SystemMetricUpdated::dispatch('facilitator_count', $facilitatorCount);
 
         return response()->json([
             ...$facilitator->toArray(),

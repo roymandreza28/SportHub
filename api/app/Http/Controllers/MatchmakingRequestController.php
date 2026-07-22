@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\MatchmakingPairFound;
 use App\Models\MatchmakingMatch;
 use App\Models\MatchmakingRequest;
 use Illuminate\Http\Request;
@@ -71,6 +72,8 @@ class MatchmakingRequestController extends Controller
                 ]);
                 $candidate->update(['status' => 'matched']);
                 $mine->update(['status' => 'matched']);
+
+                MatchmakingPairFound::dispatch($candidate->fresh(), $mine->fresh());
             }
 
             return response()->json($mine->fresh('sport'), 201);

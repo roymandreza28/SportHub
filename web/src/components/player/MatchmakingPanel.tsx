@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { cancelMatchmakingRequest, createMatchmakingRequest, fetchMyMatchmakingRequests } from '../../lib/playerApi'
 import { fetchSports } from '../../lib/venueApi'
+import { useAuth } from '../../lib/AuthContext'
+import { echo } from '../../lib/echo'
 
 const STATUS_LABEL: Record<string, string> = {
   open: 'Looking for a match...',
@@ -11,16 +13,31 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 export function MatchmakingPanel() {
+  const { user } = useAuth()
   const queryClient = useQueryClient()
   const { data: sports } = useQuery({ queryKey: ['sports'], queryFn: fetchSports })
   const { data: requests } = useQuery({
     queryKey: ['player', 'matchmaking'],
     queryFn: fetchMyMatchmakingRequests,
-    refetchInterval: 5000,
+    // Real-time (below) is the primary update path; this is just a safety
+    // net in case the socket connection drops.
+    refetchInterval: 30000,
   })
   const [sportId, setSportId] = useState<number | ''>('')
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['player', 'matchmaking'] })
+
+  useEffect(() => {
+    if (!user) return
+
+    const channel = echo.private(`matchmaking.${user.id}`)
+    channel.listen('.MatchmakingPairFound', () => invalidate())
+
+    return () => {
+      echo.leave(`matchmaking.${user.id}`)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
 
   const request = useMutation({
     mutationFn: () => createMatchmakingRequest({ sport_id: Number(sportId) }),
