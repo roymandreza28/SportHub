@@ -25,10 +25,12 @@ class AuthController extends Controller
             'password' => Hash::make($data['password']),
         ]);
 
+        $user->assignRole('player');
+
         Auth::login($user);
         $request->session()->regenerate();
 
-        return response()->json($user);
+        return response()->json($this->withRoles($user));
     }
 
     public function login(Request $request)
@@ -46,7 +48,7 @@ class AuthController extends Controller
 
         $request->session()->regenerate();
 
-        return response()->json(Auth::user());
+        return response()->json($this->withRoles(Auth::user()));
     }
 
     public function logout(Request $request)
@@ -56,5 +58,13 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
 
         return response()->noContent();
+    }
+
+    protected function withRoles(User $user): array
+    {
+        return [
+            ...$user->toArray(),
+            'roles' => $user->getRoleNames()->values(),
+        ];
     }
 }

@@ -1,10 +1,13 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { api, ensureCsrfCookie } from './api'
 
+export type Role = 'admin' | 'organizer' | 'venue_facilitator' | 'player' | 'coach'
+
 type User = {
   id: number
   name: string
   email: string
+  roles: Role[]
 }
 
 type AuthContextValue = {
@@ -13,6 +16,7 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string, passwordConfirmation: string) => Promise<void>
   logout: () => Promise<void>
+  hasRole: (...roles: Role[]) => boolean
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -58,8 +62,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
+  function hasRole(...roles: Role[]) {
+    return roles.some((role) => user?.roles.includes(role))
+  }
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, hasRole }}>
       {children}
     </AuthContext.Provider>
   )
