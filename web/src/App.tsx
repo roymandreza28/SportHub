@@ -8,6 +8,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { AdminPage } from './pages/AdminPage'
 import { FacilitatorPage } from './pages/FacilitatorPage'
 import { PlayerPage } from './pages/PlayerPage'
+import { CoachPage } from './pages/CoachPage'
 
 const queryClient = new QueryClient()
 
@@ -49,6 +50,14 @@ function App() {
               element={
                 <ProtectedRoute roles={['player']}>
                   <PlayerPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/coach"
+              element={
+                <ProtectedRoute roles={['coach']}>
+                  <CoachPage />
                 </ProtectedRoute>
               }
             />

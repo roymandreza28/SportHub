@@ -6,12 +6,16 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\CourtController;
 use App\Http\Controllers\EquipmentController;
+use App\Http\Controllers\EvaluationController;
 use App\Http\Controllers\MatchmakingRequestController;
 use App\Http\Controllers\PlayerProfileController;
 use App\Http\Controllers\SkillLevelController;
+use App\Http\Controllers\TournamentController;
+use App\Http\Controllers\TournamentRegistrationController;
 use App\Http\Controllers\VenueController;
 use App\Http\Controllers\VenueRegistrationController;
 use App\Models\Sport;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -23,6 +27,9 @@ Route::get('/sports', fn () => Sport::orderBy('name')->get());
 Route::get('/venues', [VenueController::class, 'index']);
 Route::get('/venues/{venue}', [VenueController::class, 'show']);
 Route::get('/venues/{venue}/availability', [VenueController::class, 'availability']);
+
+Route::get('/tournaments', [TournamentController::class, 'index']);
+Route::get('/tournaments/{tournament}', [TournamentController::class, 'show']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -72,5 +79,23 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/matchmaking-requests/mine', [MatchmakingRequestController::class, 'mine']);
         Route::post('/matchmaking-requests', [MatchmakingRequestController::class, 'store']);
         Route::delete('/matchmaking-requests/{matchmakingRequest}', [MatchmakingRequestController::class, 'destroy']);
+    });
+
+    Route::middleware('role:coach')->group(function () {
+        Route::get('/players', function (Request $request) {
+            $search = $request->string('search')->toString();
+
+            return User::role('player')
+                ->when($search, fn ($q, $s) => $q
+                    ->where(fn ($q2) => $q2->where('name', 'ilike', "%{$s}%")->orWhere('email', 'ilike', "%{$s}%")))
+                ->orderBy('name')
+                ->limit(20)
+                ->get(['id', 'name', 'email']);
+        });
+
+        Route::post('/tournaments/{tournament}/registrations', [TournamentRegistrationController::class, 'store']);
+
+        Route::get('/evaluations', [EvaluationController::class, 'index']);
+        Route::post('/evaluations', [EvaluationController::class, 'store']);
     });
 });
