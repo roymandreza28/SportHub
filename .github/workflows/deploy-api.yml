@@ -1,0 +1,36 @@
+name: Deploy API to Railway
+
+# Gated behind CI: this only fires once the CI workflow run on main has
+# actually finished, and only proceeds if that run succeeded — so a failing
+# test suite can never reach a deploy. The web app isn't deployed from here;
+# Vercel's own Git integration handles it directly (see docs/DEPLOYMENT.md).
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: npm install -g @railway/cli
+
+      # Each Railway service (web, reverb) is pre-configured in the Railway
+      # dashboard with Root Directory=api and its own Config File Path
+      # (railway.web.json / railway.reverb.json respectively) — `railway up
+      # -s <service>` just triggers that service's already-configured build.
+      - name: Deploy web service
+        working-directory: api
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --detach -s web
+
+      - name: Deploy reverb service
+        working-directory: api
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --detach -s reverb

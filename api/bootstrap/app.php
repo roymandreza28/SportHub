@@ -17,6 +17,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Railway (like most PaaS hosts) terminates TLS at its edge proxy and
+        // forwards plain HTTP internally. Without trusting that proxy here,
+        // Laravel sees every request as http, which mismarks secure cookies
+        // and breaks the SESSION_SECURE_COOKIE / cross-subdomain cookie setup
+        // that Sanctum's SPA auth depends on in production.
+        $middleware->trustProxies(at: '*');
+
         $middleware->statefulApi();
         $middleware->redirectGuestsTo(fn () => null);
 

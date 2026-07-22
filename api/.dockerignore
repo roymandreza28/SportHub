@@ -1,0 +1,14 @@
+vendor
+node_modules
+.env
+.env.*
+!.env.example
+!.env.production.example
+.git
+.phpunit.cache
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+tests
+.github

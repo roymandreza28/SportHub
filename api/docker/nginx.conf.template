@@ -1,0 +1,42 @@
+worker_processes auto;
+pid /run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include mime.types;
+    default_type application/octet-stream;
+    sendfile on;
+
+    server {
+        # Railway assigns the public port at runtime via $PORT; entrypoint.sh
+        # renders this template with envsubst before nginx starts.
+        listen ${PORT};
+        server_name _;
+        root /var/www/html/public;
+        index index.php;
+
+        client_max_body_size 20M;
+
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+        }
+
+        location = /up {
+            try_files /index.php /index.php?$query_string;
+        }
+
+        location ~ \.php$ {
+            fastcgi_pass 127.0.0.1:9000;
+            fastcgi_index index.php;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            include fastcgi_params;
+        }
+
+        location ~ /\.(?!well-known).* {
+            deny all;
+        }
+    }
+}

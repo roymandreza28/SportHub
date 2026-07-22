@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sporthub
+          POSTGRES_PASSWORD: sporthub_local_dev
+          POSTGRES_DB: sporthub_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo, pdo_pgsql, mbstring, bcmath, pcntl, zip
+          coverage: none
+
+      - name: Cache composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: api/vendor
+          key: composer-${{ hashFiles('api/composer.lock') }}
+
+      - run: composer install --no-interaction --prefer-dist
+      - run: cp .env.example .env
+      - run: php artisan key:generate
+      - run: php artisan test
+
+  web-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+      - run: npm run test
+      - run: npm run build
