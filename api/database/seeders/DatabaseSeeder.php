@@ -26,11 +26,17 @@ class DatabaseSeeder extends Seeder
         ];
 
         foreach ($demoUsers as $role => $name) {
-            User::factory()->create([
-                'name' => $name,
-                'email' => "{$role}@sporthub.test",
-                'password' => bcrypt('password'),
-            ])->assignRole($role);
+            $user = User::firstOrCreate(
+                ['email' => "{$role}@sporthub.test"],
+                ['name' => $name, 'password' => bcrypt('password')]
+            );
+
+            if (! $user->hasRole($role)) {
+                $user->assignRole($role);
+            }
         }
+
+        $this->call(SportsSeeder::class);
+        $this->call(SampleDataSeeder::class);
     }
 }
