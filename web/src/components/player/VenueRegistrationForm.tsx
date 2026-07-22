@@ -73,6 +73,7 @@ export function VenueRegistrationForm({ venue }: { venue: Venue }) {
       <p className="text-xs text-gray-600">Select a free time slot on the calendar (grey = already booked)</p>
 
       <FullCalendar
+        schedulerLicenseKey="CC-Attribution-NonCommercial-NoDerivatives"
         plugins={[resourceTimeGridPlugin, interactionPlugin]}
         initialView="resourceTimeGridDay"
         resources={resources}

@@ -11,6 +11,7 @@ class AuditLogController extends Controller
     {
         return AuditLog::with('actor:id,name,email')
             ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->paginate(20);
     }
 }

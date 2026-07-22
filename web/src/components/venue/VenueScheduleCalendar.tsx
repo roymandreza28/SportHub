@@ -30,6 +30,7 @@ export function VenueScheduleCalendar({ venue }: { venue: Venue }) {
   return (
     <div className="rounded border p-2">
       <FullCalendar
+        schedulerLicenseKey="CC-Attribution-NonCommercial-NoDerivatives"
         plugins={[resourceTimeGridPlugin, interactionPlugin]}
         initialView="resourceTimeGridDay"
         resources={resources}
