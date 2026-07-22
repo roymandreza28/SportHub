@@ -88,4 +88,19 @@ class VenueController extends Controller
                 'user' => $registration->user,
             ]);
     }
+
+    public function availability(Venue $venue)
+    {
+        return $venue->venueRegistrations()
+            ->whereIn('status', ['pending', 'approved'])
+            ->orderBy('starts_at')
+            ->get(['id', 'court_id', 'starts_at', 'ends_at'])
+            ->map(fn ($registration) => [
+                'id' => $registration->id,
+                'title' => 'Booked',
+                'start' => $registration->starts_at,
+                'end' => $registration->ends_at,
+                'resourceId' => $registration->court_id,
+            ]);
+    }
 }

@@ -7,9 +7,13 @@ use App\Models\VenueRegistration;
 
 class VenueRegistrationPolicy
 {
+    public function create(User $user): bool
+    {
+        return $user->can('create venue registration');
+    }
+
     /**
      * Determine whether the user can approve/reject the registration.
-     * (Player-side creation is authorized separately when that endpoint is built.)
      */
     public function update(User $user, VenueRegistration $venueRegistration): bool
     {

@@ -6,6 +6,9 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\CourtController;
 use App\Http\Controllers\EquipmentController;
+use App\Http\Controllers\MatchmakingRequestController;
+use App\Http\Controllers\PlayerProfileController;
+use App\Http\Controllers\SkillLevelController;
 use App\Http\Controllers\VenueController;
 use App\Http\Controllers\VenueRegistrationController;
 use App\Models\Sport;
@@ -19,6 +22,7 @@ Route::get('/sports', fn () => Sport::orderBy('name')->get());
 
 Route::get('/venues', [VenueController::class, 'index']);
 Route::get('/venues/{venue}', [VenueController::class, 'show']);
+Route::get('/venues/{venue}/availability', [VenueController::class, 'availability']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -55,5 +59,18 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/equipment/{equipment}', [EquipmentController::class, 'destroy']);
 
         Route::patch('/venue-registrations/{venueRegistration}', [VenueRegistrationController::class, 'update']);
+    });
+
+    Route::middleware('role:player')->group(function () {
+        Route::post('/venue-registrations', [VenueRegistrationController::class, 'store']);
+
+        Route::get('/player-profile', [PlayerProfileController::class, 'show']);
+        Route::patch('/player-profile', [PlayerProfileController::class, 'update']);
+
+        Route::get('/skill-levels/mine', [SkillLevelController::class, 'mine']);
+
+        Route::get('/matchmaking-requests/mine', [MatchmakingRequestController::class, 'mine']);
+        Route::post('/matchmaking-requests', [MatchmakingRequestController::class, 'store']);
+        Route::delete('/matchmaking-requests/{matchmakingRequest}', [MatchmakingRequestController::class, 'destroy']);
     });
 });

@@ -124,3 +124,10 @@ export async function fetchSports() {
   const { data } = await api.get<Sport[]>('/api/sports')
   return data
 }
+
+export type AvailabilityEvent = { id: number; title: string; start: string; end: string; resourceId: number | null }
+
+export async function fetchVenueAvailability(venueId: number) {
+  const { data } = await api.get<AvailabilityEvent[]>(`/api/venues/${venueId}/availability`)
+  return data
+}

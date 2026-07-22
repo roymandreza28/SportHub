@@ -31,6 +31,12 @@ export function DashboardPage() {
         </Link>
       </RoleGate>
 
+      <RoleGate roles={['player']}>
+        <Link to="/player" className="rounded bg-emerald-100 p-2 text-sm text-emerald-900">
+          Go to Player panel
+        </Link>
+      </RoleGate>
+
       <button onClick={handleLogout} className="rounded bg-gray-800 px-3 py-2 text-white">
         Log out
       </button>

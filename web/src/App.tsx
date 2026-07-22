@@ -7,6 +7,7 @@ import { RegisterPage } from './pages/RegisterPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { AdminPage } from './pages/AdminPage'
 import { FacilitatorPage } from './pages/FacilitatorPage'
+import { PlayerPage } from './pages/PlayerPage'
 
 const queryClient = new QueryClient()
 
@@ -40,6 +41,14 @@ function App() {
               element={
                 <ProtectedRoute roles={['venue_facilitator', 'admin']}>
                   <FacilitatorPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/player"
+              element={
+                <ProtectedRoute roles={['player']}>
+                  <PlayerPage />
                 </ProtectedRoute>
               }
             />
