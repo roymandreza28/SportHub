@@ -205,7 +205,7 @@ export function LandingPage() {
 
       <header
         id="home"
-        className="relative overflow-hidden bg-cover bg-center text-white"
+        className="relative scroll-mt-16 overflow-hidden bg-cover bg-center text-white"
         style={{
           backgroundImage:
             'linear-gradient(160deg, rgba(9, 38, 38, 0.82), rgba(11, 61, 58, 0.72)), url(/hero.jpg)',
@@ -241,7 +241,7 @@ export function LandingPage() {
         </div>
       </header>
 
-      <section id="features" className="mx-auto max-w-6xl px-6 py-24">
+      <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-24">
         <p className="text-sm font-semibold uppercase tracking-widest text-teal-600">Features</p>
         <h2 className="mt-2 max-w-2xl text-3xl font-extrabold text-balance text-slate-900 sm:text-4xl">
           Key tools for better community sports management.
@@ -251,9 +251,9 @@ export function LandingPage() {
           {FEATURES.map((feature) => (
             <div
               key={feature.title}
-              className="rounded-xl border border-slate-100 bg-slate-50/60 p-6 transition hover:border-teal-100 hover:bg-teal-50/40"
+              className="group rounded-xl border border-slate-100 bg-slate-50/60 p-6 transition hover:border-teal-100 hover:bg-teal-50/40"
             >
-              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-teal-100 text-teal-700">
+              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-teal-100 text-teal-700 transition-transform duration-300 group-hover:-translate-y-1">
                 <feature.icon />
               </div>
               <h3 className="mt-4 text-lg font-bold text-slate-900">{feature.title}</h3>
@@ -280,7 +280,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section id="about" className="bg-slate-50">
+      <section id="about" className="scroll-mt-20 bg-white">
         <div className="mx-auto max-w-6xl px-6 py-24">
           <p className="text-sm font-semibold uppercase tracking-widest text-teal-600">About Sporthub</p>
           <h2 className="mt-2 max-w-3xl text-3xl font-extrabold text-balance text-slate-900 sm:text-4xl">
@@ -295,8 +295,11 @@ export function LandingPage() {
 
           <div className="mt-12 grid gap-6 sm:grid-cols-3">
             {ABOUT_POINTS.map((point) => (
-              <div key={point.title} className="rounded-xl border border-slate-200 bg-white p-6">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 text-teal-700">
+              <div
+                key={point.title}
+                className="group rounded-xl border border-slate-100 bg-slate-50/60 p-6 transition hover:border-teal-100 hover:bg-teal-50/40"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 text-teal-700 transition-transform duration-300 group-hover:-translate-y-1">
                   <point.icon />
                 </div>
                 <h3 className="mt-4 font-bold text-slate-900">{point.title}</h3>
@@ -307,7 +310,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section id="get-started" className="bg-slate-950 text-white">
+      <section id="get-started" className="scroll-mt-16 bg-slate-950 text-white">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-6 py-20 text-center">
           <p className="text-sm font-semibold uppercase tracking-widest text-teal-400">Get started</p>
           <h2 className="max-w-2xl text-3xl font-extrabold text-balance sm:text-4xl">
