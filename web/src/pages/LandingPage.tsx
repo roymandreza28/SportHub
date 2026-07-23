@@ -208,7 +208,7 @@ export function LandingPage() {
         className="relative overflow-hidden bg-cover bg-center text-white"
         style={{
           backgroundImage:
-            'linear-gradient(160deg, rgba(9, 38, 38, 0.92), rgba(11, 61, 58, 0.86)), url(/hero.jpg)',
+            'linear-gradient(160deg, rgba(9, 38, 38, 0.82), rgba(11, 61, 58, 0.72)), url(/hero.jpg)',
         }}
       >
         <div className="mx-auto flex max-w-4xl flex-col items-center px-6 py-28 text-center">
