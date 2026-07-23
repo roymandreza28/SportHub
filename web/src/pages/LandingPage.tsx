@@ -1,5 +1,6 @@
-import { Link } from 'react-router'
-import { useAuth } from '../lib/AuthContext'
+import { useState } from 'react'
+import { useNavigate } from 'react-router'
+import { AuthModal, type AuthMode } from '../components/auth/AuthModal'
 
 function IconCalendar() {
   return (
@@ -141,7 +142,17 @@ const ABOUT_POINTS = [
 ]
 
 export function LandingPage() {
-  const { user } = useAuth()
+  const navigate = useNavigate()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [authModal, setAuthModal] = useState<{ open: boolean; mode: AuthMode }>({
+    open: false,
+    mode: 'login',
+  })
+
+  function openAuth(mode: AuthMode) {
+    setMobileMenuOpen(false)
+    setAuthModal({ open: true, mode })
+  }
 
   return (
     <div className="min-h-screen bg-white text-slate-900">
@@ -156,28 +167,40 @@ export function LandingPage() {
             <a href="#about" className="hover:text-slate-900">About</a>
             <a href="#get-started" className="hover:text-slate-900">Get started</a>
           </div>
-          {user ? (
-            <Link
-              to="/dashboard"
-              className="rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+          <div className="flex items-center gap-3 sm:gap-4">
+            <button
+              onClick={() => openAuth('login')}
+              className="text-sm font-medium text-slate-600 hover:text-slate-900"
             >
-              Go to Dashboard
-            </Link>
-          ) : (
-            <div className="flex items-center gap-4">
-              <Link to="/login" className="text-sm font-medium text-slate-600 hover:text-slate-900">
-                Sign In
-              </Link>
-              <Link
-                to="/register"
-                className="flex items-center gap-1.5 rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
-              >
-                Join Now
-                <span aria-hidden="true">&rarr;</span>
-              </Link>
-            </div>
-          )}
+              Sign In
+            </button>
+            <button
+              onClick={() => openAuth('register')}
+              className="flex items-center gap-1.5 rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+            >
+              Join Now
+              <span aria-hidden="true">&rarr;</span>
+            </button>
+            <button
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              aria-label="Toggle menu"
+              aria-expanded={mobileMenuOpen}
+              className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 md:hidden"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-5 w-5">
+                {mobileMenuOpen ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 6h16M4 12h16M4 18h16" />}
+              </svg>
+            </button>
+          </div>
         </div>
+        {mobileMenuOpen && (
+          <div className="flex flex-col gap-1 border-t border-slate-100 px-6 py-3 text-sm font-medium text-slate-600 md:hidden">
+            <a href="#home" onClick={() => setMobileMenuOpen(false)} className="rounded px-2 py-2 hover:bg-slate-50">Home</a>
+            <a href="#features" onClick={() => setMobileMenuOpen(false)} className="rounded px-2 py-2 hover:bg-slate-50">Features</a>
+            <a href="#about" onClick={() => setMobileMenuOpen(false)} className="rounded px-2 py-2 hover:bg-slate-50">About</a>
+            <a href="#get-started" onClick={() => setMobileMenuOpen(false)} className="rounded px-2 py-2 hover:bg-slate-50">Get started</a>
+          </div>
+        )}
       </nav>
 
       <header
@@ -202,12 +225,12 @@ export function LandingPage() {
             community.
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <Link
-              to="/register"
+            <button
+              onClick={() => openAuth('register')}
               className="rounded-md bg-teal-500 px-6 py-3 font-semibold text-white shadow-lg shadow-teal-900/30 hover:bg-teal-400"
             >
               Join Sporthub &rarr;
-            </Link>
+            </button>
             <a
               href="#features"
               className="rounded-md border border-white/30 bg-white/5 px-6 py-3 font-semibold text-white hover:bg-white/15"
@@ -296,18 +319,18 @@ export function LandingPage() {
             registering.
           </p>
           <div className="mt-2 flex flex-wrap items-center justify-center gap-4">
-            <Link
-              to="/register"
+            <button
+              onClick={() => openAuth('register')}
               className="rounded-md bg-teal-500 px-6 py-3 font-semibold text-white hover:bg-teal-400"
             >
               Create free account
-            </Link>
-            <Link
-              to="/login"
+            </button>
+            <button
+              onClick={() => openAuth('login')}
               className="rounded-md border border-white/25 px-6 py-3 font-semibold text-white hover:bg-white/10"
             >
               Sign In
-            </Link>
+            </button>
           </div>
         </div>
       </section>
@@ -315,6 +338,16 @@ export function LandingPage() {
       <footer className="border-t border-slate-100 py-8 text-center text-sm text-slate-500">
         Sporthub &mdash; Municipal Sport Community Hub
       </footer>
+
+      <AuthModal
+        open={authModal.open}
+        initialMode={authModal.mode}
+        onClose={() => setAuthModal((s) => ({ ...s, open: false }))}
+        onAuthenticated={() => {
+          setAuthModal((s) => ({ ...s, open: false }))
+          navigate('/dashboard')
+        }}
+      />
     </div>
   )
 }
