@@ -29,6 +29,7 @@ const NAV_ITEMS: NavItem[] = [
 
 export function PlayerPage() {
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
+  const [active, setActive] = useState(NAV_ITEMS[0].id)
 
   const { data: skillLevels } = useQuery({ queryKey: ['skill-levels', 'mine'], queryFn: fetchMySkillLevels })
   const { data: matchmaking } = useQuery({ queryKey: ['player', 'matchmaking'], queryFn: fetchMyMatchmakingRequests })
@@ -41,52 +42,72 @@ export function PlayerPage() {
     .slice(0, 5)
 
   return (
-    <DashboardShell navItems={NAV_ITEMS}>
-      <div id="overview" className="mb-6 scroll-mt-24">
-        <h1 className="text-2xl font-bold text-slate-900">Player</h1>
-        <p className="mt-1 text-sm text-slate-500">Your profile, matches, and bookings.</p>
-      </div>
-
-      <StatCardGrid>
-        <StatCard label="Skill levels tracked" value={skillLevels?.length ?? '-'} />
-        <StatCard label="Open matchmaking requests" value={openRequests} />
-        <StatCard label="Bookings" value={bookings?.length ?? '-'} />
-      </StatCardGrid>
-
-      <ListPreview
-        title="My Upcoming Bookings"
-        description="Venue slots you've requested that haven't happened yet."
-        emptyText="No upcoming bookings — browse venues below to request one."
-        rows={upcomingBookings.map((b) => (
-          <ListRow
-            key={b.id}
-            primary={b.court ? `${b.venue.name} — ${b.court.name}` : b.venue.name}
-            secondary={`${new Date(b.starts_at).toLocaleString()} — ${new Date(b.ends_at).toLocaleTimeString()}`}
-            badge={<StatusBadge status={b.status} />}
-          />
-        ))}
-      />
-
-      <Section id="profile" title="Profile" description="Your bio, primary sport, and skill history.">
-        <PlayerProfileEditor />
-      </Section>
-
-      <Section id="matchmaking" title="Matchmaking" description="Find an opponent for a sport, live.">
-        <MatchmakingPanel />
-      </Section>
-
-      <Section id="bookings" title="Bookings" description="Venue slots you've requested.">
-        <MyBookings />
-      </Section>
-
-      <Section id="venues" title="Venues" description="Browse venues and request a booking.">
-        <VenueDirectory onSelect={setSelectedVenue} selectedId={selectedVenue?.id} />
-        {selectedVenue && (
-          <div className="mt-4 border-t border-slate-100 pt-4">
-            <VenueRegistrationForm venue={selectedVenue} />
+    <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={setActive}>
+      {active === 'overview' && (
+        <>
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-slate-900">Player</h1>
+            <p className="mt-1 text-sm text-slate-500">Your profile, matches, and bookings.</p>
           </div>
-        )}
-      </Section>
+
+          <StatCardGrid>
+            <StatCard label="Skill levels tracked" value={skillLevels?.length ?? '-'} />
+            <StatCard label="Open matchmaking requests" value={openRequests} />
+            <StatCard label="Bookings" value={bookings?.length ?? '-'} />
+          </StatCardGrid>
+
+          <ListPreview
+            title="My Upcoming Bookings"
+            description="Venue slots you've requested that haven't happened yet."
+            emptyText="No upcoming bookings — visit Venues to request one."
+            rows={upcomingBookings.map((b) => (
+              <ListRow
+                key={b.id}
+                primary={b.court ? `${b.venue.name} — ${b.court.name}` : b.venue.name}
+                secondary={`${new Date(b.starts_at).toLocaleString()} — ${new Date(b.ends_at).toLocaleTimeString()}`}
+                badge={<StatusBadge status={b.status} />}
+              />
+            ))}
+            action={
+              <button
+                onClick={() => setActive('venues')}
+                className="text-sm font-medium text-teal-600 hover:text-teal-700"
+              >
+                Browse venues &rarr;
+              </button>
+            }
+          />
+        </>
+      )}
+
+      {active === 'profile' && (
+        <Section title="Profile" description="Your bio, primary sport, and skill history.">
+          <PlayerProfileEditor />
+        </Section>
+      )}
+
+      {active === 'matchmaking' && (
+        <Section title="Matchmaking" description="Find an opponent for a sport, live.">
+          <MatchmakingPanel />
+        </Section>
+      )}
+
+      {active === 'bookings' && (
+        <Section title="Bookings" description="Venue slots you've requested.">
+          <MyBookings />
+        </Section>
+      )}
+
+      {active === 'venues' && (
+        <Section title="Venues" description="Browse venues and request a booking.">
+          <VenueDirectory onSelect={setSelectedVenue} selectedId={selectedVenue?.id} />
+          {selectedVenue && (
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <VenueRegistrationForm venue={selectedVenue} />
+            </div>
+          )}
+        </Section>
+      )}
     </DashboardShell>
   )
 }

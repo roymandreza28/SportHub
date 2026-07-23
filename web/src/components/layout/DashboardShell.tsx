@@ -9,14 +9,30 @@ export type NavItem = {
   icon: (props: { className?: string }) => ReactElement
 }
 
-export function DashboardShell({ navItems, children }: { navItems: NavItem[]; children: ReactNode }) {
+export function DashboardShell({
+  navItems,
+  activeId,
+  onNavigate,
+  children,
+}: {
+  navItems: NavItem[]
+  activeId: string
+  onNavigate: (id: string) => void
+  children: ReactNode
+}) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
   async function handleLogout() {
+    // Navigate away before logout() resolves, not after: logout() sets user
+    // to null as its last step, and if that commits while this page (behind
+    // a role-gated ProtectedRoute) is still mounted, the route reacts to the
+    // now-null user and redirects to /login itself — winning the race
+    // against our own navigate('/') call. Leaving the protected route first
+    // means there's nothing left to react to that state change.
+    navigate('/')
     await logout()
-    navigate('/login')
   }
 
   // The only role combination an account can hold is coach+player (a coach
@@ -36,19 +52,19 @@ export function DashboardShell({ navItems, children }: { navItems: NavItem[]; ch
         </Link>
 
         <nav className="flex flex-1 flex-col gap-1">
-          {navItems.map((item, index) => (
-            <a
+          {navItems.map((item) => (
+            <button
               key={item.id}
-              href={`#${item.id}`}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                index === 0
+              onClick={() => onNavigate(item.id)}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+                activeId === item.id
                   ? 'bg-teal-600 text-white'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
               <item.icon className="h-5 w-5 shrink-0" />
               {item.label}
-            </a>
+            </button>
           ))}
         </nav>
 
@@ -173,14 +189,12 @@ export function ListRow({
 }
 
 export function ListPreview({
-  id,
   title,
   description,
   rows,
   emptyText,
   action,
 }: {
-  id?: string
   title: string
   description?: string
   rows: ReactNode[]
@@ -188,7 +202,7 @@ export function ListPreview({
   action?: ReactNode
 }) {
   return (
-    <div id={id} className="mb-8 scroll-mt-24 rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
+    <div className="mb-8 rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
       <div className="mb-1 flex items-end justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900">{title}</h2>
@@ -206,20 +220,18 @@ export function ListPreview({
 }
 
 export function Section({
-  id,
   title,
   description,
   action,
   children,
 }: {
-  id: string
   title: string
   description?: string
   action?: ReactNode
   children: ReactNode
 }) {
   return (
-    <section id={id} className="mb-8 scroll-mt-24">
+    <section>
       <div className="mb-3 flex items-end justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900">{title}</h2>

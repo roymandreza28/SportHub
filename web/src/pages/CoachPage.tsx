@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchTournaments } from '../lib/coachApi'
 import {
@@ -22,52 +23,56 @@ const NAV_ITEMS: NavItem[] = [
 
 export function CoachPage() {
   const { data: openTournaments } = useQuery({ queryKey: ['tournaments', 'open'], queryFn: () => fetchTournaments('open') })
+  const [active, setActive] = useState(NAV_ITEMS[0].id)
 
   return (
-    <DashboardShell navItems={NAV_ITEMS}>
-      <div id="overview" className="mb-6 scroll-mt-24">
-        <h1 className="text-2xl font-bold text-slate-900">Coach</h1>
-        <p className="mt-1 text-sm text-slate-500">Register players and track their skill.</p>
-      </div>
+    <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={setActive}>
+      {active === 'overview' && (
+        <>
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-slate-900">Coach</h1>
+            <p className="mt-1 text-sm text-slate-500">Register players and track their skill.</p>
+          </div>
 
-      <StatCardGrid>
-        <StatCard label="Open tournaments" value={openTournaments?.length ?? '-'} />
-      </StatCardGrid>
+          <StatCardGrid>
+            <StatCard label="Open tournaments" value={openTournaments?.length ?? '-'} />
+          </StatCardGrid>
 
-      <ListPreview
-        title="Open Tournaments"
-        description="Tournaments currently accepting registrations."
-        emptyText="No open tournaments right now."
-        rows={(openTournaments ?? []).map((t) => (
-          <ListRow
-            key={t.id}
-            primary={t.name}
-            secondary={`${t.sport.name} — starts ${new Date(t.starts_at).toLocaleDateString()}`}
-            badge={<StatusBadge status={t.status} />}
+          <ListPreview
+            title="Open Tournaments"
+            description="Tournaments currently accepting registrations."
+            emptyText="No open tournaments right now."
+            rows={(openTournaments ?? []).map((t) => (
+              <ListRow
+                key={t.id}
+                primary={t.name}
+                secondary={`${t.sport.name} — starts ${new Date(t.starts_at).toLocaleDateString()}`}
+                badge={<StatusBadge status={t.status} />}
+              />
+            ))}
+            action={
+              <button
+                onClick={() => setActive('registrations')}
+                className="text-sm font-medium text-teal-600 hover:text-teal-700"
+              >
+                Register a player &rarr;
+              </button>
+            }
           />
-        ))}
-        action={
-          <a href="#registrations" className="text-sm font-medium text-teal-600 hover:text-teal-700">
-            Register a player &rarr;
-          </a>
-        }
-      />
+        </>
+      )}
 
-      <Section
-        id="registrations"
-        title="Tournament Registration"
-        description="Enter a player into an open tournament."
-      >
-        <TournamentRegistrationForm />
-      </Section>
+      {active === 'registrations' && (
+        <Section title="Tournament Registration" description="Enter a player into an open tournament.">
+          <TournamentRegistrationForm />
+        </Section>
+      )}
 
-      <Section
-        id="evaluations"
-        title="Evaluations"
-        description="Record a skill level and see a player's history."
-      >
-        <EvaluationForm />
-      </Section>
+      {active === 'evaluations' && (
+        <Section title="Evaluations" description="Record a skill level and see a player's history.">
+          <EvaluationForm />
+        </Section>
+      )}
     </DashboardShell>
   )
 }

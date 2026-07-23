@@ -16,10 +16,12 @@ test('two players requesting the same sport get paired live over the real-time c
     await pageA.goto('/player')
     await pageB.goto('/player')
 
-    // The page has two comboboxes — the profile editor's primary-sport picker
-    // (first in DOM order) and the Matchmaking panel's sport picker (second).
-    const matchmakingSportA = pageA.getByRole('combobox').nth(1)
-    const matchmakingSportB = pageB.getByRole('combobox').nth(1)
+    // Each sidebar item shows its own content now — switch to the
+    // Matchmaking tab, which is the only tab with a sport picker on screen.
+    await pageA.getByRole('button', { name: 'Matchmaking', exact: true }).click()
+    await pageB.getByRole('button', { name: 'Matchmaking', exact: true }).click()
+    const matchmakingSportA = pageA.getByRole('combobox')
+    const matchmakingSportB = pageB.getByRole('combobox')
 
     // Player A opens a request and waits — no opponent yet.
     await matchmakingSportA.selectOption({ label: 'Chess' })

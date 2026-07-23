@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { loginAs } from './helpers'
 
-test('a new user can register, land straight on their role dashboard, and log out', async ({ page }) => {
+test('a new user can register, land straight on their role dashboard, and log out to the landing page', async ({ page }) => {
   const email = `e2e-${Date.now()}@example.com`
 
   await page.goto('/register')
@@ -17,7 +17,8 @@ test('a new user can register, land straight on their role dashboard, and log ou
   await expect(page.getByText('E2E Test User')).toBeVisible()
 
   await page.getByRole('button', { name: 'Logout' }).click()
-  await expect(page).toHaveURL(/\/login/)
+  // Logout returns to the landing page, not /login.
+  await expect(page).toHaveURL(/^http:\/\/localhost:5173\/$/)
 })
 
 test('login rejects wrong credentials and succeeds with the right ones', async ({ page }) => {

@@ -215,15 +215,15 @@ export function LandingPage() {
         <div className="mx-auto flex max-w-4xl flex-col items-center px-6 py-28 text-center">
           <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-sm font-medium">
             <span aria-hidden="true">&#127942;</span>
-            Municipal Sports Platform
+            Morong, Rizal&apos;s Municipal Sports Platform
           </span>
           <h1 className="text-4xl font-extrabold leading-tight text-balance sm:text-5xl md:text-6xl">
             Every Court, Every Coach, Every Match &mdash; One Platform
           </h1>
           <p className="mt-6 max-w-2xl text-lg text-teal-50/90">
             Sporthub brings venue booking, tournament brackets, live scoreboards, and skill-based
-            matchmaking together for organizers, facilitators, coaches, and players across your
-            community.
+            matchmaking together for organizers, facilitators, coaches, and players across the
+            Municipality of Morong, Rizal.
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <button
@@ -245,7 +245,7 @@ export function LandingPage() {
       <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-24">
         <p className="text-sm font-semibold uppercase tracking-widest text-teal-600">Features</p>
         <h2 className="mt-2 max-w-2xl text-3xl font-extrabold text-balance text-slate-900 sm:text-4xl">
-          Key tools for better community sports management.
+          Key tools for better sports management in Morong.
         </h2>
 
         <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -285,13 +285,13 @@ export function LandingPage() {
         <div className="mx-auto max-w-6xl px-6 py-24">
           <p className="text-sm font-semibold uppercase tracking-widest text-teal-600">About Sporthub</p>
           <h2 className="mt-2 max-w-3xl text-3xl font-extrabold text-balance text-slate-900 sm:text-4xl">
-            End-to-end platform for municipal sports program management.
+            End-to-end platform for the Municipality of Morong&apos;s sports program.
           </h2>
           <p className="mt-6 max-w-3xl text-lg text-slate-600">
-            Sporthub gives every part of a municipal sports program its own workspace: venues and
-            courts for facilitators, tournaments and brackets for organizers, evaluations and
-            registrations for coaches, and bookings, matchmaking, and profiles for players &mdash;
-            all backed by the same real-time data.
+            Sporthub gives every part of Morong&apos;s municipal sports program its own workspace:
+            venues and courts for facilitators, tournaments and brackets for organizers, evaluations
+            and registrations for coaches, and bookings, matchmaking, and profiles for players
+            &mdash; all backed by the same real-time data.
           </p>
 
           <div className="mt-12 grid gap-6 sm:grid-cols-3">
@@ -315,7 +315,7 @@ export function LandingPage() {
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-6 py-20 text-center">
           <p className="text-sm font-semibold uppercase tracking-widest text-teal-400">Get started</p>
           <h2 className="max-w-2xl text-3xl font-extrabold text-balance sm:text-4xl">
-            Ready to get your community playing?
+            Ready to get Morong playing?
           </h2>
           <p className="max-w-xl text-slate-300">
             Register as a player in seconds, or sign in if your organizer has already set up your
@@ -340,7 +340,7 @@ export function LandingPage() {
       </section>
 
       <footer className="border-t border-slate-100 py-8 text-center text-sm text-slate-500">
-        Sporthub &mdash; Municipal Sport Community Hub
+        Sporthub &mdash; Municipal Sport Community Hub of Morong, Rizal
       </footer>
 
       <AuthModal

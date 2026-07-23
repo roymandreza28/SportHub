@@ -5,6 +5,9 @@ test('a player can browse venues, book an available slot, and see it as pending'
   await loginAs(page, 'player@sporthub.test', 'password')
 
   await page.goto('/player')
+  // Each sidebar item now shows its own content instead of one long
+  // scrollable page — switch to the Venues tab first.
+  await page.getByRole('button', { name: 'Venues', exact: true }).click()
 
   // Pick the first venue in the directory list.
   const firstVenueButton = page.locator('ul button', { hasText: '—' }).first()
@@ -38,5 +41,6 @@ test('a player can browse venues, book an available slot, and see it as pending'
   await expect(page.getByText('Booking requested — waiting on facilitator approval.')).toBeVisible()
 
   // Confirm it now shows up in "My bookings" with pending status.
+  await page.getByRole('button', { name: 'Bookings', exact: true }).click()
   await expect(page.locator('text=pending').first()).toBeVisible()
 })

@@ -38,6 +38,9 @@ test('organizer generates a bracket, scores every match through to completion, a
 
   await loginAs(page, 'organizer@sporthub.test', 'password')
   await page.goto('/organizer')
+  // Each sidebar item shows its own content now — the tournament form,
+  // bracket, and scoreboard all live under the Tournaments tab.
+  await page.getByRole('button', { name: 'Tournaments', exact: true }).click()
 
   await page.getByRole('combobox').first().selectOption({ label: 'Basketball' })
   await page.getByPlaceholder('Tournament name').fill(tournamentName)

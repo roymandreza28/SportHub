@@ -30,6 +30,7 @@ export function FacilitatorPage() {
   const { user } = useAuth()
   const { data: venues, isLoading } = useQuery({ queryKey: ['facilitator', 'venues'], queryFn: fetchVenues })
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [active, setActive] = useState(NAV_ITEMS[0].id)
 
   const myVenues = (venues ?? []).filter((v) => v.facilitator_id === user?.id)
   const selected = myVenues.find((v) => v.id === selectedId) ?? myVenues[0] ?? null
@@ -49,90 +50,104 @@ export function FacilitatorPage() {
     .slice(0, 5)
 
   return (
-    <DashboardShell navItems={NAV_ITEMS}>
-      <div id="overview" className="mb-6 scroll-mt-24">
-        <h1 className="text-2xl font-bold text-slate-900">Venue Facilitator</h1>
-        <p className="mt-1 text-sm text-slate-500">Manage your venues, courts, and bookings.</p>
-      </div>
+    <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={setActive}>
+      {active === 'overview' && (
+        <>
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-slate-900">Venue Facilitator</h1>
+            <p className="mt-1 text-sm text-slate-500">Manage your venues, courts, and bookings.</p>
+          </div>
 
-      <StatCardGrid>
-        <StatCard label="Venues" value={myVenues.length} />
-        <StatCard label="Courts" value={totalCourts} />
-        <StatCard label="Equipment items" value={totalEquipment} />
-        <StatCard label="Pending requests" value={selected ? pendingRequests.length : '-'} />
-      </StatCardGrid>
+          <StatCardGrid>
+            <StatCard label="Venues" value={myVenues.length} />
+            <StatCard label="Courts" value={totalCourts} />
+            <StatCard label="Equipment items" value={totalEquipment} />
+            <StatCard label="Pending requests" value={selected ? pendingRequests.length : '-'} />
+          </StatCardGrid>
 
-      {isLoading && <p className="mb-8 text-sm text-slate-500">Loading venues...</p>}
+          {isLoading && <p className="mb-8 text-sm text-slate-500">Loading venues...</p>}
 
-      <ListPreview
-        title="Upcoming Bookings"
-        description={selected ? `Approved bookings coming up at ${selected.name}.` : 'Select a venue to see its schedule.'}
-        emptyText={selected ? 'No upcoming approved bookings.' : 'No venue selected yet.'}
-        rows={upcomingBookings.map((event) => (
-          <ListRow
-            key={event.id}
-            primary={event.title}
-            secondary={`${new Date(event.start).toLocaleString()} — ${new Date(event.end).toLocaleTimeString()}`}
-            badge={<StatusBadge status={event.status} />}
-          />
-        ))}
-        action={
-          pendingRequests.length > 0 ? (
-            <a href="#bookings" className="text-sm font-medium text-teal-600 hover:text-teal-700">
-              {pendingRequests.length} pending &rarr;
-            </a>
-          ) : undefined
-        }
-      />
-
-      <Section id="venues" title="Venues" description="Your venues on the map, and adding a new one.">
-        {myVenues.length > 0 && <VenueMap venues={myVenues} onSelect={(v) => setSelectedId(v.id)} />}
-        <div className="mt-4">
-          <VenueForm />
-        </div>
-
-        {myVenues.length > 1 && (
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-            {myVenues.map((v) => (
-              <button
-                key={v.id}
-                onClick={() => setSelectedId(v.id)}
-                className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  selected?.id === v.id ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'
-                }`}
-              >
-                {v.name}
-              </button>
+          <ListPreview
+            title="Upcoming Bookings"
+            description={
+              selected ? `Approved bookings coming up at ${selected.name}.` : 'Select a venue to see its schedule.'
+            }
+            emptyText={selected ? 'No upcoming approved bookings.' : 'No venue selected yet.'}
+            rows={upcomingBookings.map((event) => (
+              <ListRow
+                key={event.id}
+                primary={event.title}
+                secondary={`${new Date(event.start).toLocaleString()} — ${new Date(event.end).toLocaleTimeString()}`}
+                badge={<StatusBadge status={event.status} />}
+              />
             ))}
+            action={
+              pendingRequests.length > 0 ? (
+                <button
+                  onClick={() => setActive('bookings')}
+                  className="text-sm font-medium text-teal-600 hover:text-teal-700"
+                >
+                  {pendingRequests.length} pending &rarr;
+                </button>
+              ) : undefined
+            }
+          />
+        </>
+      )}
+
+      {active === 'venues' && (
+        <Section title="Venues" description="Your venues on the map, and adding a new one.">
+          {myVenues.length > 0 && <VenueMap venues={myVenues} onSelect={(v) => setSelectedId(v.id)} />}
+          <div className="mt-4">
+            <VenueForm />
           </div>
-        )}
 
-        {selected && (
-          <div className="mt-4 border-t border-slate-100 pt-4">
-            <CourtEquipmentManager venue={selected} />
-          </div>
-        )}
-      </Section>
+          {myVenues.length > 1 && (
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+              {myVenues.map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => setSelectedId(v.id)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    selected?.id === v.id ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {v.name}
+                </button>
+              ))}
+            </div>
+          )}
 
-      <Section
-        id="bookings"
-        title="Bookings"
-        description={selected ? `Pending registration requests for ${selected.name}.` : 'Select a venue above.'}
-      >
-        {selected ? (
-          <RegistrationApprovalQueue venue={selected} />
-        ) : (
-          <p className="text-sm text-slate-500">No venue selected yet.</p>
-        )}
-      </Section>
+          {selected && (
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <CourtEquipmentManager venue={selected} />
+            </div>
+          )}
+        </Section>
+      )}
 
-      <Section id="schedule" title="Schedule" description={selected ? selected.name : undefined}>
-        {selected ? (
-          <VenueScheduleCalendar venue={selected} />
-        ) : (
-          <p className="text-sm text-slate-500">No venue selected yet.</p>
-        )}
-      </Section>
+      {active === 'bookings' && (
+        <Section
+          title="Bookings"
+          description={selected ? `Pending registration requests for ${selected.name}.` : 'Select a venue first.'}
+        >
+          {selected ? (
+            <RegistrationApprovalQueue venue={selected} />
+          ) : (
+            <p className="text-sm text-slate-500">No venue selected yet.</p>
+          )}
+        </Section>
+      )}
+
+      {active === 'schedule' && (
+        <Section title="Schedule" description={selected ? selected.name : undefined}>
+          {selected ? (
+            <VenueScheduleCalendar venue={selected} />
+          ) : (
+            <p className="text-sm text-slate-500">No venue selected yet.</p>
+          )}
+        </Section>
+      )}
     </DashboardShell>
   )
 }
