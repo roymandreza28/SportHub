@@ -5,7 +5,11 @@ export async function loginAs(page: Page, email: string, password: string) {
   await page.getByPlaceholder('Email').fill(email)
   await page.getByPlaceholder('Password').fill(password)
   await page.getByRole('button', { name: 'Log in' }).click()
-  await page.waitForURL(/\/dashboard/)
+  // /dashboard is a transient redirect target now (it immediately forwards
+  // to the account's actual role page), so waiting on that exact path is
+  // flaky — the URL can pass through it faster than polling reliably
+  // catches. Wait for any real authenticated landing page instead.
+  await page.waitForURL(/\/(dashboard|admin|facilitator|player|coach|organizer)/)
 }
 
 /**

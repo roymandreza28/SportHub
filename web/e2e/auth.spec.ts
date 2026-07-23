@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { loginAs } from './helpers'
 
-test('a new user can register, land on the dashboard, and log out', async ({ page }) => {
+test('a new user can register, land straight on their role dashboard, and log out', async ({ page }) => {
   const email = `e2e-${Date.now()}@example.com`
 
   await page.goto('/register')
@@ -11,12 +11,12 @@ test('a new user can register, land on the dashboard, and log out', async ({ pag
   await page.getByPlaceholder('Confirm password').fill('password123')
   await page.getByRole('button', { name: 'Register' }).click()
 
-  await expect(page).toHaveURL(/\/dashboard/)
-  await expect(page.getByText(email)).toBeVisible()
-  // Self-registration defaults to the player role.
-  await expect(page.getByText('Roles: player')).toBeVisible()
+  // Self-registration defaults to the player role, and there's no role
+  // picker anymore — /dashboard forwards straight to /player.
+  await expect(page).toHaveURL(/\/player/)
+  await expect(page.getByText('E2E Test User')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Log out' }).click()
+  await page.getByRole('button', { name: 'Logout' }).click()
   await expect(page).toHaveURL(/\/login/)
 })
 
