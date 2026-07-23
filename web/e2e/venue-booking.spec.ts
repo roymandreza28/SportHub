@@ -14,11 +14,17 @@ test('a player can browse venues, book an available slot, and see it as pending'
 
   await expect(page.getByText(`Book ${venueName}`)).toBeVisible()
 
+  // Move to tomorrow first so every half-hour mark is guaranteed to be in the
+  // future regardless of what time it actually is right now — picking a slot
+  // on "today" risked landing on a time-of-day that's already passed,
+  // which the backend correctly rejects ("starts_at must be after now").
+  await page.getByRole('button', { name: 'Next day' }).click()
+
   // Click a slot unlikely to collide with other runs' bookings: a fixed hour
   // would eventually collide with an earlier run's own booking on repeat runs
   // against a persistent dev DB (no reset between E2E runs), so derive one of
-  // the 48 half-hour marks for the currently visible day from the current
-  // timestamp instead of hardcoding one.
+  // the 48 half-hour marks for tomorrow from the current timestamp instead of
+  // hardcoding one.
   const slotIndex = Date.now() % 48
   const slotTime = `${String(Math.floor(slotIndex / 2)).padStart(2, '0')}:${slotIndex % 2 === 0 ? '00' : '30'}:00`
   const slot = page.locator(`.fc-timegrid-slot-lane[data-time="${slotTime}"]`).first()

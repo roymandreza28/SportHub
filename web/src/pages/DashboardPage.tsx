@@ -12,44 +12,67 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-sm flex-col gap-4 p-8">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
-      <p>
+    <div className="mx-auto flex min-h-screen max-w-sm flex-col gap-4 bg-slate-50 p-8">
+      <span className="text-lg font-bold text-slate-900">
+        Sport<span className="text-teal-600">Hub</span>
+      </span>
+      <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+      <p className="text-slate-700">
         Logged in as <strong>{user?.name}</strong> ({user?.email})
       </p>
-      <p className="text-sm text-gray-600">Roles: {user?.roles.join(', ') || 'none'}</p>
+      <p className="text-sm text-slate-500">Roles: {user?.roles.join(', ') || 'none'}</p>
 
-      <RoleGate roles={['admin']}>
-        <Link to="/admin" className="rounded bg-amber-100 p-2 text-sm text-amber-900">
-          Go to Admin panel
-        </Link>
-      </RoleGate>
+      <div className="flex flex-col gap-2">
+        <RoleGate roles={['admin']}>
+          <Link
+            to="/admin"
+            className="rounded-lg border border-slate-100 bg-white p-3 text-sm font-medium text-slate-700 shadow-sm hover:border-teal-100 hover:text-teal-700"
+          >
+            Go to Admin panel
+          </Link>
+        </RoleGate>
 
-      <RoleGate roles={['venue_facilitator', 'admin']}>
-        <Link to="/facilitator" className="rounded bg-sky-100 p-2 text-sm text-sky-900">
-          Go to Facilitator panel
-        </Link>
-      </RoleGate>
+        <RoleGate roles={['venue_facilitator', 'admin']}>
+          <Link
+            to="/facilitator"
+            className="rounded-lg border border-slate-100 bg-white p-3 text-sm font-medium text-slate-700 shadow-sm hover:border-teal-100 hover:text-teal-700"
+          >
+            Go to Facilitator panel
+          </Link>
+        </RoleGate>
 
-      <RoleGate roles={['player']}>
-        <Link to="/player" className="rounded bg-emerald-100 p-2 text-sm text-emerald-900">
-          Go to Player panel
-        </Link>
-      </RoleGate>
+        <RoleGate roles={['player']}>
+          <Link
+            to="/player"
+            className="rounded-lg border border-slate-100 bg-white p-3 text-sm font-medium text-slate-700 shadow-sm hover:border-teal-100 hover:text-teal-700"
+          >
+            Go to Player panel
+          </Link>
+        </RoleGate>
 
-      <RoleGate roles={['coach']}>
-        <Link to="/coach" className="rounded bg-rose-100 p-2 text-sm text-rose-900">
-          Go to Coach panel
-        </Link>
-      </RoleGate>
+        <RoleGate roles={['coach']}>
+          <Link
+            to="/coach"
+            className="rounded-lg border border-slate-100 bg-white p-3 text-sm font-medium text-slate-700 shadow-sm hover:border-teal-100 hover:text-teal-700"
+          >
+            Go to Coach panel
+          </Link>
+        </RoleGate>
 
-      <RoleGate roles={['organizer']}>
-        <Link to="/organizer" className="rounded bg-violet-100 p-2 text-sm text-violet-900">
-          Go to Organizer panel
-        </Link>
-      </RoleGate>
+        <RoleGate roles={['organizer']}>
+          <Link
+            to="/organizer"
+            className="rounded-lg border border-slate-100 bg-white p-3 text-sm font-medium text-slate-700 shadow-sm hover:border-teal-100 hover:text-teal-700"
+          >
+            Go to Organizer panel
+          </Link>
+        </RoleGate>
+      </div>
 
-      <button onClick={handleLogout} className="rounded bg-gray-800 px-3 py-2 text-white">
+      <button
+        onClick={handleLogout}
+        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+      >
         Log out
       </button>
     </div>
