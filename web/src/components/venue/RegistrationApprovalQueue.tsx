@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchVenueSchedule, updateVenueRegistration, type Venue } from '../../lib/venueApi'
 import { echo } from '../../lib/echo'
+import { buttonDanger, buttonSuccess } from '../../lib/formStyles'
 
 export function RegistrationApprovalQueue({ venue }: { venue: Venue }) {
   const queryClient = useQueryClient()
@@ -30,30 +31,27 @@ export function RegistrationApprovalQueue({ venue }: { venue: Venue }) {
   const pending = (data ?? []).filter((e) => e.status === 'pending')
 
   if (pending.length === 0) {
-    return <p className="text-xs text-gray-500">No pending requests for {venue.name}.</p>
+    return <p className="text-sm text-slate-400">No pending requests for {venue.name}.</p>
   }
 
   return (
-    <ul className="flex flex-col gap-2 text-sm">
+    <ul className="flex flex-col gap-2.5">
       {pending.map((event) => (
-        <li key={event.id} className="flex items-center justify-between rounded border p-2">
+        <li
+          key={event.id}
+          className="flex items-center justify-between rounded-lg border border-slate-100 bg-white p-3 shadow-sm"
+        >
           <div>
-            <div>{event.title}</div>
-            <div className="text-xs text-gray-500">
+            <p className="text-sm font-medium text-slate-800">{event.title}</p>
+            <p className="text-xs text-slate-500">
               {new Date(event.start).toLocaleString()} - {new Date(event.end).toLocaleTimeString()}
-            </div>
+            </p>
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={() => respond.mutate({ id: event.id, status: 'approved' })}
-              className="rounded bg-green-600 px-2 py-1 text-xs text-white"
-            >
+            <button onClick={() => respond.mutate({ id: event.id, status: 'approved' })} className={buttonSuccess}>
               Approve
             </button>
-            <button
-              onClick={() => respond.mutate({ id: event.id, status: 'rejected' })}
-              className="rounded bg-red-600 px-2 py-1 text-xs text-white"
-            >
+            <button onClick={() => respond.mutate({ id: event.id, status: 'rejected' })} className={buttonDanger}>
               Reject
             </button>
           </div>

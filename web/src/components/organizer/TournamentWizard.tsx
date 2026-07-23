@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createTournament, generateBracket, type TournamentFormat } from '../../lib/organizerApi'
 import { fetchSports } from '../../lib/venueApi'
+import { buttonPrimary, buttonSuccess, fieldGroup, input, label, select } from '../../lib/formStyles'
 
 const FORMATS: TournamentFormat[] = ['single_elimination', 'round_robin']
 
@@ -41,64 +42,77 @@ export function TournamentWizard() {
   })
 
   return (
-    <div className="flex flex-col gap-2 rounded border p-3">
-      <h3 className="text-sm font-medium">Create a tournament</h3>
+    <div className="flex flex-col gap-4">
+      <h3 className="text-sm font-semibold text-slate-800">Create a tournament</h3>
 
-      <select
-        value={sportId}
-        onChange={(e) => setSportId(e.target.value ? Number(e.target.value) : '')}
-        className="rounded border px-2 py-1 text-sm"
-      >
-        <option value="">Sport...</option>
-        {sports?.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.name}
-          </option>
-        ))}
-      </select>
-      <input
-        type="text"
-        placeholder="Tournament name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="rounded border px-2 py-1 text-sm"
-      />
-      <select
-        value={format}
-        onChange={(e) => setFormat(e.target.value as TournamentFormat)}
-        className="rounded border px-2 py-1 text-sm"
-      >
-        {FORMATS.map((f) => (
-          <option key={f} value={f}>
-            {f.replace('_', ' ')}
-          </option>
-        ))}
-      </select>
-      <input
-        type="datetime-local"
-        value={startsAt}
-        onChange={(e) => setStartsAt(e.target.value)}
-        className="rounded border px-2 py-1 text-sm"
-      />
-      <button
-        onClick={() => createMutation.mutate()}
-        disabled={!sportId || !name || !startsAt || createMutation.isPending}
-        className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
-      >
-        {createMutation.isPending ? 'Creating...' : 'Create tournament'}
-      </button>
+      <div className="grid max-w-xl gap-4 sm:grid-cols-2">
+        <div className={fieldGroup}>
+          <label className={label}>Sport</label>
+          <select
+            value={sportId}
+            onChange={(e) => setSportId(e.target.value ? Number(e.target.value) : '')}
+            className={select}
+          >
+            <option value="">Sport...</option>
+            {sports?.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className={fieldGroup}>
+          <label className={label}>Format</label>
+          <select value={format} onChange={(e) => setFormat(e.target.value as TournamentFormat)} className={select}>
+            {FORMATS.map((f) => (
+              <option key={f} value={f}>
+                {f.replace('_', ' ')}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className={`${fieldGroup} sm:col-span-2`}>
+          <label className={label}>Tournament name</label>
+          <input
+            type="text"
+            placeholder="Tournament name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className={input}
+          />
+        </div>
+        <div className={fieldGroup}>
+          <label className={label}>Starts at</label>
+          <input
+            type="datetime-local"
+            value={startsAt}
+            onChange={(e) => setStartsAt(e.target.value)}
+            className={input}
+          />
+        </div>
+      </div>
 
-      {createdId && (
+      <div className="flex flex-wrap gap-3">
         <button
-          onClick={() => bracketMutation.mutate()}
-          disabled={bracketMutation.isPending}
-          className="rounded bg-emerald-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+          onClick={() => createMutation.mutate()}
+          disabled={!sportId || !name || !startsAt || createMutation.isPending}
+          className={buttonPrimary}
         >
-          {bracketMutation.isPending ? 'Generating...' : `Generate bracket for tournament #${createdId}`}
+          {createMutation.isPending ? 'Creating...' : 'Create tournament'}
         </button>
-      )}
 
-      {message && <p className="text-xs text-gray-600">{message}</p>}
+        {createdId && (
+          <button
+            onClick={() => bracketMutation.mutate()}
+            disabled={bracketMutation.isPending}
+            className={buttonSuccess}
+          >
+            {bracketMutation.isPending ? 'Generating...' : `Generate bracket for tournament #${createdId}`}
+          </button>
+        )}
+      </div>
+
+      {message && <p className="text-sm text-slate-600">{message}</p>}
     </div>
   )
 }

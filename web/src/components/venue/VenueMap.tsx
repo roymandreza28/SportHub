@@ -18,8 +18,9 @@ const defaultIcon = L.icon({
 })
 
 export function VenueMap({ venues, onSelect }: { venues: Venue[]; onSelect?: (venue: Venue) => void }) {
+  // Falls back to Morong, Rizal when there are no venues yet.
   const center: [number, number] =
-    venues.length > 0 ? [Number(venues[0].latitude), Number(venues[0].longitude)] : [39.78, -89.65]
+    venues.length > 0 ? [Number(venues[0].latitude), Number(venues[0].longitude)] : [14.5192, 121.2331]
 
   return (
     <MapContainer center={center} zoom={12} className="h-80 w-full rounded" scrollWheelZoom={false}>

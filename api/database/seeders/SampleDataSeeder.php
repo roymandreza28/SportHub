@@ -24,12 +24,12 @@ class SampleDataSeeder extends Seeder
         $badminton = Sport::where('name', 'Badminton')->first();
 
         $civicCenter = Venue::firstOrCreate(
-            ['facilitator_id' => $facilitator->id, 'name' => 'Civic Center Sports Complex'],
+            ['facilitator_id' => $facilitator->id, 'name' => 'Morong Sports Complex'],
             [
-                'address' => '100 Civic Center Dr, Springfield',
-                'latitude' => 39.7817,
-                'longitude' => -89.6501,
-                'description' => 'Multi-purpose municipal sports complex.',
+                'address' => 'Brgy. Poblacion, Morong, Rizal',
+                'latitude' => 14.5192,
+                'longitude' => 121.2331,
+                'description' => 'Multi-purpose municipal sports complex serving Morong, Rizal.',
                 'amenities' => ['parking', 'lockers', 'restrooms'],
             ]
         );
@@ -48,12 +48,12 @@ class SampleDataSeeder extends Seeder
         );
 
         $riverside = Venue::firstOrCreate(
-            ['facilitator_id' => $facilitator->id, 'name' => 'Riverside Community Park'],
+            ['facilitator_id' => $facilitator->id, 'name' => 'Wawa River Park'],
             [
-                'address' => '250 Riverside Ave, Springfield',
-                'latitude' => 39.7901,
-                'longitude' => -89.6440,
-                'description' => 'Outdoor community fields and courts.',
+                'address' => 'Brgy. Wawa, Morong, Rizal',
+                'latitude' => 14.5241,
+                'longitude' => 121.2286,
+                'description' => 'Outdoor community fields and courts along the Wawa riverside.',
                 'amenities' => ['parking', 'water fountain'],
             ]
         );

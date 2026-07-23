@@ -9,7 +9,7 @@ const LEVEL_COLORS: Record<SkillLevel['level'], string> = {
 
 export function SkillLevelBadge({ skillLevel }: { skillLevel: SkillLevel }) {
   return (
-    <span className={`rounded px-2 py-1 text-xs ${LEVEL_COLORS[skillLevel.level]}`}>
+    <span className={`rounded-full px-3 py-1 text-xs font-medium ${LEVEL_COLORS[skillLevel.level]}`}>
       {skillLevel.sport.name}: {skillLevel.level}
       {skillLevel.coach && ` (evaluated by ${skillLevel.coach.name})`}
     </span>

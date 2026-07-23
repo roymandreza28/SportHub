@@ -4,12 +4,20 @@ import { cancelMatchmakingRequest, createMatchmakingRequest, fetchMyMatchmakingR
 import { fetchSports } from '../../lib/venueApi'
 import { useAuth } from '../../lib/AuthContext'
 import { echo } from '../../lib/echo'
+import { buttonPrimary, select } from '../../lib/formStyles'
 
 const STATUS_LABEL: Record<string, string> = {
   open: 'Looking for a match...',
   matched: 'Matched!',
   expired: 'Expired',
   cancelled: 'Cancelled',
+}
+
+const STATUS_STYLE: Record<string, string> = {
+  open: 'bg-teal-100 text-teal-700',
+  matched: 'bg-green-100 text-green-700',
+  expired: 'bg-slate-100 text-slate-500',
+  cancelled: 'bg-slate-100 text-slate-500',
 }
 
 export function MatchmakingPanel() {
@@ -50,14 +58,12 @@ export function MatchmakingPanel() {
   })
 
   return (
-    <div className="flex flex-col gap-3 rounded border p-3">
-      <h3 className="text-sm font-medium">Matchmaking</h3>
-
+    <div className="flex flex-col gap-4">
       <div className="flex gap-2">
         <select
           value={sportId}
           onChange={(e) => setSportId(e.target.value ? Number(e.target.value) : '')}
-          className="flex-1 rounded border px-2 py-1 text-sm"
+          className={`${select} flex-1`}
         >
           <option value="">Choose a sport...</option>
           {sports?.map((s) => (
@@ -69,24 +75,29 @@ export function MatchmakingPanel() {
         <button
           onClick={() => request.mutate()}
           disabled={!sportId || request.isPending}
-          className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+          className={buttonPrimary}
         >
           Find a match
         </button>
       </div>
 
-      <ul className="flex flex-col gap-2 text-sm">
+      <ul className="flex flex-col gap-2">
         {requests?.map((req) => (
-          <li key={req.id} className="flex items-center justify-between rounded border p-2">
+          <li
+            key={req.id}
+            className="flex items-center justify-between rounded-lg border border-slate-100 bg-white p-3 shadow-sm"
+          >
             <div>
-              <div>{req.sport.name}</div>
-              <div className="text-xs text-gray-500">
-                {STATUS_LABEL[req.status] ?? req.status}
+              <p className="text-sm font-medium text-slate-800">{req.sport.name}</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                <span className={`rounded-full px-2 py-0.5 font-medium ${STATUS_STYLE[req.status] ?? ''}`}>
+                  {STATUS_LABEL[req.status] ?? req.status}
+                </span>
                 {req.opponent && ` with ${req.opponent.name} (${req.opponent.email})`}
-              </div>
+              </p>
             </div>
             {req.status === 'open' && (
-              <button onClick={() => cancel.mutate(req.id)} className="text-xs text-red-600">
+              <button onClick={() => cancel.mutate(req.id)} className="text-xs font-medium text-red-600 hover:text-red-700">
                 Cancel
               </button>
             )}

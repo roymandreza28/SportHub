@@ -6,6 +6,7 @@ import interactionPlugin from '@fullcalendar/interaction'
 import type { DateSelectArg } from '@fullcalendar/core'
 import { fetchVenueAvailability, type Venue } from '../../lib/venueApi'
 import { createVenueRegistration } from '../../lib/playerApi'
+import { buttonPrimary, input } from '../../lib/formStyles'
 
 export function VenueRegistrationForm({ venue }: { venue: Venue }) {
   const queryClient = useQueryClient()
@@ -68,25 +69,29 @@ export function VenueRegistrationForm({ venue }: { venue: Venue }) {
   }))
 
   return (
-    <div className="flex flex-col gap-2 rounded border p-3">
-      <h3 className="text-sm font-medium">Book {venue.name}</h3>
-      <p className="text-xs text-gray-600">Select a free time slot on the calendar (grey = already booked)</p>
+    <div className="flex flex-col gap-3">
+      <div>
+        <h3 className="text-sm font-semibold text-slate-800">Book {venue.name}</h3>
+        <p className="text-xs text-slate-500">Select a free time slot on the calendar (grey = already booked)</p>
+      </div>
 
-      <FullCalendar
-        schedulerLicenseKey="CC-Attribution-NonCommercial-NoDerivatives"
-        plugins={[resourceTimeGridPlugin, interactionPlugin]}
-        initialView="resourceTimeGridDay"
-        resources={resources}
-        events={busyEvents}
-        selectable
-        select={handleSelect}
-        height="auto"
-        headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
-      />
+      <div className="overflow-hidden rounded-lg border border-slate-200">
+        <FullCalendar
+          schedulerLicenseKey="CC-Attribution-NonCommercial-NoDerivatives"
+          plugins={[resourceTimeGridPlugin, interactionPlugin]}
+          initialView="resourceTimeGridDay"
+          resources={resources}
+          events={busyEvents}
+          selectable
+          select={handleSelect}
+          height="auto"
+          headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
+        />
+      </div>
 
       {selection && (
-        <div className="flex flex-col gap-2 rounded border bg-gray-50 p-2 text-sm">
-          <p>
+        <div className="flex flex-col gap-2 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
+          <p className="text-sm font-medium text-slate-700">
             Selected: {new Date(selection.start).toLocaleString()} - {new Date(selection.end).toLocaleTimeString()}
           </p>
           <input
@@ -94,20 +99,16 @@ export function VenueRegistrationForm({ venue }: { venue: Venue }) {
             placeholder="Purpose (optional)"
             value={purpose}
             onChange={(e) => setPurpose(e.target.value)}
-            className="rounded border px-2 py-1 text-sm"
+            className={input}
           />
-          <button
-            onClick={handleSubmit}
-            disabled={mutation.isPending}
-            className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
-          >
+          <button onClick={handleSubmit} disabled={mutation.isPending} className={`${buttonPrimary} self-start`}>
             {mutation.isPending ? 'Requesting...' : 'Request booking'}
           </button>
         </div>
       )}
 
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      {success && <p className="text-xs text-green-600">Booking requested — waiting on facilitator approval.</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {success && <p className="text-sm text-green-600">Booking requested — waiting on facilitator approval.</p>}
     </div>
   )
 }

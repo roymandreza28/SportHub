@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createNews } from '../../lib/organizerApi'
+import { buttonPrimary, fieldGroup, input, label, textarea } from '../../lib/formStyles'
 
 export function NewsEditor() {
   const queryClient = useQueryClient()
@@ -17,26 +18,32 @@ export function NewsEditor() {
   })
 
   return (
-    <div className="flex flex-col gap-2 rounded border p-3">
-      <h3 className="text-sm font-medium">Post news</h3>
-      <input
-        type="text"
-        placeholder="Title"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        className="rounded border px-2 py-1 text-sm"
-      />
-      <textarea
-        placeholder="Body"
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        className="rounded border px-2 py-1 text-sm"
-        rows={4}
-      />
+    <div className="flex max-w-xl flex-col gap-4">
+      <h3 className="text-sm font-semibold text-slate-800">Post news</h3>
+      <div className={fieldGroup}>
+        <label className={label}>Title</label>
+        <input
+          type="text"
+          placeholder="What's the headline?"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className={input}
+        />
+      </div>
+      <div className={fieldGroup}>
+        <label className={label}>Body</label>
+        <textarea
+          placeholder="Tell the community what's happening in Morong..."
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          className={textarea}
+          rows={4}
+        />
+      </div>
       <button
         onClick={() => mutation.mutate()}
         disabled={!title || !body || mutation.isPending}
-        className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+        className={`${buttonPrimary} self-start`}
       >
         {mutation.isPending ? 'Publishing...' : 'Publish'}
       </button>

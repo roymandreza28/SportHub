@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createFacilitator } from '../../lib/adminApi'
+import { buttonPrimary, fieldGroup, input, label } from '../../lib/formStyles'
 
 export function FacilitatorCreateForm() {
   const queryClient = useQueryClient()
@@ -28,38 +29,45 @@ export function FacilitatorCreateForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-2 rounded border p-3">
-      <h3 className="text-sm font-medium">Create facilitator account</h3>
-      <input
-        type="text"
-        placeholder="Name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="rounded border px-2 py-1 text-sm"
-        required
-      />
-      <input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className="rounded border px-2 py-1 text-sm"
-        required
-      />
-      <input
-        type="password"
-        placeholder="Temporary password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className="rounded border px-2 py-1 text-sm"
-        required
-      />
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      <button
-        type="submit"
-        disabled={mutation.isPending}
-        className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
-      >
+    <form onSubmit={handleSubmit} className="flex max-w-md flex-col gap-4">
+      <div className={fieldGroup}>
+        <label className={label} htmlFor="facilitator-name">Name</label>
+        <input
+          id="facilitator-name"
+          type="text"
+          placeholder="Full name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className={input}
+          required
+        />
+      </div>
+      <div className={fieldGroup}>
+        <label className={label} htmlFor="facilitator-email">Email</label>
+        <input
+          id="facilitator-email"
+          type="email"
+          placeholder="name@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className={input}
+          required
+        />
+      </div>
+      <div className={fieldGroup}>
+        <label className={label} htmlFor="facilitator-password">Temporary password</label>
+        <input
+          id="facilitator-password"
+          type="password"
+          placeholder="Temporary password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className={input}
+          required
+        />
+      </div>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <button type="submit" disabled={mutation.isPending} className={`${buttonPrimary} self-start`}>
         {mutation.isPending ? 'Creating...' : 'Create facilitator'}
       </button>
     </form>

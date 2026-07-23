@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchUsers, type AdminUser } from '../../lib/adminApi'
 import { RoleAssignmentModal } from './RoleAssignmentModal'
+import { buttonGhost, input, table, tableCell, tableHeadCell, tableHeadRow, tableRow, tableWrap } from '../../lib/formStyles'
 
 export function UserManagementTable() {
   const [search, setSearch] = useState('')
@@ -13,44 +14,55 @@ export function UserManagementTable() {
   })
 
   return (
-    <div className="flex flex-col gap-2 rounded border p-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">Users</h3>
-        <input
-          type="text"
-          placeholder="Search name or email"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="rounded border px-2 py-1 text-sm"
-        />
-      </div>
+    <div className="flex flex-col gap-4">
+      <input
+        type="text"
+        placeholder="Search name or email"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className={`${input} max-w-sm`}
+      />
 
-      {isLoading && <p className="text-sm text-gray-500">Loading...</p>}
+      {isLoading && <p className="text-sm text-slate-500">Loading...</p>}
 
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="border-b text-xs text-gray-600">
-            <th className="py-1">Name</th>
-            <th className="py-1">Email</th>
-            <th className="py-1">Roles</th>
-            <th className="py-1" />
-          </tr>
-        </thead>
-        <tbody>
-          {data?.data.map((user) => (
-            <tr key={user.id} className="border-b last:border-0">
-              <td className="py-1">{user.name}</td>
-              <td className="py-1">{user.email}</td>
-              <td className="py-1">{user.roles.map((r) => r.name).join(', ') || 'none'}</td>
-              <td className="py-1 text-right">
-                <button onClick={() => setEditing(user)} className="text-xs text-indigo-600">
-                  Edit roles
-                </button>
-              </td>
+      <div className={tableWrap}>
+        <table className={table}>
+          <thead>
+            <tr className={tableHeadRow}>
+              <th className={tableHeadCell}>Name</th>
+              <th className={tableHeadCell}>Email</th>
+              <th className={tableHeadCell}>Roles</th>
+              <th className={tableHeadCell} />
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data?.data.map((user) => (
+              <tr key={user.id} className={tableRow}>
+                <td className={`${tableCell} font-medium text-slate-900`}>{user.name}</td>
+                <td className={tableCell}>{user.email}</td>
+                <td className={tableCell}>
+                  {user.roles.length === 0 ? (
+                    <span className="text-slate-400">none</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {user.roles.map((r) => (
+                        <span key={r.id} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                          {r.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </td>
+                <td className={`${tableCell} text-right`}>
+                  <button onClick={() => setEditing(user)} className={buttonGhost}>
+                    Edit roles
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {editing && <RoleAssignmentModal user={editing} onClose={() => setEditing(null)} />}
     </div>

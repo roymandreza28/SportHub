@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { fetchTournaments, registerPlayerForTournament, type PlayerSearchResult } from '../../lib/coachApi'
 import { PlayerSearchPicker } from './PlayerSearchPicker'
+import { buttonPrimary, fieldGroup, label, select } from '../../lib/formStyles'
 
 export function TournamentRegistrationForm() {
   const { data: tournaments } = useQuery({ queryKey: ['tournaments', 'open'], queryFn: () => fetchTournaments('open') })
@@ -24,34 +25,38 @@ export function TournamentRegistrationForm() {
   })
 
   return (
-    <div className="flex flex-col gap-2 rounded border p-3">
-      <h3 className="text-sm font-medium">Register a player for a tournament</h3>
+    <div className="flex max-w-md flex-col gap-4">
+      <div className={fieldGroup}>
+        <label className={label}>Tournament</label>
+        <select
+          value={tournamentId}
+          onChange={(e) => setTournamentId(e.target.value ? Number(e.target.value) : '')}
+          className={select}
+        >
+          <option value="">Choose a tournament...</option>
+          {tournaments?.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name} ({t.sport.name})
+            </option>
+          ))}
+        </select>
+      </div>
 
-      <select
-        value={tournamentId}
-        onChange={(e) => setTournamentId(e.target.value ? Number(e.target.value) : '')}
-        className="rounded border px-2 py-1 text-sm"
-      >
-        <option value="">Choose a tournament...</option>
-        {tournaments?.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.name} ({t.sport.name})
-          </option>
-        ))}
-      </select>
-
-      <PlayerSearchPicker selected={player} onSelect={setPlayer} />
+      <div className={fieldGroup}>
+        <label className={label}>Player</label>
+        <PlayerSearchPicker selected={player} onSelect={setPlayer} />
+      </div>
 
       <button
         onClick={() => mutation.mutate()}
         disabled={!tournamentId || !player || mutation.isPending}
-        className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+        className={`${buttonPrimary} self-start`}
       >
         {mutation.isPending ? 'Registering...' : 'Register player'}
       </button>
 
       {message && (
-        <p className={`text-xs ${message.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>{message.text}</p>
+        <p className={`text-sm ${message.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>{message.text}</p>
       )}
     </div>
   )

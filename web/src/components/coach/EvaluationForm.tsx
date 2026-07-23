@@ -4,6 +4,7 @@ import { createEvaluation, type PlayerSearchResult } from '../../lib/coachApi'
 import { fetchSports } from '../../lib/venueApi'
 import { PlayerSearchPicker } from './PlayerSearchPicker'
 import { PlayerSkillHistoryChart } from './PlayerSkillHistoryChart'
+import { buttonPrimary, fieldGroup, input, label, select, textarea } from '../../lib/formStyles'
 
 const LEVELS = ['beginner', 'intermediate', 'advanced', 'pro'] as const
 
@@ -33,61 +34,75 @@ export function EvaluationForm() {
   })
 
   return (
-    <div className="flex flex-col gap-3 rounded border p-3">
-      <h3 className="text-sm font-medium">Evaluate a player</h3>
-
-      <PlayerSearchPicker selected={player} onSelect={setPlayer} />
+    <div className="flex flex-col gap-4">
+      <div className={`${fieldGroup} max-w-md`}>
+        <label className={label}>Player</label>
+        <PlayerSearchPicker selected={player} onSelect={setPlayer} />
+      </div>
 
       {player && (
         <>
-          <div className="flex flex-col gap-2">
-            <select
-              value={sportId}
-              onChange={(e) => setSportId(e.target.value ? Number(e.target.value) : '')}
-              className="rounded border px-2 py-1 text-sm"
-            >
-              <option value="">Sport...</option>
-              {sports?.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-            <select
-              value={level}
-              onChange={(e) => setLevel(e.target.value as (typeof LEVELS)[number])}
-              className="rounded border px-2 py-1 text-sm"
-            >
-              {LEVELS.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              placeholder="Score (optional)"
-              value={score}
-              onChange={(e) => setScore(e.target.value)}
-              className="rounded border px-2 py-1 text-sm"
-            />
-            <textarea
-              placeholder="Notes (optional)"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="rounded border px-2 py-1 text-sm"
-            />
-            <button
-              onClick={() => mutation.mutate()}
-              disabled={!sportId || mutation.isPending}
-              className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
-            >
-              {mutation.isPending ? 'Saving...' : 'Submit evaluation'}
-            </button>
+          <div className="grid max-w-md gap-4 sm:grid-cols-2">
+            <div className={fieldGroup}>
+              <label className={label}>Sport</label>
+              <select
+                value={sportId}
+                onChange={(e) => setSportId(e.target.value ? Number(e.target.value) : '')}
+                className={select}
+              >
+                <option value="">Sport...</option>
+                {sports?.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={fieldGroup}>
+              <label className={label}>Level</label>
+              <select
+                value={level}
+                onChange={(e) => setLevel(e.target.value as (typeof LEVELS)[number])}
+                className={select}
+              >
+                {LEVELS.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={fieldGroup}>
+              <label className={label}>Score (optional)</label>
+              <input
+                type="number"
+                placeholder="0–100"
+                value={score}
+                onChange={(e) => setScore(e.target.value)}
+                className={input}
+              />
+            </div>
+            <div className={`${fieldGroup} sm:col-span-2`}>
+              <label className={label}>Notes (optional)</label>
+              <textarea
+                placeholder="What did you observe?"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className={textarea}
+                rows={2}
+              />
+            </div>
           </div>
+          <button
+            onClick={() => mutation.mutate()}
+            disabled={!sportId || mutation.isPending}
+            className={`${buttonPrimary} self-start`}
+          >
+            {mutation.isPending ? 'Saving...' : 'Submit evaluation'}
+          </button>
 
-          <div>
-            <h4 className="mb-1 text-xs font-medium text-gray-600">Skill history</h4>
+          <div className="border-t border-slate-100 pt-4">
+            <h4 className={`${label} mb-2`}>Skill history</h4>
             <PlayerSkillHistoryChart playerId={player.id} />
           </div>
         </>
