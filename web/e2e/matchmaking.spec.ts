@@ -24,7 +24,9 @@ test('two players requesting the same sport get paired live over the real-time c
     // Player A opens a request and waits — no opponent yet.
     await matchmakingSportA.selectOption({ label: 'Chess' })
     await pageA.getByRole('button', { name: 'Find a match' }).click()
-    await expect(pageA.getByText('Looking for a match...')).toBeVisible()
+    // .first() for the same reason as below — accumulated open Chess requests
+    // between these fixed seed accounts from earlier runs.
+    await expect(pageA.getByText('Looking for a match...').first()).toBeVisible()
 
     // Player B requests the same sport — this should synchronously pair them
     // server-side, and Player A's UI should update via the matchmaking.{id}

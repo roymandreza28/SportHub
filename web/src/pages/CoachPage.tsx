@@ -1,6 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchTournaments } from '../lib/coachApi'
-import { DashboardShell, Section, StatCard, StatCardGrid, type NavItem } from '../components/layout/DashboardShell'
+import {
+  DashboardShell,
+  ListPreview,
+  ListRow,
+  Section,
+  StatCard,
+  StatCardGrid,
+  StatusBadge,
+  type NavItem,
+} from '../components/layout/DashboardShell'
 import { IconClipboard, IconHome, IconTrophy } from '../components/layout/icons'
 import { TournamentRegistrationForm } from '../components/coach/TournamentRegistrationForm'
 import { EvaluationForm } from '../components/coach/EvaluationForm'
@@ -24,6 +33,25 @@ export function CoachPage() {
       <StatCardGrid>
         <StatCard label="Open tournaments" value={openTournaments?.length ?? '-'} />
       </StatCardGrid>
+
+      <ListPreview
+        title="Open Tournaments"
+        description="Tournaments currently accepting registrations."
+        emptyText="No open tournaments right now."
+        rows={(openTournaments ?? []).map((t) => (
+          <ListRow
+            key={t.id}
+            primary={t.name}
+            secondary={`${t.sport.name} — starts ${new Date(t.starts_at).toLocaleDateString()}`}
+            badge={<StatusBadge status={t.status} />}
+          />
+        ))}
+        action={
+          <a href="#registrations" className="text-sm font-medium text-teal-600 hover:text-teal-700">
+            Register a player &rarr;
+          </a>
+        }
+      />
 
       <Section
         id="registrations"

@@ -2,7 +2,16 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchOrganizerTournaments, fetchLivestreams, type BracketMatch } from '../lib/organizerApi'
 import { useAuth } from '../lib/AuthContext'
-import { DashboardShell, Section, StatCard, StatCardGrid, type NavItem } from '../components/layout/DashboardShell'
+import {
+  DashboardShell,
+  ListPreview,
+  ListRow,
+  Section,
+  StatCard,
+  StatCardGrid,
+  StatusBadge,
+  type NavItem,
+} from '../components/layout/DashboardShell'
 import { IconFileText, IconHome, IconRadio, IconTrophy } from '../components/layout/icons'
 import { TournamentWizard } from '../components/organizer/TournamentWizard'
 import { BracketView } from '../components/organizer/BracketView'
@@ -49,6 +58,25 @@ export function OrganizerPage() {
         <StatCard label="Livestreams" value={myLivestreams.length} />
         <StatCard label="Live now" value={liveStreamCount} />
       </StatCardGrid>
+
+      <ListPreview
+        title="Your Tournaments"
+        description="Every tournament you've created, most recent first."
+        emptyText="No tournaments yet — create one below."
+        rows={myTournaments.map((t) => (
+          <ListRow
+            key={t.id}
+            primary={t.name}
+            secondary={`${t.sport.name} — ${new Date(t.starts_at).toLocaleDateString()}${t.venue ? ` at ${t.venue.name}` : ''}`}
+            badge={<StatusBadge status={t.status} />}
+          />
+        ))}
+        action={
+          <a href="#tournaments" className="text-sm font-medium text-teal-600 hover:text-teal-700">
+            Create tournament &rarr;
+          </a>
+        }
+      />
 
       <Section id="tournaments" title="Tournaments" description="Create a tournament and manage its bracket.">
         <TournamentWizard />

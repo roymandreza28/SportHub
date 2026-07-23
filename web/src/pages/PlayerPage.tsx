@@ -2,7 +2,16 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { Venue } from '../lib/venueApi'
 import { fetchMySkillLevels, fetchMyMatchmakingRequests, fetchMyVenueRegistrations } from '../lib/playerApi'
-import { DashboardShell, Section, StatCard, StatCardGrid, type NavItem } from '../components/layout/DashboardShell'
+import {
+  DashboardShell,
+  ListPreview,
+  ListRow,
+  Section,
+  StatCard,
+  StatCardGrid,
+  StatusBadge,
+  type NavItem,
+} from '../components/layout/DashboardShell'
 import { IconCalendar, IconHome, IconMapPin, IconTarget, IconUsers } from '../components/layout/icons'
 import { VenueDirectory } from '../components/player/VenueDirectory'
 import { VenueRegistrationForm } from '../components/player/VenueRegistrationForm'
@@ -26,6 +35,10 @@ export function PlayerPage() {
   const { data: bookings } = useQuery({ queryKey: ['player', 'venue-registrations'], queryFn: fetchMyVenueRegistrations })
 
   const openRequests = (matchmaking ?? []).filter((r) => r.status === 'open').length
+  const upcomingBookings = (bookings ?? [])
+    .filter((b) => b.status === 'pending' || b.status === 'approved')
+    .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
+    .slice(0, 5)
 
   return (
     <DashboardShell navItems={NAV_ITEMS}>
@@ -39,6 +52,20 @@ export function PlayerPage() {
         <StatCard label="Open matchmaking requests" value={openRequests} />
         <StatCard label="Bookings" value={bookings?.length ?? '-'} />
       </StatCardGrid>
+
+      <ListPreview
+        title="My Upcoming Bookings"
+        description="Venue slots you've requested that haven't happened yet."
+        emptyText="No upcoming bookings — browse venues below to request one."
+        rows={upcomingBookings.map((b) => (
+          <ListRow
+            key={b.id}
+            primary={b.court ? `${b.venue.name} — ${b.court.name}` : b.venue.name}
+            secondary={`${new Date(b.starts_at).toLocaleString()} — ${new Date(b.ends_at).toLocaleTimeString()}`}
+            badge={<StatusBadge status={b.status} />}
+          />
+        ))}
+      />
 
       <Section id="profile" title="Profile" description="Your bio, primary sport, and skill history.">
         <PlayerProfileEditor />

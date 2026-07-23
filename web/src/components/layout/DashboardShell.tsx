@@ -92,6 +92,85 @@ export function StatCard({ label, value }: { label: string; value: ReactNode }) 
   )
 }
 
+const STATUS_BADGE_STYLES: Record<string, string> = {
+  pending: 'bg-amber-100 text-amber-700',
+  approved: 'bg-green-100 text-green-700',
+  rejected: 'bg-red-100 text-red-700',
+  cancelled: 'bg-slate-100 text-slate-500',
+  open: 'bg-teal-100 text-teal-700',
+  in_progress: 'bg-blue-100 text-blue-700',
+  completed: 'bg-slate-100 text-slate-600',
+  live: 'bg-red-100 text-red-700',
+  draft: 'bg-slate-100 text-slate-500',
+  scheduled: 'bg-blue-100 text-blue-700',
+  ended: 'bg-slate-100 text-slate-500',
+}
+
+export function StatusBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
+        STATUS_BADGE_STYLES[status] ?? 'bg-slate-100 text-slate-600'
+      }`}
+    >
+      {status.replace('_', ' ')}
+    </span>
+  )
+}
+
+export function ListRow({
+  primary,
+  secondary,
+  badge,
+}: {
+  primary: ReactNode
+  secondary?: ReactNode
+  badge?: ReactNode
+}) {
+  return (
+    <li className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium text-slate-800">{primary}</p>
+        {secondary && <p className="truncate text-xs text-slate-500">{secondary}</p>}
+      </div>
+      {badge}
+    </li>
+  )
+}
+
+export function ListPreview({
+  id,
+  title,
+  description,
+  rows,
+  emptyText,
+  action,
+}: {
+  id?: string
+  title: string
+  description?: string
+  rows: ReactNode[]
+  emptyText: string
+  action?: ReactNode
+}) {
+  return (
+    <div id={id} className="mb-8 scroll-mt-24 rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
+      <div className="mb-1 flex items-end justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">{title}</h2>
+          {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+        </div>
+        {action}
+      </div>
+      {rows.length === 0 ? (
+        <p className="mt-4 text-sm text-slate-400">{emptyText}</p>
+      ) : (
+        <ul className="mt-3 flex flex-col divide-y divide-slate-100">{rows}</ul>
+      )}
+    </div>
+  )
+}
+
 export function Section({
   id,
   title,
