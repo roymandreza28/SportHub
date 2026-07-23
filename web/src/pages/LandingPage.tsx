@@ -158,7 +158,8 @@ export function LandingPage() {
     <div className="min-h-screen bg-white text-slate-900">
       <nav className="sticky top-0 z-10 border-b border-slate-100 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <span className="text-lg font-bold tracking-tight text-slate-900">
+          <span className="flex items-center gap-2 text-lg font-bold tracking-tight text-slate-900">
+            <img src="/logo.png" alt="" className="h-8 w-8" />
             Sport<span className="text-teal-600">Hub</span>
           </span>
           <div className="hidden gap-8 text-sm font-medium text-slate-600 md:flex">

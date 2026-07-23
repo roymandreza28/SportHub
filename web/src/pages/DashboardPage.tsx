@@ -13,7 +13,8 @@ export function DashboardPage() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-sm flex-col gap-4 bg-slate-50 p-8">
-      <span className="text-lg font-bold text-slate-900">
+      <span className="flex items-center gap-2 text-lg font-bold text-slate-900">
+        <img src="/logo.png" alt="" className="h-8 w-8" />
         Sport<span className="text-teal-600">Hub</span>
       </span>
       <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>

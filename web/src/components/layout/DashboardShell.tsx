@@ -22,9 +22,7 @@ export function DashboardShell({ navItems, children }: { navItems: NavItem[]; ch
     <div className="flex min-h-screen bg-slate-50">
       <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-white px-4 py-6">
         <Link to="/dashboard" className="mb-8 flex items-center gap-2 px-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-600 text-sm font-bold text-white">
-            S
-          </span>
+          <img src="/logo.png" alt="" className="h-8 w-8" />
           <span className="text-lg font-bold text-slate-900">
             Sport<span className="text-teal-600">Hub</span>
           </span>
