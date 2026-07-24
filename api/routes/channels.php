@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Conversation;
 use App\Models\Venue;
 use Illuminate\Support\Facades\Broadcast;
 
@@ -32,4 +33,10 @@ Broadcast::channel('livestream.{livestreamId}.chat', function ($user, $livestrea
 
 Broadcast::channel('admin.monitoring', function ($user) {
     return $user->hasRole('admin');
+});
+
+// Friend/group chat: only current participants may listen.
+Broadcast::channel('conversation.{conversationId}', function ($user, $conversationId) {
+    return Conversation::find($conversationId)
+        ?->participants()->where('users.id', $user->id)->exists() ?? false;
 });

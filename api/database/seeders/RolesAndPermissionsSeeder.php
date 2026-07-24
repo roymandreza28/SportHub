@@ -27,10 +27,16 @@ class RolesAndPermissionsSeeder extends Seeder
             'create venue registration',
             'manage own profile',
             'create matchmaking request',
+            'manage friendships',
+            'create posts',
+            'use chat',
         ],
         'coach' => [
             'create tournament registration',
             'evaluate player',
+            'manage friendships',
+            'create posts',
+            'use chat',
         ],
     ];
 

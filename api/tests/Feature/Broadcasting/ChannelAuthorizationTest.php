@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Conversation;
 use App\Models\Venue;
 
 // The suite's default BROADCAST_CONNECTION=null (see phpunit.xml) uses
@@ -79,4 +80,19 @@ it('denies admin.monitoring to a non-admin and allows it for an admin', function
     $this->actingAs($admin)
         ->postJson('/broadcasting/auth', ['socket_id' => '1.1', 'channel_name' => 'private-admin.monitoring'])
         ->assertOk();
+});
+
+it('authorizes only current participants for a conversation channel', function () {
+    $member = userWithRole('player');
+    $stranger = userWithRole('player');
+    $conversation = Conversation::create(['type' => 'direct', 'created_by' => $member->id]);
+    $conversation->participants()->attach($member->id);
+
+    $this->actingAs($member)
+        ->postJson('/broadcasting/auth', ['socket_id' => '1.1', 'channel_name' => "private-conversation.{$conversation->id}"])
+        ->assertOk();
+
+    $this->actingAs($stranger)
+        ->postJson('/broadcasting/auth', ['socket_id' => '1.1', 'channel_name' => "private-conversation.{$conversation->id}"])
+        ->assertForbidden();
 });

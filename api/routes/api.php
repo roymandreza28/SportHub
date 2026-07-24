@@ -14,6 +14,12 @@ use App\Http\Controllers\MatchmakingRequestController;
 use App\Http\Controllers\NewsController;
 use App\Http\Controllers\PlayerProfileController;
 use App\Http\Controllers\SkillLevelController;
+use App\Http\Controllers\Social\ConversationController;
+use App\Http\Controllers\Social\ConversationMessageController;
+use App\Http\Controllers\Social\FriendshipController;
+use App\Http\Controllers\Social\PostController;
+use App\Http\Controllers\Social\ProfileController;
+use App\Http\Controllers\Social\SocialSearchController;
 use App\Http\Controllers\TournamentController;
 use App\Http\Controllers\TournamentRegistrationController;
 use App\Http\Controllers\VenueController;
@@ -65,6 +71,28 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/facilitators', [AdminUserController::class, 'createFacilitator']);
         Route::get('/dashboard/metrics', [AdminDashboardController::class, 'metrics']);
         Route::get('/audit-log', [AuditLogController::class, 'index']);
+    });
+
+    Route::middleware('role:player|coach')->prefix('social')->group(function () {
+        Route::get('/users', [SocialSearchController::class, 'index']);
+        Route::get('/users/{user}', [ProfileController::class, 'show']);
+
+        Route::get('/friends', [FriendshipController::class, 'index']);
+        Route::get('/friend-requests', [FriendshipController::class, 'pending']);
+        Route::post('/friend-requests', [FriendshipController::class, 'store']);
+        Route::post('/friend-requests/{friendship}/accept', [FriendshipController::class, 'accept']);
+        Route::post('/friend-requests/{friendship}/decline', [FriendshipController::class, 'decline']);
+        Route::delete('/friendships/{friendship}', [FriendshipController::class, 'destroy']);
+
+        Route::get('/posts', [PostController::class, 'index']);
+        Route::post('/posts', [PostController::class, 'store']);
+        Route::delete('/posts/{post}', [PostController::class, 'destroy']);
+
+        Route::get('/conversations', [ConversationController::class, 'index']);
+        Route::post('/conversations', [ConversationController::class, 'store']);
+        Route::post('/conversations/{conversation}/participants', [ConversationController::class, 'addParticipant']);
+        Route::get('/conversations/{conversation}/messages', [ConversationMessageController::class, 'index']);
+        Route::post('/conversations/{conversation}/messages', [ConversationMessageController::class, 'store']);
     });
 
     Route::middleware('role:venue_facilitator|admin')->group(function () {

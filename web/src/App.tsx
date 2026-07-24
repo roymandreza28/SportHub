@@ -11,6 +11,7 @@ import { FacilitatorPage } from './pages/FacilitatorPage'
 import { PlayerPage } from './pages/PlayerPage'
 import { CoachPage } from './pages/CoachPage'
 import { OrganizerPage } from './pages/OrganizerPage'
+import { ProfilePage } from './pages/ProfilePage'
 
 const queryClient = new QueryClient()
 
@@ -68,6 +69,14 @@ function App() {
               element={
                 <ProtectedRoute roles={['organizer']}>
                   <OrganizerPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile/:userId"
+              element={
+                <ProtectedRoute roles={['player', 'coach']}>
+                  <ProfilePage />
                 </ProtectedRoute>
               }
             />

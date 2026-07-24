@@ -21,9 +21,9 @@ export async function loginAs(page: Page, email: string, password: string) {
  */
 export async function apiRequest(
   page: Page,
-  method: 'POST' | 'PATCH',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,
-  data: Record<string, unknown>
+  data?: Record<string, unknown>
 ) {
   const cookies = await page.context().cookies()
   const xsrf = cookies.find((c) => c.name === 'XSRF-TOKEN')?.value

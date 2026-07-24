@@ -5,11 +5,13 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -104,5 +106,46 @@ class User extends Authenticatable
     public function chatMessages(): HasMany
     {
         return $this->hasMany(ChatMessage::class);
+    }
+
+    public function friendshipsAsRequester(): HasMany
+    {
+        return $this->hasMany(Friendship::class, 'requester_id');
+    }
+
+    public function friendshipsAsAddressee(): HasMany
+    {
+        return $this->hasMany(Friendship::class, 'addressee_id');
+    }
+
+    public function friends(): Collection
+    {
+        $asRequester = $this->friendshipsAsRequester()->where('status', 'accepted')->with('addressee')->get()->pluck('addressee');
+        $asAddressee = $this->friendshipsAsAddressee()->where('status', 'accepted')->with('requester')->get()->pluck('requester');
+
+        return $asRequester->concat($asAddressee)->unique('id')->values();
+    }
+
+    public function isFriendsWith(User $other): bool
+    {
+        return Friendship::where('pair_key', Friendship::pairKeyFor($this->id, $other->id))
+            ->where('status', 'accepted')
+            ->exists();
+    }
+
+    public function friendshipWith(User $other): ?Friendship
+    {
+        return Friendship::where('pair_key', Friendship::pairKeyFor($this->id, $other->id))->first();
+    }
+
+    public function posts(): HasMany
+    {
+        return $this->hasMany(Post::class);
+    }
+
+    public function conversations(): BelongsToMany
+    {
+        return $this->belongsToMany(Conversation::class, 'conversation_participants')
+            ->withPivot('joined_at', 'last_read_at');
     }
 }

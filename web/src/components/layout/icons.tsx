@@ -163,3 +163,32 @@ export function IconChevronLeft(props: IconProps) {
 export function IconChevronDown(props: IconProps) {
   return base(<path d="m5 8.5 7 7 7-7" />, props)
 }
+
+export function IconUserPlus(props: IconProps) {
+  return base(
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M18 8v6M15 11h6" />
+    </>,
+    props
+  )
+}
+
+export function IconMessageCircle(props: IconProps) {
+  return base(
+    <path d="M12 3.5c-5 0-8.5 3.3-8.5 7.3 0 2.4 1.3 4.5 3.4 5.9L6 21l4.3-1.7c.5.07 1.1.1 1.7.1 5 0 8.5-3.3 8.5-7.3S17 3.5 12 3.5Z" />,
+    props
+  )
+}
+
+export function IconImage(props: IconProps) {
+  return base(
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="2" />
+      <circle cx="8.5" cy="10" r="1.75" />
+      <path d="m5 17 4.5-4.5c.7-.7 1.8-.7 2.5 0L15 15.5M14 14l1.5-1.5c.7-.7 1.8-.7 2.5 0L21 15.5" />
+    </>,
+    props
+  )
+}
