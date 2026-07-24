@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -57,6 +58,20 @@ class AuthController extends Controller
         $request->session()->regenerate();
 
         return response()->json($this->withRoles(Auth::user()));
+    }
+
+    public function updatePassword(Request $request)
+    {
+        $data = $request->validate([
+            'current_password' => ['required', 'current_password'],
+            'password' => ['required', 'string', 'min:8'],
+        ]);
+
+        $request->user()->update(['password' => Hash::make($data['password'])]);
+
+        AuditLog::record($request->user(), 'user.password_changed_self');
+
+        return response()->noContent();
     }
 
     public function logout(Request $request)

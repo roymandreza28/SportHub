@@ -45,6 +45,7 @@ Route::get('/livestreams/{livestream}/messages', [ChatMessageController::class, 
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::patch('/user/password', [AuthController::class, 'updatePassword']);
 
     Route::get('/user', function (Request $request) {
         $user = $request->user();

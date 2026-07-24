@@ -16,6 +16,8 @@ test('a new user can register, land straight on their role dashboard, and log ou
   await expect(page).toHaveURL(/\/player/)
   await expect(page.getByText('E2E Test User')).toBeVisible()
 
+  // Logout now lives inside the header's user menu dropdown.
+  await page.getByRole('button', { name: 'E2E Test User' }).click()
   await page.getByRole('button', { name: 'Logout' }).click()
   // Logout returns to the landing page, not /login.
   await expect(page).toHaveURL(/^http:\/\/localhost:5173\/$/)

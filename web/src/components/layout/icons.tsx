@@ -159,3 +159,7 @@ export function IconLogOut(props: IconProps) {
 export function IconChevronLeft(props: IconProps) {
   return base(<path d="m14.5 5-7 7 7 7" />, props)
 }
+
+export function IconChevronDown(props: IconProps) {
+  return base(<path d="m5 8.5 7 7 7-7" />, props)
+}
