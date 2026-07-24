@@ -43,6 +43,52 @@ class AdminUserController extends Controller
         ];
     }
 
+    public function updatePassword(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'password' => ['required', 'string', 'min:8'],
+        ]);
+
+        $user->update(['password' => Hash::make($data['password'])]);
+
+        AuditLog::record($request->user(), 'user.password_changed', $user);
+
+        return response()->noContent();
+    }
+
+    public function updateStatus(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'is_active' => ['required', 'boolean'],
+        ]);
+
+        if ($user->is($request->user())) {
+            abort(422, 'You cannot deactivate your own account.');
+        }
+
+        $user->update(['is_active' => $data['is_active']]);
+
+        AuditLog::record($request->user(), $data['is_active'] ? 'user.activated' : 'user.deactivated', $user);
+
+        return [
+            ...$user->toArray(),
+            'roles' => $user->getRoleNames()->values(),
+        ];
+    }
+
+    public function destroy(Request $request, User $user)
+    {
+        if ($user->is($request->user())) {
+            abort(422, 'You cannot delete your own account.');
+        }
+
+        AuditLog::record($request->user(), 'user.deleted', $user);
+
+        $user->delete();
+
+        return response()->noContent();
+    }
+
     public function createFacilitator(Request $request)
     {
         $data = $request->validate([

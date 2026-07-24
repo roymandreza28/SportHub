@@ -60,7 +60,7 @@ export function AdminPage() {
       )}
 
       {active === 'users' && (
-        <Section title="Users Management" description="Search users and manage their roles.">
+        <Section title="Users Management" description="Search users and manage their accounts.">
           <UserManagementTable />
         </Section>
       )}

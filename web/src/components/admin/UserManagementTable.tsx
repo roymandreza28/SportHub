@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchUsers, type AdminUser } from '../../lib/adminApi'
-import { RoleAssignmentModal } from './RoleAssignmentModal'
+import { UserActionsModal } from './UserActionsModal'
 import { buttonGhost, input, table, tableCell, tableHeadCell, tableHeadRow, tableRow, tableWrap } from '../../lib/formStyles'
 
 export function UserManagementTable() {
@@ -32,6 +32,7 @@ export function UserManagementTable() {
               <th className={tableHeadCell}>Name</th>
               <th className={tableHeadCell}>Email</th>
               <th className={tableHeadCell}>Roles</th>
+              <th className={tableHeadCell}>Status</th>
               <th className={tableHeadCell} />
             </tr>
           </thead>
@@ -53,9 +54,18 @@ export function UserManagementTable() {
                     </div>
                   )}
                 </td>
+                <td className={tableCell}>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    }`}
+                  >
+                    {user.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
                 <td className={`${tableCell} text-right`}>
                   <button onClick={() => setEditing(user)} className={buttonGhost}>
-                    Edit roles
+                    Edit
                   </button>
                 </td>
               </tr>
@@ -64,7 +74,7 @@ export function UserManagementTable() {
         </table>
       </div>
 
-      {editing && <RoleAssignmentModal user={editing} onClose={() => setEditing(null)} />}
+      {editing && <UserActionsModal user={editing} onClose={() => setEditing(null)} />}
     </div>
   )
 }

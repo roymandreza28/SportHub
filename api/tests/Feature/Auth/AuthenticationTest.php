@@ -45,3 +45,20 @@ it('logs out and invalidates the session', function () {
 
     $this->actingAs($user)->postJson('/api/logout')->assertNoContent();
 });
+
+it('rejects login for a deactivated account', function () {
+    $user = User::factory()->create(['password' => bcrypt('correct-password'), 'is_active' => false]);
+
+    $this->postJson('/api/login', ['email' => $user->email, 'password' => 'correct-password'])
+        ->assertStatus(422);
+});
+
+it('rejects further requests and logs out a user whose account is deactivated mid-session', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)->getJson('/api/user')->assertOk();
+
+    $user->update(['is_active' => false]);
+
+    $this->actingAs($user)->getJson('/api/user')->assertStatus(403);
+});

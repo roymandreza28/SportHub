@@ -2,6 +2,7 @@
 
 use App\Models\AuditLog;
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 
 it('denies every admin route to a non-admin role', function () {
     $player = userWithRole('player');
@@ -76,4 +77,80 @@ it('lists audit log entries newest first', function () {
 
     $response->assertOk();
     expect($response->json('data.0.action'))->toBe('second.action');
+});
+
+it('lets an admin change another users password and logs it', function () {
+    $admin = userWithRole('admin');
+    $target = userWithRole('player');
+
+    $response = $this->actingAs($admin)->patchJson("/api/admin/users/{$target->id}/password", [
+        'password' => 'newpassword123',
+    ]);
+
+    $response->assertNoContent();
+    expect(Hash::check('newpassword123', $target->fresh()->password))->toBeTrue();
+
+    $this->assertDatabaseHas('audit_logs', [
+        'actor_id' => $admin->id,
+        'action' => 'user.password_changed',
+        'subject_id' => $target->id,
+    ]);
+});
+
+it('lets an admin deactivate and reactivate another users account', function () {
+    $admin = userWithRole('admin');
+    $target = userWithRole('player');
+
+    $response = $this->actingAs($admin)->patchJson("/api/admin/users/{$target->id}/status", [
+        'is_active' => false,
+    ]);
+
+    $response->assertOk();
+    expect($target->fresh()->is_active)->toBeFalse();
+    $this->assertDatabaseHas('audit_logs', ['action' => 'user.deactivated', 'subject_id' => $target->id]);
+
+    $response = $this->actingAs($admin)->patchJson("/api/admin/users/{$target->id}/status", [
+        'is_active' => true,
+    ]);
+
+    $response->assertOk();
+    expect($target->fresh()->is_active)->toBeTrue();
+    $this->assertDatabaseHas('audit_logs', ['action' => 'user.activated', 'subject_id' => $target->id]);
+});
+
+it('prevents an admin from deactivating their own account', function () {
+    $admin = userWithRole('admin');
+
+    $response = $this->actingAs($admin)->patchJson("/api/admin/users/{$admin->id}/status", [
+        'is_active' => false,
+    ]);
+
+    $response->assertStatus(422);
+    expect($admin->fresh()->is_active)->toBeTrue();
+});
+
+it('lets an admin soft delete another users account and logs it', function () {
+    $admin = userWithRole('admin');
+    $target = userWithRole('player');
+
+    $response = $this->actingAs($admin)->deleteJson("/api/admin/users/{$target->id}");
+
+    $response->assertNoContent();
+    expect(User::find($target->id))->toBeNull();
+    expect(User::withTrashed()->find($target->id))->not->toBeNull();
+
+    $this->assertDatabaseHas('audit_logs', [
+        'actor_id' => $admin->id,
+        'action' => 'user.deleted',
+        'subject_id' => $target->id,
+    ]);
+});
+
+it('prevents an admin from deleting their own account', function () {
+    $admin = userWithRole('admin');
+
+    $response = $this->actingAs($admin)->deleteJson("/api/admin/users/{$admin->id}");
+
+    $response->assertStatus(422);
+    expect(User::find($admin->id))->not->toBeNull();
 });

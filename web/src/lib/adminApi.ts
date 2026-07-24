@@ -5,6 +5,7 @@ export type AdminUser = {
   id: number
   name: string
   email: string
+  is_active: boolean
   roles: { id: number; name: Role }[]
 }
 
@@ -44,9 +45,17 @@ export async function fetchUsers(search: string) {
   return data
 }
 
-export async function updateUserRoles(userId: number, roles: Role[]) {
-  const { data } = await api.patch<AdminUser>(`/api/admin/users/${userId}/roles`, { roles })
+export async function updateUserPassword(userId: number, password: string) {
+  await api.patch(`/api/admin/users/${userId}/password`, { password })
+}
+
+export async function updateUserStatus(userId: number, isActive: boolean) {
+  const { data } = await api.patch<AdminUser>(`/api/admin/users/${userId}/status`, { is_active: isActive })
   return data
+}
+
+export async function deleteUser(userId: number) {
+  await api.delete(`/api/admin/users/${userId}`)
 }
 
 export async function createFacilitator(input: { name: string; email: string; password: string }) {

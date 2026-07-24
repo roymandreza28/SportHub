@@ -58,6 +58,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin')->prefix('admin')->group(function () {
         Route::get('/users', [AdminUserController::class, 'index']);
         Route::patch('/users/{user}/roles', [AdminUserController::class, 'updateRoles']);
+        Route::patch('/users/{user}/password', [AdminUserController::class, 'updatePassword']);
+        Route::patch('/users/{user}/status', [AdminUserController::class, 'updateStatus']);
+        Route::delete('/users/{user}', [AdminUserController::class, 'destroy']);
         Route::post('/facilitators', [AdminUserController::class, 'createFacilitator']);
         Route::get('/dashboard/metrics', [AdminDashboardController::class, 'metrics']);
         Route::get('/audit-log', [AuditLogController::class, 'index']);
