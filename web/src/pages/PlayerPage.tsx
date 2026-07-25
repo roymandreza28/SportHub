@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import type { Venue } from '../lib/venueApi'
 import { fetchMySkillLevels, fetchMyMatchmakingRequests, fetchMyVenueRegistrations } from '../lib/playerApi'
@@ -32,7 +33,8 @@ const NAV_ITEMS: NavItem[] = [
 
 export function PlayerPage() {
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
-  const [active, setActive] = useState(NAV_ITEMS[0].id)
+  const [searchParams] = useSearchParams()
+  const [active, setActive] = useState(searchParams.get('tab') ?? NAV_ITEMS[0].id)
   const { openChatWindow } = useChatUI()
 
   const { data: skillLevels } = useQuery({ queryKey: ['skill-levels', 'mine'], queryFn: fetchMySkillLevels })

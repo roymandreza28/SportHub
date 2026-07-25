@@ -17,11 +17,11 @@ class FriendshipController extends Controller
         $user = $request->user();
 
         $asRequester = $user->friendshipsAsRequester()->where('status', 'accepted')
-            ->with('addressee:id,name,email')->get()
+            ->with('addressee:id,name,email,avatar_path')->get()
             ->map(fn (Friendship $f) => ['friendship_id' => $f->id, 'user' => $f->addressee]);
 
         $asAddressee = $user->friendshipsAsAddressee()->where('status', 'accepted')
-            ->with('requester:id,name,email')->get()
+            ->with('requester:id,name,email,avatar_path')->get()
             ->map(fn (Friendship $f) => ['friendship_id' => $f->id, 'user' => $f->requester]);
 
         return $asRequester->concat($asAddressee)->values();
@@ -36,7 +36,7 @@ class FriendshipController extends Controller
             : $request->user()->friendshipsAsAddressee();
 
         return $query->where('status', 'pending')
-            ->with(['requester:id,name,email', 'addressee:id,name,email'])
+            ->with(['requester:id,name,email,avatar_path', 'addressee:id,name,email,avatar_path'])
             ->latest()
             ->get();
     }

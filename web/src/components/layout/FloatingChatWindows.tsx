@@ -1,10 +1,12 @@
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router'
 import { fetchConversations, fetchMessages, markConversationRead, type ConversationSummary } from '../../lib/chatApi'
 import { useAuth } from '../../lib/AuthContext'
 import { useChatUI } from '../../lib/ChatUIContext'
-import { conversationTitle } from '../social/ConversationList'
+import { conversationAvatarUrl, conversationTitle } from '../social/ConversationList'
 import { ConversationWindow } from '../social/ConversationWindow'
+import { Avatar } from './Avatar'
 
 function FloatingChatWindow({ conversation, onClose }: { conversation: ConversationSummary; onClose: () => void }) {
   const { user } = useAuth()
@@ -22,13 +24,26 @@ function FloatingChatWindow({ conversation, onClose }: { conversation: Conversat
     })
   }, [conversation.id, history?.data.length, queryClient])
 
+  const title = conversationTitle(conversation, user?.id)
+  const otherParticipant = conversation.type === 'direct' ? conversation.participants.find((p) => p.id !== user?.id) : null
+
   return (
     <div className="flex h-96 w-80 flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl">
-      <div className="flex shrink-0 items-center justify-between bg-teal-600 px-3 py-2.5 text-white">
-        <span className="truncate text-sm font-semibold">{conversationTitle(conversation, user?.id)}</span>
+      <div className="flex shrink-0 items-center justify-between gap-2 bg-teal-600 px-3 py-2 text-white">
+        {otherParticipant ? (
+          <Link to={`/profile/${otherParticipant.id}`} className="flex min-w-0 items-center gap-2 hover:opacity-90">
+            <Avatar name={title} url={conversationAvatarUrl(conversation, user?.id)} size="sm" />
+            <span className="truncate text-sm font-semibold">{title}</span>
+          </Link>
+        ) : (
+          <span className="flex min-w-0 items-center gap-2">
+            <Avatar name={title} url={null} size="sm" />
+            <span className="truncate text-sm font-semibold">{title}</span>
+          </span>
+        )}
         <button
           onClick={onClose}
-          aria-label={`Close chat with ${conversationTitle(conversation, user?.id)}`}
+          aria-label={`Close chat with ${title}`}
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-teal-100 transition hover:bg-teal-700 hover:text-white"
         >
           ×

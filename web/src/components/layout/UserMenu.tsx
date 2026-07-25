@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../../lib/AuthContext'
 import { AccountSettingsModal } from './AccountSettingsModal'
+import { Avatar } from './Avatar'
 import { IconChevronDown, IconLogOut, IconSettings, IconSwitch } from './icons'
 
 export function UserMenu() {
-  const { user, logout } = useAuth()
+  const { user, logout, hasRole } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -50,9 +51,7 @@ export function UserMenu() {
           onClick={() => setOpen(true)}
           className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold text-teal-700">
-            {user?.name?.[0]?.toUpperCase() ?? '?'}
-          </span>
+          <Avatar name={user?.name ?? '?'} url={user?.avatar_url} size="sm" />
           <span className="hidden sm:inline">{user?.name}</span>
           <IconChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
@@ -61,10 +60,25 @@ export function UserMenu() {
           <div className="absolute right-0 top-full z-20 w-64 pt-2">
             <div className="rounded-xl border border-slate-100 bg-white p-2 shadow-2xl">
               <div className="border-b border-slate-100 px-3 py-2.5">
-                <p className="truncate text-sm font-semibold text-slate-900">{user?.name}</p>
-                <p className="truncate text-xs text-slate-500">{user?.email}</p>
+                <div className="flex items-center gap-3">
+                  <Avatar name={user?.name ?? '?'} url={user?.avatar_url} size="md" />
+                  <div className="min-w-0">
+                    {hasRole('player', 'coach') && user ? (
+                      <Link
+                        to={`/profile/${user.id}`}
+                        onClick={() => setOpen(false)}
+                        className="block truncate text-sm font-semibold text-slate-900 hover:text-teal-700"
+                      >
+                        {user.name}
+                      </Link>
+                    ) : (
+                      <p className="truncate text-sm font-semibold text-slate-900">{user?.name}</p>
+                    )}
+                    <p className="truncate text-xs text-slate-500">{user?.email}</p>
+                  </div>
+                </div>
                 {!!user?.roles.length && (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
+                  <div className="mt-2 flex flex-wrap gap-1">
                     {user.roles.map((role) => (
                       <span
                         key={role}

@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router'
 import { acceptFriendRequest, declineFriendRequest, fetchFriendRequests } from '../../lib/friendsApi'
 import { buttonPrimary, buttonSecondary } from '../../lib/formStyles'
+import { Avatar } from '../layout/Avatar'
 
 export function FriendRequestsPanel() {
   const queryClient = useQueryClient()
@@ -30,8 +32,11 @@ export function FriendRequestsPanel() {
         <ul className="flex flex-col divide-y divide-slate-100">
           {incoming?.map((req) => (
             <li key={req.id} className="flex items-center justify-between gap-3 py-2.5">
-              <p className="text-sm font-medium text-slate-800">{req.requester.name}</p>
-              <div className="flex gap-2">
+              <Link to={`/profile/${req.requester.id}`} className="flex min-w-0 items-center gap-2.5 hover:text-teal-700">
+                <Avatar name={req.requester.name} url={req.requester.avatar_url} size="sm" />
+                <span className="truncate text-sm font-medium text-slate-800">{req.requester.name}</span>
+              </Link>
+              <div className="flex shrink-0 gap-2">
                 <button onClick={() => acceptMutation.mutate(req.id)} className={buttonPrimary}>
                   Accept
                 </button>
@@ -50,8 +55,11 @@ export function FriendRequestsPanel() {
         <ul className="flex flex-col divide-y divide-slate-100">
           {outgoing?.map((req) => (
             <li key={req.id} className="flex items-center justify-between gap-3 py-2.5">
-              <p className="text-sm font-medium text-slate-800">{req.addressee.name}</p>
-              <span className="text-xs font-medium text-slate-400">Pending</span>
+              <Link to={`/profile/${req.addressee.id}`} className="flex min-w-0 items-center gap-2.5 hover:text-teal-700">
+                <Avatar name={req.addressee.name} url={req.addressee.avatar_url} size="sm" />
+                <span className="truncate text-sm font-medium text-slate-800">{req.addressee.name}</span>
+              </Link>
+              <span className="shrink-0 text-xs font-medium text-slate-400">Pending</span>
             </li>
           ))}
         </ul>

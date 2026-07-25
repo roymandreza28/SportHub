@@ -1,7 +1,9 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 
 it('registers a new user, logs them in via session, and defaults them to player', function () {
     $response = $this->postJson('/api/register', [
@@ -89,4 +91,33 @@ it('rejects a self password change with the wrong current password', function ()
     ])->assertStatus(422);
 
     expect(Hash::check('correct-password', $user->fresh()->password))->toBeTrue();
+});
+
+it('lets any authenticated role upload their own avatar, replacing the old file', function () {
+    Storage::fake('public');
+    $user = userWithRole('organizer');
+
+    $first = $this->actingAs($user)->post('/api/user/avatar', [
+        'avatar' => UploadedFile::fake()->create('me.jpg', 100, 'image/jpeg'),
+    ]);
+    $first->assertOk();
+    $firstPath = $user->fresh()->avatar_path;
+    Storage::disk('public')->assertExists($firstPath);
+    expect($first->json('avatar_url'))->toContain($firstPath);
+
+    $second = $this->actingAs($user)->post('/api/user/avatar', [
+        'avatar' => UploadedFile::fake()->create('me-again.jpg', 100, 'image/jpeg'),
+    ]);
+    $second->assertOk();
+    Storage::disk('public')->assertMissing($firstPath);
+    Storage::disk('public')->assertExists($user->fresh()->avatar_path);
+});
+
+it('rejects a non-image avatar upload', function () {
+    Storage::fake('public');
+    $user = userWithRole('player');
+
+    $this->actingAs($user)->post('/api/user/avatar', [
+        'avatar' => UploadedFile::fake()->create('doc.pdf', 100),
+    ])->assertStatus(422);
 });

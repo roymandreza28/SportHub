@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -72,6 +73,23 @@ class AuthController extends Controller
         AuditLog::record($request->user(), 'user.password_changed_self');
 
         return response()->noContent();
+    }
+
+    public function updateAvatar(Request $request)
+    {
+        $data = $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        $user = $request->user();
+
+        if ($user->avatar_path) {
+            Storage::disk('public')->delete($user->avatar_path);
+        }
+
+        $user->update(['avatar_path' => $request->file('avatar')->store('avatars/'.$user->id, 'public')]);
+
+        return response()->json($this->withRoles($user->fresh()));
     }
 
     public function logout(Request $request)

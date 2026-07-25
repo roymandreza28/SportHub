@@ -40,10 +40,13 @@ test('friends can message each other from the header messages menu, delivered li
     await pageA.goto('/player')
     await pageA.getByRole('button', { name: 'Messages' }).click()
     await pageA.getByRole('button', { name: 'New', exact: true }).click()
+    await expect(pageA.getByText(nameB)).toBeVisible({ timeout: 15000 })
     await pageA.getByText(nameB).click()
     await pageA.getByRole('button', { name: 'Start' }).click()
     // Modal closes only once the conversation is actually created server-side.
     await expect(pageA.getByRole('heading', { name: 'New conversation' })).toHaveCount(0, { timeout: 15000 })
+    // ...and A's own floating window should appear immediately after.
+    await expect(pageA.getByPlaceholder('Type a message...')).toBeVisible({ timeout: 15000 })
 
     await pageB.goto('/player')
     await pageB.getByRole('button', { name: 'Messages' }).click()

@@ -4,6 +4,7 @@ import type { Paginated } from './socialApi'
 export type ConversationParticipant = {
   id: number
   name: string
+  avatar_url: string | null
 }
 
 export type ConversationMessageItem = {

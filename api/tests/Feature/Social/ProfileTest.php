@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Friendship;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 it('reports friendship_status as self, none, pending_sent, pending_received, and friends', function () {
     $me = userWithRole('player');
@@ -34,4 +36,28 @@ it('404s when viewing a profile for a role outside the social layer', function (
     $organizer = userWithRole('organizer');
 
     $this->actingAs($me)->getJson("/api/social/users/{$organizer->id}")->assertNotFound();
+});
+
+it('lets a player or coach set a cover photo, reflected on their profile', function () {
+    Storage::fake('public');
+    $me = userWithRole('player');
+
+    $response = $this->actingAs($me)->post('/api/social/profile/cover', [
+        'cover' => UploadedFile::fake()->create('cover.jpg', 200, 'image/jpeg'),
+    ]);
+    $response->assertOk();
+    Storage::disk('public')->assertExists($me->fresh()->cover_path);
+
+    $this->actingAs($me)->getJson("/api/social/users/{$me->id}")
+        ->assertOk()
+        ->assertJsonPath('user.cover_url', fn ($url) => str_contains($url, $me->fresh()->cover_path));
+});
+
+it('denies a role outside the social layer from setting a cover photo', function () {
+    Storage::fake('public');
+    $organizer = userWithRole('organizer');
+
+    $this->actingAs($organizer)->post('/api/social/profile/cover', [
+        'cover' => UploadedFile::fake()->create('cover.jpg', 200, 'image/jpeg'),
+    ])->assertForbidden();
 });

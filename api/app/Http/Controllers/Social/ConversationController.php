@@ -12,7 +12,7 @@ class ConversationController extends Controller
     public function index(Request $request)
     {
         return $request->user()->conversations()
-            ->with(['participants:id,name', 'messages' => fn ($q) => $q->latest()->limit(1)])
+            ->with(['participants:id,name,avatar_path', 'messages' => fn ($q) => $q->latest()->limit(1)])
             ->get()
             ->sortByDesc(fn (Conversation $c) => $c->messages->first()?->created_at ?? $c->created_at)
             ->values();
@@ -51,7 +51,7 @@ class ConversationController extends Controller
                     $conversation->participants()->attach([$user->id, $otherId]);
                 }
 
-                return response()->json($conversation->load('participants:id,name'), 201);
+                return response()->json($conversation->load('participants:id,name,avatar_path'), 201);
             });
         }
 
@@ -67,7 +67,7 @@ class ConversationController extends Controller
 
         $conversation->participants()->attach($participantIds->push($user->id)->unique());
 
-        return response()->json($conversation->load('participants:id,name'), 201);
+        return response()->json($conversation->load('participants:id,name,avatar_path'), 201);
     }
 
     public function markRead(Request $request, Conversation $conversation)
@@ -92,6 +92,6 @@ class ConversationController extends Controller
 
         $conversation->participants()->syncWithoutDetaching([$newUserId]);
 
-        return $conversation->load('participants:id,name');
+        return $conversation->load('participants:id,name,avatar_path');
     }
 }

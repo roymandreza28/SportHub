@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchTournaments } from '../lib/coachApi'
 import {
@@ -27,7 +28,8 @@ const NAV_ITEMS: NavItem[] = [
 
 export function CoachPage() {
   const { data: openTournaments } = useQuery({ queryKey: ['tournaments', 'open'], queryFn: () => fetchTournaments('open') })
-  const [active, setActive] = useState(NAV_ITEMS[0].id)
+  const [searchParams] = useSearchParams()
+  const [active, setActive] = useState(searchParams.get('tab') ?? NAV_ITEMS[0].id)
   const { openChatWindow } = useChatUI()
 
   return (

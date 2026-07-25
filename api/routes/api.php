@@ -52,6 +52,7 @@ Route::get('/livestreams/{livestream}/messages', [ChatMessageController::class, 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::patch('/user/password', [AuthController::class, 'updatePassword']);
+    Route::post('/user/avatar', [AuthController::class, 'updateAvatar']);
 
     Route::get('/user', function (Request $request) {
         $user = $request->user();
@@ -76,6 +77,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:player|coach')->prefix('social')->group(function () {
         Route::get('/users', [SocialSearchController::class, 'index']);
         Route::get('/users/{user}', [ProfileController::class, 'show']);
+        Route::post('/profile/cover', [ProfileController::class, 'updateCover']);
 
         Route::get('/friends', [FriendshipController::class, 'index']);
         Route::get('/friend-requests', [FriendshipController::class, 'pending']);

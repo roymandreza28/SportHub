@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchFriends } from '../../lib/friendsApi'
 import { createGroupConversation, startDirectConversation } from '../../lib/chatApi'
 import { buttonPrimary, buttonSecondary, fieldGroup, input, label } from '../../lib/formStyles'
+import { Avatar } from '../layout/Avatar'
 
 export function NewConversationModal({
   onClose,
@@ -62,6 +63,7 @@ export function NewConversationModal({
                     onChange={() => toggle(friend.user.id)}
                     className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
                   />
+                  <Avatar name={friend.user.name} url={friend.user.avatar_url} size="sm" />
                   {friend.user.name}
                 </label>
               ))}

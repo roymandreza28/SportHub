@@ -26,6 +26,7 @@ describe('LoginPage', () => {
       register: vi.fn(),
       logout: vi.fn(),
       hasRole: () => false,
+      refreshUser: vi.fn(),
     })
 
     renderLoginPage()
@@ -47,6 +48,7 @@ describe('LoginPage', () => {
       register: vi.fn(),
       logout: vi.fn(),
       hasRole: () => false,
+      refreshUser: vi.fn(),
     })
 
     renderLoginPage()

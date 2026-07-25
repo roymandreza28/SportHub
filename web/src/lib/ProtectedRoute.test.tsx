@@ -12,6 +12,7 @@ function mockAuth(overrides: Partial<ReturnType<typeof AuthContext.useAuth>>) {
     register: vi.fn(),
     logout: vi.fn(),
     hasRole: () => false,
+    refreshUser: vi.fn(),
     ...overrides,
   })
 }
@@ -57,14 +58,14 @@ describe('ProtectedRoute', () => {
   })
 
   it('renders the protected content when authenticated with no role restriction', () => {
-    mockAuth({ user: { id: 1, name: 'Test', email: 't@test.com', roles: [] } })
+    mockAuth({ user: { id: 1, name: 'Test', email: 't@test.com', roles: [], avatar_url: null } })
     renderAt('/anywhere')
     expect(screen.getByText('Protected content')).toBeInTheDocument()
   })
 
   it('redirects to /dashboard when authenticated but missing the required role', () => {
     mockAuth({
-      user: { id: 1, name: 'Test', email: 't@test.com', roles: ['player'] },
+      user: { id: 1, name: 'Test', email: 't@test.com', roles: ['player'], avatar_url: null },
       hasRole: () => false,
     })
     renderAt('/admin')
@@ -73,7 +74,7 @@ describe('ProtectedRoute', () => {
 
   it('renders the protected content when the user has the required role', () => {
     mockAuth({
-      user: { id: 1, name: 'Test', email: 't@test.com', roles: ['admin'] },
+      user: { id: 1, name: 'Test', email: 't@test.com', roles: ['admin'], avatar_url: null },
       hasRole: (...roles) => roles.includes('admin'),
     })
     renderAt('/admin')

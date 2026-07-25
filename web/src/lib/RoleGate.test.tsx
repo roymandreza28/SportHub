@@ -5,12 +5,13 @@ import * as AuthContext from './AuthContext'
 
 function mockAuth(roles: string[]) {
   vi.spyOn(AuthContext, 'useAuth').mockReturnValue({
-    user: { id: 1, name: 'Test', email: 't@test.com', roles: roles as never },
+    user: { id: 1, name: 'Test', email: 't@test.com', roles: roles as never, avatar_url: null },
     isLoading: false,
     login: vi.fn(),
     register: vi.fn(),
     logout: vi.fn(),
     hasRole: (...check: string[]) => check.some((r) => roles.includes(r)),
+    refreshUser: vi.fn(),
   })
 }
 

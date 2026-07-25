@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { searchSocialUsers } from '../../lib/socialApi'
 import { IconSearch } from '../layout/icons'
+import { Avatar } from '../layout/Avatar'
 
 export function UserSearchBar() {
   const [search, setSearch] = useState('')
@@ -56,9 +57,7 @@ export function UserSearchBar() {
               }}
               className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold text-teal-700">
-                {result.name[0]?.toUpperCase()}
-              </span>
+              <Avatar name={result.name} url={result.avatar_url} size="sm" />
               <span className="min-w-0 flex-1 truncate">{result.name}</span>
             </Link>
           ))}
