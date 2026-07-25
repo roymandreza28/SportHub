@@ -12,6 +12,7 @@ import { useChatUI } from '../lib/ChatUIContext'
 import { primaryDashboardPath } from '../lib/roles'
 import { SocialShell } from '../components/layout/SocialShell'
 import { PostGrid } from '../components/social/PostGrid'
+import { PostComposer } from '../components/social/PostComposer'
 import { Avatar } from '../components/layout/Avatar'
 import { buttonDanger, buttonPrimary, buttonSecondary } from '../lib/formStyles'
 
@@ -160,14 +161,16 @@ export function ProfilePage() {
           <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <h1 className="text-xl font-bold text-slate-900">{user.name}</h1>
-              <div className="mt-1 flex flex-wrap gap-1">
+              <p className="mt-0.5 text-sm text-slate-500">
+                {user.friends_count} {user.friends_count === 1 ? 'friend' : 'friends'}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1">
                 {user.roles.map((role) => (
                   <span key={role} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium capitalize text-slate-600">
                     {role.replace('_', ' ')}
                   </span>
                 ))}
               </div>
-              {user.bio && <p className="mt-2 text-sm text-slate-600">{user.bio}</p>}
             </div>
 
             <div className="flex shrink-0 gap-2">
@@ -231,9 +234,34 @@ export function ProfilePage() {
         </div>
       </div>
 
-      <div className="mt-6">
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Posts</h2>
-        <PostGrid posts={posts?.data ?? []} />
+      <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="md:col-span-1">
+          <div className="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
+            <h2 className="text-base font-bold text-slate-900">About</h2>
+            {user.bio ? (
+              <p className="mt-3 text-sm text-slate-600">{user.bio}</p>
+            ) : (
+              <p className="mt-3 text-sm text-slate-400">{isSelf ? 'Add a bio from Edit profile.' : 'No bio yet.'}</p>
+            )}
+            {user.primary_sport && (
+              <p className="mt-3 flex items-center gap-2 text-sm text-slate-600">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Primary sport</span>
+                {user.primary_sport}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="md:col-span-2">
+          {isSelf && (
+            <div className="mb-4 rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
+              <PostComposer />
+            </div>
+          )}
+
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Posts</h2>
+          <PostGrid posts={posts?.data ?? []} />
+        </div>
       </div>
     </SocialShell>
   )

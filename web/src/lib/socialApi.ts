@@ -24,8 +24,10 @@ export type ProfileResponse = {
     name: string
     roles: Role[]
     bio: string | null
+    primary_sport: string | null
     avatar_url: string | null
     cover_url: string | null
+    friends_count: number
   }
   friendship_status: FriendshipStatus
   friendship_id: number | null

@@ -31,6 +31,31 @@ it('reports friendship_status as self, none, pending_sent, pending_received, and
     $this->actingAs($me)->getJson("/api/social/users/{$friend->id}")->assertJsonPath('friendship_status', 'friends');
 });
 
+it('reports friends_count and primary_sport on the profile response', function () {
+    $me = userWithRole('player');
+    $friendA = userWithRole('player');
+    $friendB = userWithRole('coach');
+
+    Friendship::create([
+        'requester_id' => $me->id, 'addressee_id' => $friendA->id, 'status' => 'accepted',
+        'pair_key' => Friendship::pairKeyFor($me->id, $friendA->id),
+    ]);
+    Friendship::create([
+        'requester_id' => $friendB->id, 'addressee_id' => $me->id, 'status' => 'accepted',
+        'pair_key' => Friendship::pairKeyFor($me->id, $friendB->id),
+    ]);
+
+    $sport = \App\Models\Sport::create(['name' => 'Basketball']);
+    \App\Models\PlayerProfile::create(['user_id' => $me->id, 'primary_sport_id' => $sport->id, 'bio' => 'Hoops enjoyer']);
+
+    $response = $this->actingAs($me)->getJson("/api/social/users/{$me->id}");
+
+    $response->assertOk();
+    $response->assertJsonPath('user.friends_count', 2);
+    $response->assertJsonPath('user.primary_sport', 'Basketball');
+    $response->assertJsonPath('user.bio', 'Hoops enjoyer');
+});
+
 it('404s when viewing a profile for a role outside the social layer', function () {
     $me = userWithRole('player');
     $organizer = userWithRole('organizer');
