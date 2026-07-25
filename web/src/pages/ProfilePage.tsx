@@ -6,6 +6,7 @@ import { fetchPosts } from '../lib/postsApi'
 import { acceptFriendRequest, declineFriendRequest, removeFriendship, sendFriendRequest } from '../lib/friendsApi'
 import { startDirectConversation } from '../lib/chatApi'
 import { useAuth } from '../lib/AuthContext'
+import { useChatUI } from '../lib/ChatUIContext'
 import { primaryDashboardPath } from '../lib/roles'
 import { SocialShell } from '../components/layout/SocialShell'
 import { PostGrid } from '../components/social/PostGrid'
@@ -23,6 +24,7 @@ export function ProfilePage() {
   const { userId } = useParams<{ userId: string }>()
   const id = Number(userId)
   const { user: viewer } = useAuth()
+  const { requestConversation } = useChatUI()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
@@ -58,8 +60,8 @@ export function ProfilePage() {
   const messageMutation = useMutation({
     mutationFn: () => startDirectConversation(id),
     onSuccess: (conversation) => {
-      const path = primaryDashboardPath(viewer?.roles ?? [])
-      navigate(`${path}?tab=chat&conversation=${conversation.id}`)
+      requestConversation(conversation.id)
+      navigate(primaryDashboardPath(viewer?.roles ?? []))
     },
   })
 

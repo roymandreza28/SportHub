@@ -11,7 +11,7 @@ async function registerPlayer(page: Page, name: string) {
   await page.waitForURL(/\/player/)
 }
 
-test('a player can find another player, send a friend request, and become friends after acceptance', async ({ browser }) => {
+test('a player can find another player via the header search, send a friend request, and become friends after acceptance', async ({ browser }) => {
   test.setTimeout(60000)
 
   const contextA = await browser.newContext()
@@ -25,26 +25,26 @@ test('a player can find another player, send a friend request, and become friend
     await registerPlayer(pageA, nameA)
     await registerPlayer(pageB, nameB)
 
-    await pageA.getByRole('button', { name: 'Friends', exact: true }).click()
-    await pageA.getByPlaceholder('Search players and coaches by name or email').fill(nameB)
-    await pageA.getByRole('link', { name: 'View profile' }).click()
+    // "Find people" now lives in the top nav center search bar, not a sidebar tab.
+    await pageA.getByPlaceholder('Search players and coaches').fill(nameB)
+    await pageA.getByRole('link', { name: nameB }).click()
 
-    await expect(pageA.getByRole('heading', { name: nameB })).toBeVisible()
+    await expect(pageA.getByRole('heading', { name: nameB })).toBeVisible({ timeout: 20000 })
     await pageA.getByRole('button', { name: 'Add friend' }).click()
-    await expect(pageA.getByRole('button', { name: 'Cancel request' })).toBeVisible()
+    await expect(pageA.getByRole('button', { name: 'Cancel request' })).toBeVisible({ timeout: 20000 })
 
-    await pageB.getByRole('button', { name: 'Friends', exact: true }).click()
-    await expect(pageB.getByText(nameA)).toBeVisible()
+    // Friend requests now surface via the header notification bell.
+    await pageB.getByRole('button', { name: 'Notifications' }).hover()
+    await expect(pageB.getByText(nameA)).toBeVisible({ timeout: 20000 })
     await pageB.getByRole('button', { name: 'Accept' }).click()
+    await expect(pageB.getByRole('button', { name: 'Accept' })).toHaveCount(0, { timeout: 20000 })
 
-    // Acceptance moves the request out of "incoming" and into the friends list.
-    await expect(pageB.getByRole('button', { name: 'Accept' })).toHaveCount(0)
+    // The friends list now lives on the Profile tab.
+    await pageB.getByRole('button', { name: 'Profile', exact: true }).click()
     await expect(pageB.getByText(nameA)).toBeVisible()
 
-    // A's own view is stale until it refetches — a fresh visit to the tab
-    // should show the now-accepted friendship without any manual refresh logic.
     await pageA.goto('/player')
-    await pageA.getByRole('button', { name: 'Friends', exact: true }).click()
+    await pageA.getByRole('button', { name: 'Profile', exact: true }).click()
     await expect(pageA.getByText(nameB)).toBeVisible()
   } finally {
     await contextA.close()

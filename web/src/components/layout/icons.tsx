@@ -182,6 +182,26 @@ export function IconMessageCircle(props: IconProps) {
   )
 }
 
+export function IconBell(props: IconProps) {
+  return base(
+    <>
+      <path d="M6 10.5a6 6 0 0 1 12 0c0 3.5 1 5 1.7 5.8H4.3C5 15.5 6 14 6 10.5Z" />
+      <path d="M9.5 19a2.5 2.5 0 0 0 5 0" />
+    </>,
+    props
+  )
+}
+
+export function IconSearch(props: IconProps) {
+  return base(
+    <>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m20 20-4.8-4.8" />
+    </>,
+    props
+  )
+}
+
 export function IconImage(props: IconProps) {
   return base(
     <>

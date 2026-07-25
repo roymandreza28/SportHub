@@ -15,7 +15,7 @@ async function registerPlayer(page: Page, name: string): Promise<number> {
   return me.id as number
 }
 
-test('friends can message each other in a direct conversation, delivered live over the real-time channel', async ({ browser }) => {
+test('friends can message each other from the header messages menu, delivered live over the real-time channel', async ({ browser }) => {
   test.setTimeout(60000)
 
   const contextA = await browser.newContext()
@@ -38,14 +38,15 @@ test('friends can message each other in a direct conversation, delivered live ov
     await apiRequest(pageB, 'POST', `/api/social/friend-requests/${friendship.id}/accept`)
 
     await pageA.goto('/player')
-    await pageA.getByRole('button', { name: 'Messages', exact: true }).click()
-    await pageA.getByRole('button', { name: 'New conversation' }).click()
+    await pageA.getByRole('button', { name: 'Messages' }).click()
+    await pageA.getByRole('button', { name: 'New', exact: true }).click()
     await pageA.getByText(nameB).click()
     await pageA.getByRole('button', { name: 'Start' }).click()
+    // Modal closes only once the conversation is actually created server-side.
     await expect(pageA.getByRole('heading', { name: 'New conversation' })).toHaveCount(0, { timeout: 15000 })
 
     await pageB.goto('/player')
-    await pageB.getByRole('button', { name: 'Messages', exact: true }).click()
+    await pageB.getByRole('button', { name: 'Messages' }).click()
     await expect(pageB.getByText(nameA).first()).toBeVisible({ timeout: 15000 })
     await pageB.getByText(nameA).first().click()
     // Opening the conversation mounts ConversationWindow, which subscribes to

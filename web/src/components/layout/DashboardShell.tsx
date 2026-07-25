@@ -1,5 +1,9 @@
-import type { ReactElement, ReactNode } from 'react'
+import { useState, type ReactElement, type ReactNode } from 'react'
 import { Link } from 'react-router'
+import { useAuth } from '../../lib/AuthContext'
+import { UserSearchBar } from '../social/UserSearchBar'
+import { HeaderMessagesMenu } from './HeaderMessagesMenu'
+import { HeaderNotificationsMenu } from './HeaderNotificationsMenu'
 import { IconChevronLeft } from './icons'
 import { UserMenu } from './UserMenu'
 
@@ -20,14 +24,24 @@ export function DashboardShell({
   onNavigate: (id: string) => void
   children: ReactNode
 }) {
+  const { hasRole } = useAuth()
+  const [collapsed, setCollapsed] = useState(false)
+  const showSocialHeader = hasRole('player', 'coach')
+
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white px-4 py-6">
-        <Link to="/dashboard" className="mb-8 flex items-center gap-2 px-2">
-          <img src="/logo.png" alt="" className="h-8 w-8" />
-          <span className="text-lg font-bold text-slate-900">
-            Sport<span className="text-teal-600">Hub</span>
-          </span>
+      <aside
+        className={`sticky top-0 flex h-screen shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white py-6 transition-all ${
+          collapsed ? 'w-20 px-2' : 'w-64 px-4'
+        }`}
+      >
+        <Link to="/dashboard" className={`mb-8 flex items-center gap-2 px-2 ${collapsed ? 'justify-center' : ''}`}>
+          <img src="/logo.png" alt="" className="h-8 w-8 shrink-0" />
+          {!collapsed && (
+            <span className="text-lg font-bold text-slate-900">
+              Sport<span className="text-teal-600">Hub</span>
+            </span>
+          )}
         </Link>
 
         <nav className="flex flex-1 flex-col gap-1">
@@ -35,29 +49,39 @@ export function DashboardShell({
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
+              title={collapsed ? item.label : undefined}
               className={`flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+                collapsed ? 'justify-center' : ''
+              } ${
                 activeId === item.id
                   ? 'bg-teal-600 text-white'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
               <item.icon className="h-5 w-5 shrink-0" />
-              {item.label}
+              {!collapsed && item.label}
             </button>
           ))}
         </nav>
       </aside>
 
-      <div className="flex-1">
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/90 px-8 py-4 backdrop-blur">
-          <Link
-            to="/dashboard"
-            aria-label="Back to dashboard"
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+      <div className="min-w-0 flex-1">
+        <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-slate-200 bg-white/90 px-8 py-4 backdrop-blur">
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
           >
-            <IconChevronLeft className="h-4 w-4" />
-          </Link>
-          <UserMenu />
+            <IconChevronLeft className={`h-4 w-4 transition-transform ${collapsed ? 'rotate-180' : ''}`} />
+          </button>
+
+          <div className="flex flex-1 items-center justify-center">{showSocialHeader && <UserSearchBar />}</div>
+
+          <div className="flex shrink-0 items-center gap-1">
+            {showSocialHeader && <HeaderMessagesMenu />}
+            {showSocialHeader && <HeaderNotificationsMenu />}
+            <UserMenu />
+          </div>
         </header>
 
         <main className="mx-auto max-w-6xl px-6 py-8 sm:px-8">{children}</main>

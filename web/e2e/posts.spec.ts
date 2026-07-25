@@ -37,9 +37,9 @@ test('a player can post a photo with a caption, and any other player can view it
     await expect(pageA.locator('img[alt="My first post!"]')).toBeVisible({ timeout: 20000 })
 
     // B is not a friend of A — proves posts are open-visibility, not friends-only.
-    await pageB.getByRole('button', { name: 'Friends', exact: true }).click()
-    await pageB.getByPlaceholder('Search players and coaches by name or email').fill(nameA)
-    await pageB.getByRole('link', { name: 'View profile' }).click()
+    // The "find people" search now lives in the top nav center, always visible.
+    await pageB.getByPlaceholder('Search players and coaches').fill(nameA)
+    await pageB.getByRole('link', { name: nameA }).click()
 
     await expect(pageB.getByRole('heading', { name: nameA })).toBeVisible()
     await expect(pageB.locator('img[alt="My first post!"]')).toBeVisible()

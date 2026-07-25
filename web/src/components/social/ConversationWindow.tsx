@@ -5,7 +5,7 @@ import { echo } from '../../lib/echo'
 import { useAuth } from '../../lib/AuthContext'
 import { input } from '../../lib/formStyles'
 
-export function ConversationWindow({ conversationId, title }: { conversationId: number; title: string }) {
+export function ConversationWindow({ conversationId }: { conversationId: number }) {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const [body, setBody] = useState('')
@@ -47,11 +47,8 @@ export function ConversationWindow({ conversationId, title }: { conversationId: 
   const allMessages = [...historyMessages, ...liveMessages.filter((m) => !historyMessages.some((h) => h.id === m.id))]
 
   return (
-    <div className="flex h-96 flex-col rounded-lg border border-slate-200 bg-white">
-      <div className="border-b border-slate-100 px-4 py-2.5">
-        <p className="text-sm font-semibold text-slate-800">{title}</p>
-      </div>
-      <div className="flex-1 space-y-2 overflow-y-auto p-4 text-sm">
+    <div className="flex h-full flex-col">
+      <div className="flex-1 space-y-2 overflow-y-auto p-3 text-sm">
         {allMessages.map((m) => (
           <div key={m.id} className={m.user.id === user?.id ? 'text-right' : ''}>
             <span
@@ -65,7 +62,7 @@ export function ConversationWindow({ conversationId, title }: { conversationId: 
           </div>
         ))}
       </div>
-      <form onSubmit={handleSubmit} className="flex gap-2 border-t border-slate-100 p-3">
+      <form onSubmit={handleSubmit} className="flex gap-2 border-t border-slate-100 p-2">
         <input
           type="text"
           placeholder="Type a message..."
