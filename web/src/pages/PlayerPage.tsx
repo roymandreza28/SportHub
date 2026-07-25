@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import type { Venue } from '../lib/venueApi'
 import { fetchMySkillLevels, fetchMyMatchmakingRequests, fetchMyVenueRegistrations } from '../lib/playerApi'
+import { fetchProfile } from '../lib/socialApi'
 import {
   DashboardShell,
   ListPreview,
@@ -21,7 +22,12 @@ import { MatchmakingPanel } from '../components/player/MatchmakingPanel'
 import { MyBookings } from '../components/player/MyBookings'
 import { MyPosts } from '../components/social/MyPosts'
 import { FriendsList } from '../components/social/FriendsList'
+import { ProfileHeaderCard } from '../components/social/ProfileHeaderCard'
+import { useAuth } from '../lib/AuthContext'
 import { useChatUI } from '../lib/ChatUIContext'
+import { useProfileMediaMutations } from '../lib/useProfileMedia'
+import { extractErrorMessage } from '../lib/errors'
+import { buttonSecondary } from '../lib/formStyles'
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'overview', label: 'Dashboard', icon: IconHome },
@@ -36,10 +42,17 @@ export function PlayerPage() {
   const [searchParams] = useSearchParams()
   const [active, setActive] = useState(searchParams.get('tab') ?? NAV_ITEMS[0].id)
   const { openChatWindow } = useChatUI()
+  const { user } = useAuth()
 
   const { data: skillLevels } = useQuery({ queryKey: ['skill-levels', 'mine'], queryFn: fetchMySkillLevels })
   const { data: matchmaking } = useQuery({ queryKey: ['player', 'matchmaking'], queryFn: fetchMyMatchmakingRequests })
   const { data: bookings } = useQuery({ queryKey: ['player', 'venue-registrations'], queryFn: fetchMyVenueRegistrations })
+  const { data: myProfile } = useQuery({
+    queryKey: ['social', 'profile', user?.id],
+    queryFn: () => fetchProfile(user!.id),
+    enabled: active === 'profile' && !!user,
+  })
+  const { avatarMutation, coverMutation } = useProfileMediaMutations(user?.id ?? 0)
 
   const openRequests = (matchmaking ?? []).filter((r) => r.status === 'open').length
   const upcomingBookings = (bookings ?? [])
@@ -86,18 +99,49 @@ export function PlayerPage() {
         </>
       )}
 
-      {active === 'profile' && (
-        <Section title="Profile" description="Your bio, primary sport, and skill history.">
-          <PlayerProfileEditor />
-          <div className="mt-6 border-t border-slate-100 pt-6">
-            <h3 className="mb-3 text-sm font-semibold text-slate-800">My Posts</h3>
-            <MyPosts />
+      {active === 'profile' && user && (
+        <>
+          <ProfileHeaderCard
+            name={user.name}
+            roles={user.roles}
+            friendsCount={myProfile?.user.friends_count ?? 0}
+            avatarUrl={user.avatar_url}
+            coverUrl={myProfile?.user.cover_url ?? null}
+            editable
+            onAvatarChange={(file) => avatarMutation.mutate(file)}
+            avatarPending={avatarMutation.isPending}
+            onCoverChange={(file) => coverMutation.mutate(file)}
+            coverPending={coverMutation.isPending}
+            error={
+              avatarMutation.isError || coverMutation.isError
+                ? extractErrorMessage(avatarMutation.error ?? coverMutation.error)
+                : null
+            }
+            actions={
+              <Link to={`/profile/${user.id}`} className={buttonSecondary}>
+                View public profile
+              </Link>
+            }
+          />
+
+          <div className="mt-6">
+            <Section title="Edit profile" description="Your bio, primary sport, and skill history.">
+              <PlayerProfileEditor />
+            </Section>
           </div>
-          <div className="mt-6 border-t border-slate-100 pt-6">
-            <h3 className="mb-3 text-sm font-semibold text-slate-800">Friends</h3>
-            <FriendsList onMessage={openChatWindow} />
+
+          <div className="mt-6">
+            <Section title="My Posts">
+              <MyPosts />
+            </Section>
           </div>
-        </Section>
+
+          <div className="mt-6">
+            <Section title="Friends">
+              <FriendsList onMessage={openChatWindow} />
+            </Section>
+          </div>
+        </>
       )}
 
       {active === 'matchmaking' && (

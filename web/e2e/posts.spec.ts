@@ -30,7 +30,10 @@ test('a player can post a photo with a caption, and any other player can view it
     await registerPlayer(pageB, nameB)
 
     await pageA.getByRole('button', { name: 'Profile', exact: true }).click()
-    await pageA.locator('input[type="file"]').setInputFiles(path.join(__dirname, 'fixtures/test-image.png'))
+    // Scoped to the "My Posts" section specifically — the profile header now
+    // has its own cover-photo and avatar file inputs above this one.
+    const myPostsSection = pageA.locator('section', { has: pageA.getByRole('heading', { name: 'My Posts' }) })
+    await myPostsSection.locator('input[type="file"]').setInputFiles(path.join(__dirname, 'fixtures/test-image.png'))
     await pageA.getByPlaceholder('Say something about this photo...').fill('My first post!')
     await pageA.getByRole('button', { name: 'Post', exact: true }).click()
 

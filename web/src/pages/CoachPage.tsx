@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fetchTournaments } from '../lib/coachApi'
+import { fetchProfile } from '../lib/socialApi'
 import {
   DashboardShell,
   ListPreview,
@@ -17,7 +18,12 @@ import { TournamentRegistrationForm } from '../components/coach/TournamentRegist
 import { EvaluationForm } from '../components/coach/EvaluationForm'
 import { MyPosts } from '../components/social/MyPosts'
 import { FriendsList } from '../components/social/FriendsList'
+import { ProfileHeaderCard } from '../components/social/ProfileHeaderCard'
+import { useAuth } from '../lib/AuthContext'
 import { useChatUI } from '../lib/ChatUIContext'
+import { useProfileMediaMutations } from '../lib/useProfileMedia'
+import { extractErrorMessage } from '../lib/errors'
+import { buttonSecondary } from '../lib/formStyles'
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'overview', label: 'Dashboard', icon: IconHome },
@@ -31,6 +37,14 @@ export function CoachPage() {
   const [searchParams] = useSearchParams()
   const [active, setActive] = useState(searchParams.get('tab') ?? NAV_ITEMS[0].id)
   const { openChatWindow } = useChatUI()
+  const { user } = useAuth()
+
+  const { data: myProfile } = useQuery({
+    queryKey: ['social', 'profile', user?.id],
+    queryFn: () => fetchProfile(user!.id),
+    enabled: active === 'profile' && !!user,
+  })
+  const { avatarMutation, coverMutation } = useProfileMediaMutations(user?.id ?? 0)
 
   return (
     <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={setActive}>
@@ -69,14 +83,43 @@ export function CoachPage() {
         </>
       )}
 
-      {active === 'profile' && (
-        <Section title="Profile" description="Share photos with other players and coaches.">
-          <MyPosts />
-          <div className="mt-6 border-t border-slate-100 pt-6">
-            <h3 className="mb-3 text-sm font-semibold text-slate-800">Friends</h3>
-            <FriendsList onMessage={openChatWindow} />
+      {active === 'profile' && user && (
+        <>
+          <ProfileHeaderCard
+            name={user.name}
+            roles={user.roles}
+            friendsCount={myProfile?.user.friends_count ?? 0}
+            avatarUrl={user.avatar_url}
+            coverUrl={myProfile?.user.cover_url ?? null}
+            editable
+            onAvatarChange={(file) => avatarMutation.mutate(file)}
+            avatarPending={avatarMutation.isPending}
+            onCoverChange={(file) => coverMutation.mutate(file)}
+            coverPending={coverMutation.isPending}
+            error={
+              avatarMutation.isError || coverMutation.isError
+                ? extractErrorMessage(avatarMutation.error ?? coverMutation.error)
+                : null
+            }
+            actions={
+              <Link to={`/profile/${user.id}`} className={buttonSecondary}>
+                View public profile
+              </Link>
+            }
+          />
+
+          <div className="mt-6">
+            <Section title="My Posts" description="Share photos with other players and coaches.">
+              <MyPosts />
+            </Section>
           </div>
-        </Section>
+
+          <div className="mt-6">
+            <Section title="Friends">
+              <FriendsList onMessage={openChatWindow} />
+            </Section>
+          </div>
+        </>
       )}
 
       {active === 'registrations' && (
