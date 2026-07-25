@@ -83,6 +83,24 @@ it('sends and lists messages only for conversation participants, broadcasting li
         ->assertJsonPath('data.0.body', 'Hello!');
 });
 
+it('marks a conversation read only for the requesting participant, and denies non-participants', function () {
+    $a = userWithRole('player');
+    $b = userWithRole('coach');
+    $stranger = userWithRole('player');
+    makeFriends($a, $b);
+
+    $conversation = $this->actingAs($a)->postJson('/api/social/conversations', ['type' => 'direct', 'user_id' => $b->id])->json();
+
+    $this->actingAs($stranger)->postJson("/api/social/conversations/{$conversation['id']}/read")->assertForbidden();
+    $this->actingAs($a)->postJson("/api/social/conversations/{$conversation['id']}/read")->assertNoContent();
+
+    $aPivot = $a->conversations()->find($conversation['id'])->pivot;
+    $bPivot = $b->conversations()->find($conversation['id'])->pivot;
+
+    expect($aPivot->last_read_at)->not->toBeNull();
+    expect($bPivot->last_read_at)->toBeNull();
+});
+
 it('only allows adding a participant to a group conversation, and only if they are a friend of the adder', function () {
     $creator = userWithRole('player');
     $friend = userWithRole('player');

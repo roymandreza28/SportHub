@@ -33,7 +33,7 @@ const NAV_ITEMS: NavItem[] = [
 export function PlayerPage() {
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
   const [active, setActive] = useState(NAV_ITEMS[0].id)
-  const { requestConversation } = useChatUI()
+  const { openChatWindow } = useChatUI()
 
   const { data: skillLevels } = useQuery({ queryKey: ['skill-levels', 'mine'], queryFn: fetchMySkillLevels })
   const { data: matchmaking } = useQuery({ queryKey: ['player', 'matchmaking'], queryFn: fetchMyMatchmakingRequests })
@@ -93,7 +93,7 @@ export function PlayerPage() {
           </div>
           <div className="mt-6 border-t border-slate-100 pt-6">
             <h3 className="mb-3 text-sm font-semibold text-slate-800">Friends</h3>
-            <FriendsList onMessage={requestConversation} />
+            <FriendsList onMessage={openChatWindow} />
           </div>
         </Section>
       )}

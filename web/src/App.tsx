@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route } from 'react-router'
 import { AuthProvider } from './lib/AuthContext'
 import { ChatUIProvider } from './lib/ChatUIContext'
 import { ProtectedRoute } from './lib/ProtectedRoute'
+import { FloatingChatWindows } from './components/layout/FloatingChatWindows'
+import { GlobalChatListener } from './components/layout/GlobalChatListener'
 import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
@@ -21,6 +23,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ChatUIProvider>
+          <GlobalChatListener />
+          <FloatingChatWindows />
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<LandingPage />} />

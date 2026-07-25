@@ -70,6 +70,15 @@ class ConversationController extends Controller
         return response()->json($conversation->load('participants:id,name'), 201);
     }
 
+    public function markRead(Request $request, Conversation $conversation)
+    {
+        $this->authorize('view', $conversation);
+
+        $conversation->participants()->updateExistingPivot($request->user()->id, ['last_read_at' => now()]);
+
+        return response()->noContent();
+    }
+
     public function addParticipant(Request $request, Conversation $conversation)
     {
         $this->authorize('addParticipant', $conversation);

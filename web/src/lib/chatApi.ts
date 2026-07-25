@@ -20,6 +20,9 @@ export type ConversationSummary = {
   name: string | null
   participants: ConversationParticipant[]
   messages: ConversationMessageItem[]
+  // Pivot of the *viewer's own* membership row — present because the /conversations
+  // list is queried through the authenticated user's own conversations() relation.
+  pivot: { last_read_at: string | null }
 }
 
 export async function fetchConversations() {
@@ -51,6 +54,10 @@ export async function addConversationParticipant(conversationId: number, userId:
   return data
 }
 
+export async function markConversationRead(conversationId: number) {
+  await api.post(`/api/social/conversations/${conversationId}/read`)
+}
+
 export async function fetchMessages(conversationId: number) {
   const { data } = await api.get<Paginated<ConversationMessageItem>>(
     `/api/social/conversations/${conversationId}/messages`
@@ -64,4 +71,11 @@ export async function sendMessage(conversationId: number, body: string) {
     { body }
   )
   return data
+}
+
+export function isConversationUnread(conversation: ConversationSummary, viewerId?: number): boolean {
+  const lastMessage = conversation.messages[0]
+  if (!lastMessage || lastMessage.user.id === viewerId) return false
+  if (!conversation.pivot.last_read_at) return true
+  return new Date(lastMessage.created_at) > new Date(conversation.pivot.last_read_at)
 }

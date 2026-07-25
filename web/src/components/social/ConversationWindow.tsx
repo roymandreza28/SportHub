@@ -1,37 +1,20 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchMessages, sendMessage, type ConversationMessageItem } from '../../lib/chatApi'
-import { echo } from '../../lib/echo'
+import { useState, type FormEvent } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { fetchMessages, sendMessage } from '../../lib/chatApi'
 import { useAuth } from '../../lib/AuthContext'
 import { input } from '../../lib/formStyles'
 
 export function ConversationWindow({ conversationId }: { conversationId: number }) {
   const { user } = useAuth()
-  const queryClient = useQueryClient()
   const [body, setBody] = useState('')
-  const [liveMessages, setLiveMessages] = useState<ConversationMessageItem[]>([])
 
+  // No socket subscription here — GlobalChatListener owns the single
+  // subscription per conversation and keeps this query's cache fresh, so
+  // every open surface (a floating window, a future re-render) just reads it.
   const { data: history } = useQuery({
     queryKey: ['social', 'messages', conversationId],
     queryFn: () => fetchMessages(conversationId),
   })
-
-  useEffect(() => {
-    setLiveMessages([])
-  }, [conversationId])
-
-  useEffect(() => {
-    const channel = echo.private(`conversation.${conversationId}`)
-
-    channel.listen('.ConversationMessageSent', (message: ConversationMessageItem) => {
-      setLiveMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]))
-      queryClient.invalidateQueries({ queryKey: ['social', 'conversations'] })
-    })
-
-    return () => {
-      echo.leave(`conversation.${conversationId}`)
-    }
-  }, [conversationId, queryClient])
 
   const mutation = useMutation({
     mutationFn: () => sendMessage(conversationId, body),
@@ -43,13 +26,12 @@ export function ConversationWindow({ conversationId }: { conversationId: number 
     if (body.trim()) mutation.mutate()
   }
 
-  const historyMessages = history?.data ?? []
-  const allMessages = [...historyMessages, ...liveMessages.filter((m) => !historyMessages.some((h) => h.id === m.id))]
+  const messages = history?.data ?? []
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 space-y-2 overflow-y-auto p-3 text-sm">
-        {allMessages.map((m) => (
+        {messages.map((m) => (
           <div key={m.id} className={m.user.id === user?.id ? 'text-right' : ''}>
             <span
               className={`inline-block max-w-[80%] rounded-lg px-3 py-1.5 text-left ${

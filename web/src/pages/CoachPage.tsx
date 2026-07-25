@@ -28,7 +28,7 @@ const NAV_ITEMS: NavItem[] = [
 export function CoachPage() {
   const { data: openTournaments } = useQuery({ queryKey: ['tournaments', 'open'], queryFn: () => fetchTournaments('open') })
   const [active, setActive] = useState(NAV_ITEMS[0].id)
-  const { requestConversation } = useChatUI()
+  const { openChatWindow } = useChatUI()
 
   return (
     <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={setActive}>
@@ -72,7 +72,7 @@ export function CoachPage() {
           <MyPosts />
           <div className="mt-6 border-t border-slate-100 pt-6">
             <h3 className="mb-3 text-sm font-semibold text-slate-800">Friends</h3>
-            <FriendsList onMessage={requestConversation} />
+            <FriendsList onMessage={openChatWindow} />
           </div>
         </Section>
       )}

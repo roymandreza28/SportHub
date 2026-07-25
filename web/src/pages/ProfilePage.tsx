@@ -1,13 +1,11 @@
-import { useParams, useNavigate } from 'react-router'
+import { useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { fetchProfile } from '../lib/socialApi'
 import { fetchPosts } from '../lib/postsApi'
 import { acceptFriendRequest, declineFriendRequest, removeFriendship, sendFriendRequest } from '../lib/friendsApi'
 import { startDirectConversation } from '../lib/chatApi'
-import { useAuth } from '../lib/AuthContext'
 import { useChatUI } from '../lib/ChatUIContext'
-import { primaryDashboardPath } from '../lib/roles'
 import { SocialShell } from '../components/layout/SocialShell'
 import { PostGrid } from '../components/social/PostGrid'
 import { buttonDanger, buttonPrimary, buttonSecondary } from '../lib/formStyles'
@@ -23,9 +21,7 @@ function extractErrorMessage(error: unknown): string {
 export function ProfilePage() {
   const { userId } = useParams<{ userId: string }>()
   const id = Number(userId)
-  const { user: viewer } = useAuth()
-  const { requestConversation } = useChatUI()
-  const navigate = useNavigate()
+  const { openChatWindow } = useChatUI()
   const queryClient = useQueryClient()
 
   const { data: profile, isLoading } = useQuery({
@@ -59,10 +55,7 @@ export function ProfilePage() {
   })
   const messageMutation = useMutation({
     mutationFn: () => startDirectConversation(id),
-    onSuccess: (conversation) => {
-      requestConversation(conversation.id)
-      navigate(primaryDashboardPath(viewer?.roles ?? []))
-    },
+    onSuccess: (conversation) => openChatWindow(conversation.id),
   })
 
   if (isLoading) {
