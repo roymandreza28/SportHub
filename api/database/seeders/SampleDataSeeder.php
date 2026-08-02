@@ -21,47 +21,63 @@ class SampleDataSeeder extends Seeder
         }
 
         $basketball = Sport::where('name', 'Basketball')->first();
+        $volleyball = Sport::where('name', 'Volleyball')->first();
         $badminton = Sport::where('name', 'Badminton')->first();
 
-        $civicCenter = Venue::firstOrCreate(
-            ['facilitator_id' => $facilitator->id, 'name' => 'Morong Sports Complex'],
+        // Real, named facility in Morong proper — a multi-purpose covered
+        // gymnasium, the standard Philippine barangay/municipal venue for
+        // both basketball and volleyball.
+        $gymnasium = Venue::firstOrCreate(
+            ['facilitator_id' => $facilitator->id, 'name' => 'Morong Gymnasium'],
             [
                 'address' => 'Brgy. Poblacion, Morong, Rizal',
                 'latitude' => 14.5192,
                 'longitude' => 121.2331,
-                'description' => 'Multi-purpose municipal sports complex serving Morong, Rizal.',
+                'description' => 'Municipal gymnasium in Morong proper — basketball and volleyball.',
                 'amenities' => ['parking', 'lockers', 'restrooms'],
             ]
         );
 
-        $civicCenter->courts()->firstOrCreate(
-            ['name' => 'Court A'],
-            ['sport_id' => $basketball?->id, 'type' => 'court', 'capacity' => 30, 'status' => 'active']
+        $mainCourt = $gymnasium->courts()->firstOrCreate(
+            ['name' => 'Main Court'],
+            ['type' => 'court', 'capacity' => 30, 'status' => 'active']
         );
-        $civicCenter->courts()->firstOrCreate(
-            ['name' => 'Court B'],
-            ['sport_id' => $badminton?->id, 'type' => 'court', 'capacity' => 20, 'status' => 'active']
+        if ($basketball) {
+            $mainCourt->sports()->syncWithoutDetaching([$basketball->id]);
+        }
+
+        $volleyballCourt = $gymnasium->courts()->firstOrCreate(
+            ['name' => 'Volleyball Court'],
+            ['type' => 'court', 'capacity' => 24, 'status' => 'active']
         );
-        $civicCenter->equipment()->firstOrCreate(
+        if ($volleyball) {
+            $volleyballCourt->sports()->syncWithoutDetaching([$volleyball->id]);
+        }
+
+        $gymnasium->equipment()->firstOrCreate(
             ['name' => 'Basketballs'],
             ['quantity_total' => 20, 'quantity_available' => 20]
         );
 
-        $riverside = Venue::firstOrCreate(
-            ['facilitator_id' => $facilitator->id, 'name' => 'Wawa River Park'],
+        // Real, named badminton facility in Barangay Maybancal.
+        $badmintonCenter = Venue::firstOrCreate(
+            ['facilitator_id' => $facilitator->id, 'name' => "Tapal's Badminton Center"],
             [
-                'address' => 'Brgy. Wawa, Morong, Rizal',
-                'latitude' => 14.5241,
-                'longitude' => 121.2286,
-                'description' => 'Outdoor community fields and courts along the Wawa riverside.',
-                'amenities' => ['parking', 'water fountain'],
+                'address' => 'Brgy. Maybancal, Morong, Rizal',
+                'latitude' => 14.5170,
+                'longitude' => 121.2450,
+                'description' => 'Dedicated badminton courts in Barangay Maybancal.',
+                'amenities' => ['parking'],
             ]
         );
 
-        $riverside->courts()->firstOrCreate(
-            ['name' => 'Field 1'],
-            ['sport_id' => Sport::where('name', 'Football')->first()?->id, 'type' => 'field', 'capacity' => 50, 'status' => 'active']
+        $badmintonCourt = $badmintonCenter->courts()->firstOrCreate(
+            ['name' => 'Court 1'],
+            ['type' => 'court', 'capacity' => 8, 'status' => 'active']
         );
+        if ($badminton) {
+            $badmintonCourt->sports()->syncWithoutDetaching([$badminton->id]);
+        }
 
         PlayerProfile::firstOrCreate(
             ['user_id' => $player->id],
@@ -77,7 +93,7 @@ class SampleDataSeeder extends Seeder
                 ['sport_id' => $basketball->id],
                 [
                     'coach_id' => $coach->id,
-                    'level' => 'intermediate',
+                    'level' => 'casual_player',
                     'score' => 62.5,
                     'evaluated_at' => now(),
                 ]

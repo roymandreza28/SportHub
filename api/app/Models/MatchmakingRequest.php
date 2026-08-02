@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class MatchmakingRequest extends Model
 {
     protected $fillable = [
-        'user_id', 'sport_id', 'skill_level_id', 'venue_id', 'status',
+        'user_id', 'sport_id', 'sport_format_id', 'team_id', 'skill_level_id', 'venue_id', 'status',
         'preferred_start_at', 'preferred_end_at',
     ];
 
@@ -38,5 +38,15 @@ class MatchmakingRequest extends Model
     public function venue(): BelongsTo
     {
         return $this->belongsTo(Venue::class);
+    }
+
+    public function sportFormat(): BelongsTo
+    {
+        return $this->belongsTo(SportFormat::class);
+    }
+
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
     }
 }
