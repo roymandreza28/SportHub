@@ -20,6 +20,7 @@ use App\Http\Controllers\Social\FriendshipController;
 use App\Http\Controllers\Social\PostController;
 use App\Http\Controllers\Social\ProfileController;
 use App\Http\Controllers\Social\SocialSearchController;
+use App\Http\Controllers\TeamController;
 use App\Http\Controllers\TournamentController;
 use App\Http\Controllers\TournamentRegistrationController;
 use App\Http\Controllers\VenueController;
@@ -33,6 +34,16 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::get('/sports', fn () => Sport::orderBy('name')->get());
+Route::get('/sport-formats', function (Request $request) {
+    return \App\Models\SportFormat::when($request->string('sport_id')->toString(), fn ($q, $sportId) => $q->where('sport_id', $sportId))
+        ->orderBy('players_per_side')
+        ->get();
+});
+
+// Must be registered before the public `/venues/{venue}` route below —
+// otherwise Laravel matches "mine" as a {venue} route-model-binding
+// parameter first and 404s before this ever runs.
+Route::middleware(['auth:sanctum', 'role:venue_facilitator|admin'])->get('/venues/mine', [VenueController::class, 'mine']);
 
 Route::get('/venues', [VenueController::class, 'index']);
 Route::get('/venues/{venue}', [VenueController::class, 'show']);
@@ -90,9 +101,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/posts', [PostController::class, 'store']);
         Route::delete('/posts/{post}', [PostController::class, 'destroy']);
 
-        Route::get('/conversations', [ConversationController::class, 'index']);
         Route::post('/conversations', [ConversationController::class, 'store']);
         Route::post('/conversations/{conversation}/participants', [ConversationController::class, 'addParticipant']);
+    });
+
+    // A venue facilitator can't start or join a conversation on their own —
+    // only view/read/send within one they were auto-attached to when a
+    // booking at their venue got approved (see VenueRegistrationController)
+    // — so this group is broader than the player|coach one above.
+    Route::middleware('role:player|coach|venue_facilitator')->prefix('social')->group(function () {
+        Route::get('/conversations', [ConversationController::class, 'index']);
         Route::post('/conversations/{conversation}/read', [ConversationController::class, 'markRead']);
         Route::get('/conversations/{conversation}/messages', [ConversationMessageController::class, 'index']);
         Route::post('/conversations/{conversation}/messages', [ConversationMessageController::class, 'store']);
@@ -115,10 +133,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/venue-registrations/{venueRegistration}', [VenueRegistrationController::class, 'update']);
     });
 
-    Route::middleware('role:player')->group(function () {
+    Route::middleware('role:player|coach')->group(function () {
         Route::get('/venue-registrations/mine', [VenueRegistrationController::class, 'mine']);
         Route::post('/venue-registrations', [VenueRegistrationController::class, 'store']);
+    });
 
+    Route::middleware('role:player')->group(function () {
         Route::get('/player-profile', [PlayerProfileController::class, 'show']);
         Route::patch('/player-profile', [PlayerProfileController::class, 'update']);
 
@@ -127,6 +147,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/matchmaking-requests/mine', [MatchmakingRequestController::class, 'mine']);
         Route::post('/matchmaking-requests', [MatchmakingRequestController::class, 'store']);
         Route::delete('/matchmaking-requests/{matchmakingRequest}', [MatchmakingRequestController::class, 'destroy']);
+
+        Route::get('/teams/mine', [TeamController::class, 'mine']);
+        Route::post('/teams', [TeamController::class, 'store']);
+        Route::post('/teams/{team}/invite', [TeamController::class, 'invite']);
+        Route::delete('/teams/{team}', [TeamController::class, 'destroy']);
+        Route::delete('/teams/{team}/members/{teamMember}', [TeamController::class, 'removeMember']);
+        Route::post('/team-members/{teamMember}/accept', [TeamController::class, 'accept']);
+        Route::post('/team-members/{teamMember}/decline', [TeamController::class, 'decline']);
     });
 
     Route::middleware('role:coach')->group(function () {

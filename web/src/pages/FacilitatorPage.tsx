@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { fetchVenues, fetchVenueSchedule } from '../lib/venueApi'
-import { useAuth } from '../lib/AuthContext'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { fetchMyVenues, fetchVenueSchedule } from '../lib/venueApi'
 import {
   DashboardShell,
   ListPreview,
@@ -14,10 +13,13 @@ import {
 } from '../components/layout/DashboardShell'
 import { IconCalendar, IconClipboard, IconHome, IconMapPin } from '../components/layout/icons'
 import { VenueMap } from '../components/venue/VenueMap'
-import { VenueForm } from '../components/venue/VenueForm'
-import { CourtEquipmentManager } from '../components/venue/CourtEquipmentManager'
+import { VenueList } from '../components/venue/VenueList'
+import { CreateVenueModal } from '../components/venue/CreateVenueModal'
+import { VenueEditModal } from '../components/venue/VenueEditModal'
 import { VenueScheduleCalendar } from '../components/venue/VenueScheduleCalendar'
 import { RegistrationApprovalQueue } from '../components/venue/RegistrationApprovalQueue'
+import { VenueBookingsList } from '../components/venue/VenueBookingsList'
+import { buttonGhost, buttonPrimary, select } from '../lib/formStyles'
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'overview', label: 'Dashboard', icon: IconHome },
@@ -27,13 +29,39 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 export function FacilitatorPage() {
-  const { user } = useAuth()
-  const { data: venues, isLoading } = useQuery({ queryKey: ['facilitator', 'venues'], queryFn: fetchVenues })
+  const queryClient = useQueryClient()
+  const { data: venues, isLoading } = useQuery({ queryKey: ['facilitator', 'venues'], queryFn: fetchMyVenues })
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [active, setActive] = useState(NAV_ITEMS[0].id)
 
-  const myVenues = (venues ?? []).filter((v) => v.facilitator_id === user?.id)
+  // Booking/pending counts on this query only change from actions taken
+  // elsewhere (a player booking a slot, another session approving one) —
+  // there's no live push for "one of my venues' booking counts changed", so
+  // refetch whenever the facilitator actually looks at a tab that shows
+  // those counts rather than trusting whatever was cached at page load.
+  function handleNavigate(id: string) {
+    setActive(id)
+    if (id === 'bookings' || id === 'schedule') {
+      queryClient.invalidateQueries({ queryKey: ['facilitator', 'venues'] })
+    }
+  }
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [editingVenueId, setEditingVenueId] = useState<number | null>(null)
+  // Independent of `selectedId` (the Venues tab's court/equipment selection)
+  // so opening a venue's bookings or schedule doesn't silently change what's
+  // selected elsewhere, and so Bookings always lands on the venue list first
+  // rather than jumping straight into whatever was last picked.
+  const [bookingsVenueId, setBookingsVenueId] = useState<number | null>(null)
+  const [scheduleVenueId, setScheduleVenueId] = useState<number | null>(null)
+
+  const myVenues = venues ?? []
   const selected = myVenues.find((v) => v.id === selectedId) ?? myVenues[0] ?? null
+  // Looked up by id every render (not stored as a snapshot) so that editing
+  // courts/equipment inside the modal — which invalidates this same query —
+  // is reflected immediately instead of showing stale data until reopened.
+  const editingVenue = myVenues.find((v) => v.id === editingVenueId) ?? null
+  const bookingsVenue = myVenues.find((v) => v.id === bookingsVenueId) ?? null
+  const scheduleVenue = myVenues.find((v) => v.id === scheduleVenueId) ?? myVenues[0] ?? null
 
   const { data: schedule } = useQuery({
     queryKey: ['facilitator', 'schedule', selected?.id],
@@ -50,7 +78,7 @@ export function FacilitatorPage() {
     .slice(0, 5)
 
   return (
-    <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={setActive}>
+    <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={handleNavigate}>
       {active === 'overview' && (
         <>
           <div className="mb-6">
@@ -96,55 +124,74 @@ export function FacilitatorPage() {
       )}
 
       {active === 'venues' && (
-        <Section title="Venues" description="Your venues on the map, and adding a new one.">
+        <Section
+          title="Venues"
+          description="Every venue you've registered. Deactivate one that's closed for a long time to hide it from players."
+          action={
+            <button onClick={() => setShowCreateModal(true)} className={buttonPrimary}>
+              + Create Venue
+            </button>
+          }
+        >
           {myVenues.length > 0 && <VenueMap venues={myVenues} onSelect={(v) => setSelectedId(v.id)} />}
+
           <div className="mt-4">
-            <VenueForm />
+            <VenueList
+              venues={myVenues}
+              selectedId={selected?.id ?? null}
+              onSelect={(v) => setSelectedId(v.id)}
+              onEdit={(v) => setEditingVenueId(v.id)}
+            />
           </div>
 
-          {myVenues.length > 1 && (
-            <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-              {myVenues.map((v) => (
-                <button
-                  key={v.id}
-                  onClick={() => setSelectedId(v.id)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    selected?.id === v.id ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'
-                  }`}
-                >
-                  {v.name}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {selected && (
-            <div className="mt-4 border-t border-slate-100 pt-4">
-              <CourtEquipmentManager venue={selected} />
-            </div>
-          )}
+          {showCreateModal && <CreateVenueModal onClose={() => setShowCreateModal(false)} />}
+          {editingVenue && <VenueEditModal venue={editingVenue} onClose={() => setEditingVenueId(null)} />}
         </Section>
       )}
 
       {active === 'bookings' && (
         <Section
           title="Bookings"
-          description={selected ? `Pending registration requests for ${selected.name}.` : 'Select a venue first.'}
+          description={
+            bookingsVenue
+              ? `Every booking at ${bookingsVenue.name} — approve or reject the pending ones.`
+              : 'Pick a venue to see its bookings.'
+          }
+          action={
+            bookingsVenue ? (
+              <button onClick={() => setBookingsVenueId(null)} className={buttonGhost}>
+                &larr; Back to venues
+              </button>
+            ) : undefined
+          }
         >
-          {selected ? (
-            <RegistrationApprovalQueue venue={selected} />
+          {bookingsVenue ? (
+            <RegistrationApprovalQueue venue={bookingsVenue} />
           ) : (
-            <p className="text-sm text-slate-500">No venue selected yet.</p>
+            <VenueBookingsList venues={myVenues} onSelect={(v) => setBookingsVenueId(v.id)} />
           )}
         </Section>
       )}
 
       {active === 'schedule' && (
-        <Section title="Schedule" description={selected ? selected.name : undefined}>
-          {selected ? (
-            <VenueScheduleCalendar venue={selected} />
+        <Section title="Schedule" description="Pick a venue to view its booking calendar.">
+          {myVenues.length > 0 && (
+            <select
+              value={scheduleVenue?.id ?? ''}
+              onChange={(e) => setScheduleVenueId(e.target.value ? Number(e.target.value) : null)}
+              className={`${select} mb-4 max-w-xs`}
+            >
+              {myVenues.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          )}
+          {scheduleVenue ? (
+            <VenueScheduleCalendar venue={scheduleVenue} />
           ) : (
-            <p className="text-sm text-slate-500">No venue selected yet.</p>
+            <p className="text-sm text-slate-500">No venues yet.</p>
           )}
         </Section>
       )}

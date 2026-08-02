@@ -106,6 +106,8 @@ export function StatCard({ label, value }: { label: string; value: ReactNode }) 
 const STATUS_BADGE_STYLES: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700',
   approved: 'bg-green-100 text-green-700',
+  active: 'bg-green-100 text-green-700',
+  inactive: 'bg-slate-100 text-slate-500',
   rejected: 'bg-red-100 text-red-700',
   cancelled: 'bg-slate-100 text-slate-500',
   open: 'bg-teal-100 text-teal-700',

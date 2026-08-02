@@ -25,12 +25,14 @@ test('a player can browse venues, book an available slot, and see it as pending'
 
   // Click a slot unlikely to collide with other runs' bookings: a fixed hour
   // would eventually collide with an earlier run's own booking on repeat runs
-  // against a persistent dev DB (no reset between E2E runs), so derive one of
-  // the 48 half-hour marks for tomorrow from the current timestamp instead of
-  // hardcoding one.
-  const slotIndex = Date.now() % 48
-  const slotTime = `${String(Math.floor(slotIndex / 2)).padStart(2, '0')}:${slotIndex % 2 === 0 ? '00' : '30'}:00`
-  const slot = page.locator(`.fc-timegrid-slot-lane[data-time="${slotTime}"]`).first()
+  // against a persistent dev DB (no reset between E2E runs), so derive one
+  // from the current timestamp instead of hardcoding one. Picked from
+  // whatever slot lanes are actually rendered — not assumed to span the
+  // full 24h day — since a venue with operating hours set constrains the
+  // calendar to slotMinTime/slotMaxTime, shrinking the rendered range.
+  const slotLanes = page.locator('.fc-timegrid-slot-lane[data-time]')
+  const slotCount = await slotLanes.count()
+  const slot = slotLanes.nth(Date.now() % slotCount)
   await slot.scrollIntoViewIfNeeded()
   await slot.click()
 

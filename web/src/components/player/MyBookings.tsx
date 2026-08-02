@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchMyVenueRegistrations } from '../../lib/playerApi'
 import { useAuth } from '../../lib/AuthContext'
+import { useChatUI } from '../../lib/ChatUIContext'
 import { echo } from '../../lib/echo'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -13,6 +14,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function MyBookings() {
   const { user } = useAuth()
+  const { openChatWindow } = useChatUI()
   const queryClient = useQueryClient()
   const { data: bookings } = useQuery({
     queryKey: ['player', 'venue-registrations'],
@@ -46,14 +48,24 @@ export function MyBookings() {
         >
           <div>
             <p className="text-sm font-medium text-slate-800">
-              {b.venue.name}
+              {b.venue?.name ?? 'Deleted venue'}
               {b.court && ` — ${b.court.name}`}
             </p>
             <p className="text-xs text-slate-500">
               {new Date(b.starts_at).toLocaleString()} - {new Date(b.ends_at).toLocaleTimeString()}
             </p>
           </div>
-          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_COLORS[b.status]}`}>{b.status}</span>
+          <div className="flex shrink-0 items-center gap-2">
+            {b.conversation && (
+              <button
+                onClick={() => openChatWindow(b.conversation!.id)}
+                className="text-xs font-medium text-teal-600 hover:text-teal-700"
+              >
+                Message facilitator
+              </button>
+            )}
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_COLORS[b.status]}`}>{b.status}</span>
+          </div>
         </li>
       ))}
     </ul>

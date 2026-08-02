@@ -17,7 +17,8 @@ export function GlobalChatListener() {
   const { user, hasRole } = useAuth()
   const queryClient = useQueryClient()
   const { openChatWindow } = useChatUI()
-  const enabled = !!user && hasRole('player', 'coach')
+  // venue_facilitator included: see FloatingChatWindows for why.
+  const enabled = !!user && hasRole('player', 'coach', 'venue_facilitator')
 
   const { data: conversations } = useQuery({
     queryKey: ['social', 'conversations'],

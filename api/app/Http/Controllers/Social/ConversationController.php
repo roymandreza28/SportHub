@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Social;
 
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
+use App\Services\BookingConversationCleanupService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -11,8 +12,14 @@ class ConversationController extends Controller
 {
     public function index(Request $request)
     {
+        BookingConversationCleanupService::run();
+
         return $request->user()->conversations()
-            ->with(['participants:id,name,avatar_path', 'messages' => fn ($q) => $q->latest()->limit(1)])
+            ->with([
+                'participants:id,name,avatar_path',
+                'messages' => fn ($q) => $q->latest()->limit(1),
+                'messages.user:id,name',
+            ])
             ->get()
             ->sortByDesc(fn (Conversation $c) => $c->messages->first()?->created_at ?? $c->created_at)
             ->values();

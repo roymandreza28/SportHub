@@ -1,10 +1,12 @@
 import { api } from './api'
-import type { Sport } from './venueApi'
+import type { Sport, SportFormat } from './venueApi'
+import type { SkillLevelTier } from './skillLevels'
+import type { Team } from './teamsApi'
 
 export type SkillLevel = {
   id: number
   sport_id: number
-  level: 'beginner' | 'intermediate' | 'advanced' | 'pro'
+  level: SkillLevelTier
   score: string | null
   sport: Sport
   coach: { id: number; name: string } | null
@@ -24,7 +26,13 @@ export type MatchmakingRequestItem = {
   sport_id: number
   status: 'open' | 'matched' | 'expired' | 'cancelled'
   sport: Sport
+  sport_format: SportFormat | null
+  team: Team | null
+  venue: { id: number; name: string } | null
+  preferred_start_at: string | null
+  preferred_end_at: string | null
   opponent?: { id: number; name: string; email: string }
+  opponent_team?: Team | null
 }
 
 export async function fetchPlayerProfile() {
@@ -47,7 +55,14 @@ export async function fetchMyMatchmakingRequests() {
   return data
 }
 
-export async function createMatchmakingRequest(input: { sport_id: number; venue_id?: number }) {
+export async function createMatchmakingRequest(input: {
+  sport_id: number
+  sport_format_id: number
+  team_id?: number
+  venue_id?: number
+  preferred_start_at?: string
+  preferred_end_at?: string
+}) {
   const { data } = await api.post<MatchmakingRequestItem>('/api/matchmaking-requests', input)
   return data
 }
@@ -75,6 +90,10 @@ export type MyVenueRegistration = {
   purpose: string | null
   venue: { id: number; name: string }
   court: { id: number; name: string } | null
+  // Only present once the booking is approved — a direct conversation with
+  // the venue's facilitator, auto-created on approval and auto-(soft)deleted
+  // once the booking's day is over.
+  conversation: { id: number } | null
 }
 
 export async function fetchMyVenueRegistrations() {

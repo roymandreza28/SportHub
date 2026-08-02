@@ -68,11 +68,16 @@ export function VenueRegistrationForm({ venue }: { venue: Venue }) {
     editable: false,
   }))
 
+  const hasFixedHours = Boolean(venue.opens_at && venue.closes_at)
+
   return (
     <div className="flex flex-col gap-3">
       <div>
         <h3 className="text-sm font-semibold text-slate-800">Book {venue.name}</h3>
-        <p className="text-xs text-slate-500">Select a free time slot on the calendar (grey = already booked)</p>
+        <p className="text-xs text-slate-500">
+          Select a free time slot on the calendar (grey = already booked)
+          {hasFixedHours && ` — open ${venue.opens_at?.slice(0, 5)}–${venue.closes_at?.slice(0, 5)}`}
+        </p>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-slate-200">
@@ -86,6 +91,14 @@ export function VenueRegistrationForm({ venue }: { venue: Venue }) {
           select={handleSelect}
           height="auto"
           headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
+          {...(hasFixedHours
+            ? {
+                businessHours: { daysOfWeek: [0, 1, 2, 3, 4, 5, 6], startTime: venue.opens_at!, endTime: venue.closes_at! },
+                selectConstraint: 'businessHours',
+                slotMinTime: venue.opens_at!,
+                slotMaxTime: venue.closes_at!,
+              }
+            : {})}
         />
       </div>
 

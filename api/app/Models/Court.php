@@ -4,20 +4,21 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Court extends Model
 {
-    protected $fillable = ['venue_id', 'name', 'sport_id', 'type', 'capacity', 'status'];
+    protected $fillable = ['venue_id', 'name', 'type', 'capacity', 'status'];
 
     public function venue(): BelongsTo
     {
         return $this->belongsTo(Venue::class);
     }
 
-    public function sport(): BelongsTo
+    public function sports(): BelongsToMany
     {
-        return $this->belongsTo(Sport::class);
+        return $this->belongsToMany(Sport::class);
     }
 
     public function venueRegistrations(): HasMany

@@ -83,6 +83,23 @@ it('sends and lists messages only for conversation participants, broadcasting li
         ->assertJsonPath('data.0.body', 'Hello!');
 });
 
+it('lists conversations with the last messages sender eager-loaded', function () {
+    $a = userWithRole('player');
+    $b = userWithRole('coach');
+    makeFriends($a, $b);
+
+    $conversation = $this->actingAs($a)->postJson('/api/social/conversations', ['type' => 'direct', 'user_id' => $b->id])->json();
+    $this->actingAs($a)->postJson("/api/social/conversations/{$conversation['id']}/messages", ['body' => 'Hello!']);
+
+    // The frontend's unread-indicator logic reads messages.0.user.id directly
+    // (no optional chaining) — if this relation isn't eager-loaded, `user` is
+    // silently omitted from the JSON entirely and the list view throws.
+    $this->actingAs($b)->getJson('/api/social/conversations')
+        ->assertOk()
+        ->assertJsonPath('0.messages.0.body', 'Hello!')
+        ->assertJsonPath('0.messages.0.user.id', $a->id);
+});
+
 it('marks a conversation read only for the requesting participant, and denies non-participants', function () {
     $a = userWithRole('player');
     $b = userWithRole('coach');

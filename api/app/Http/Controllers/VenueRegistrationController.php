@@ -3,17 +3,32 @@
 namespace App\Http\Controllers;
 
 use App\Events\VenueRegistrationUpdated;
+use App\Models\Conversation;
 use App\Models\Court;
+use App\Models\Venue;
 use App\Models\VenueRegistration;
+use App\Services\BookingConversationCleanupService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class VenueRegistrationController extends Controller
 {
     public function mine(Request $request)
     {
+        // withTrashed() — a player's own booking history should still show
+        // which venue it was for even if that venue was later soft-deleted;
+        // the whole point of a soft delete (vs. a hard one) is that this
+        // kind of historical reference doesn't just go blank.
+        BookingConversationCleanupService::run();
+
         return $request->user()->venueRegistrations()
-            ->with('venue:id,name', 'court:id,name')
+            ->with([
+                'venue' => fn ($q) => $q->withTrashed()->select('id', 'name'),
+                'court:id,name',
+                'conversation:id,venue_registration_id',
+            ])
             ->orderByDesc('starts_at')
             ->get();
     }
@@ -29,6 +44,24 @@ class VenueRegistrationController extends Controller
             'ends_at' => ['required', 'date', 'after:starts_at'],
             'purpose' => ['nullable', 'string', 'max:255'],
         ]);
+
+        $venue = Venue::findOrFail($data['venue_id']);
+
+        abort_if($venue->status !== 'active', 422, 'This venue is currently closed and not accepting bookings.');
+
+        if ($venue->opens_at && $venue->closes_at) {
+            // Facilitators set operating hours as Asia/Manila wall-clock time
+            // (the app serves a single municipality); starts_at/ends_at
+            // arrive as UTC instants, so convert before comparing.
+            $startTime = Carbon::parse($data['starts_at'])->timezone('Asia/Manila')->format('H:i:s');
+            $endTime = Carbon::parse($data['ends_at'])->timezone('Asia/Manila')->format('H:i:s');
+
+            if ($startTime < $venue->opens_at || $endTime > $venue->closes_at) {
+                throw ValidationException::withMessages([
+                    'starts_at' => ["This venue is only open from {$venue->opens_at} to {$venue->closes_at}."],
+                ]);
+            }
+        }
 
         if (! empty($data['court_id'])) {
             $court = Court::findOrFail($data['court_id']);
@@ -67,8 +100,31 @@ class VenueRegistrationController extends Controller
 
         $venueRegistration->update($data);
 
+        if ($data['status'] === 'approved') {
+            $this->ensureBookingConversation($venueRegistration);
+        }
+
         VenueRegistrationUpdated::dispatch($venueRegistration->fresh());
 
-        return $venueRegistration->load('user:id,name,email', 'court:id,name');
+        return $venueRegistration->load('user:id,name,email', 'court:id,name', 'conversation:id,venue_registration_id');
+    }
+
+    // The player/coach who booked and the venue's facilitator can only talk
+    // once a booking is approved, and this conversation is created directly
+    // (not through Social\ConversationController::store()) precisely because
+    // that endpoint requires the two users to already be friends — a
+    // facilitator and a one-off booker usually aren't.
+    private function ensureBookingConversation(VenueRegistration $registration): void
+    {
+        DB::transaction(function () use ($registration) {
+            $conversation = Conversation::firstOrCreate(
+                ['venue_registration_id' => $registration->id],
+                ['type' => 'direct', 'created_by' => $registration->venue->facilitator_id]
+            );
+
+            if ($conversation->wasRecentlyCreated) {
+                $conversation->participants()->attach([$registration->user_id, $registration->venue->facilitator_id]);
+            }
+        });
     }
 }

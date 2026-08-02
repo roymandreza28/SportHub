@@ -6,14 +6,18 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Conversation extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'type',
         'name',
         'created_by',
         'direct_key',
+        'venue_registration_id',
     ];
 
     public static function directKeyFor(int $a, int $b): string
@@ -35,5 +39,10 @@ class Conversation extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(ConversationMessage::class);
+    }
+
+    public function venueRegistration(): BelongsTo
+    {
+        return $this->belongsTo(VenueRegistration::class);
     }
 }

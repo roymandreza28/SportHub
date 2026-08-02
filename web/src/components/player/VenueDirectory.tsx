@@ -5,7 +5,7 @@ import { VenueMap } from '../venue/VenueMap'
 import { input } from '../../lib/formStyles'
 
 export function VenueDirectory({ onSelect, selectedId }: { onSelect: (venue: Venue) => void; selectedId?: number }) {
-  const { data: venues, isLoading } = useQuery({ queryKey: ['venues'], queryFn: fetchVenues })
+  const { data: venues, isLoading } = useQuery({ queryKey: ['venues'], queryFn: () => fetchVenues() })
   const [search, setSearch] = useState('')
 
   const filtered = (venues ?? []).filter((v) => v.name.toLowerCase().includes(search.toLowerCase()))

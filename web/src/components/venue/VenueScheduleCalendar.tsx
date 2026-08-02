@@ -27,6 +27,8 @@ export function VenueScheduleCalendar({ venue }: { venue: Venue }) {
     color: STATUS_COLORS[event.status],
   }))
 
+  const hasFixedHours = Boolean(venue.opens_at && venue.closes_at)
+
   return (
     <div className="rounded border p-2">
       <FullCalendar
@@ -37,6 +39,13 @@ export function VenueScheduleCalendar({ venue }: { venue: Venue }) {
         events={events}
         height="auto"
         headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
+        {...(hasFixedHours
+          ? {
+              businessHours: { daysOfWeek: [0, 1, 2, 3, 4, 5, 6], startTime: venue.opens_at!, endTime: venue.closes_at! },
+              slotMinTime: venue.opens_at!,
+              slotMaxTime: venue.closes_at!,
+            }
+          : {})}
       />
     </div>
   )

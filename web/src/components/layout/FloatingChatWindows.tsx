@@ -59,7 +59,9 @@ function FloatingChatWindow({ conversation, onClose }: { conversation: Conversat
 export function FloatingChatWindows() {
   const { user, hasRole } = useAuth()
   const { openWindows, closeChatWindow } = useChatUI()
-  const enabled = !!user && hasRole('player', 'coach')
+  // venue_facilitator included: they can't start chats, but can be dropped
+  // into a booking-triggered conversation once a booking is approved.
+  const enabled = !!user && hasRole('player', 'coach', 'venue_facilitator')
 
   const { data: conversations } = useQuery({
     queryKey: ['social', 'conversations'],

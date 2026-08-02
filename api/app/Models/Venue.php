@@ -5,11 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Venue extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'facilitator_id', 'name', 'address', 'latitude', 'longitude', 'description', 'amenities',
+        'opens_at', 'closes_at', 'status',
     ];
 
     protected function casts(): array

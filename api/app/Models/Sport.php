@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Sport extends Model
@@ -24,8 +25,13 @@ class Sport extends Model
         return $this->hasMany(Tournament::class);
     }
 
-    public function courts(): HasMany
+    public function courts(): BelongsToMany
     {
-        return $this->hasMany(Court::class);
+        return $this->belongsToMany(Court::class);
+    }
+
+    public function formats(): HasMany
+    {
+        return $this->hasMany(SportFormat::class);
     }
 }

@@ -1,5 +1,8 @@
 <?php
 
+use App\Models\Sport;
+use App\Models\SportFormat;
+use App\Models\Team;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 
@@ -36,4 +39,32 @@ function userWithRole(string $role): User
     $user->assignRole($role);
 
     return $user;
+}
+
+/**
+ * Builds a full, 'ready' team for the given captain/sport/format, filling
+ * every remaining slot with freshly-created players — for tests that need a
+ * ready team to exist without exercising the invite/accept flow itself.
+ */
+function createReadyTeam(User $captain, Sport $sport, SportFormat $format): Team
+{
+    $team = Team::create([
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+        'captain_id' => $captain->id,
+        'name' => "{$captain->name}'s Team",
+        'status' => 'forming',
+    ]);
+
+    $team->members()->create(['user_id' => $captain->id, 'status' => 'accepted', 'responded_at' => now()]);
+
+    for ($i = 1; $i < $format->players_per_side; $i++) {
+        $teammate = User::factory()->create();
+        $teammate->assignRole('player');
+        $team->members()->create(['user_id' => $teammate->id, 'status' => 'accepted', 'responded_at' => now()]);
+    }
+
+    $team->refreshReadyStatus();
+
+    return $team;
 }

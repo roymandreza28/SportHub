@@ -5,24 +5,41 @@ namespace App\Http\Controllers;
 use App\Events\SystemMetricUpdated;
 use App\Models\Venue;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class VenueController extends Controller
 {
     public function index(Request $request)
     {
         return Venue::query()
-            ->with(['courts.sport', 'equipment'])
+            ->where('status', 'active')
+            ->with(['courts.sports', 'equipment'])
             ->when($request->string('sport_id')->toString(), fn ($q, $sportId) => $q
-                ->whereHas('courts', fn ($cq) => $cq->where('sport_id', $sportId)))
+                ->whereHas('courts.sports', fn ($sq) => $sq->where('sports.id', $sportId)))
             ->when($request->string('search')->toString(), fn ($q, $search) => $q
                 ->where('name', 'ilike', "%{$search}%"))
             ->orderBy('name')
             ->get();
     }
 
+    public function mine(Request $request)
+    {
+        // Unlike index(), this is the facilitator's own management view —
+        // every venue they own regardless of status, so an inactive venue
+        // (hidden from players) is still visible here to be edited/reactivated.
+        return $request->user()->venues()
+            ->with(['courts.sports', 'equipment'])
+            ->withCount([
+                'venueRegistrations',
+                'venueRegistrations as pending_bookings_count' => fn ($q) => $q->where('status', 'pending'),
+            ])
+            ->orderBy('name')
+            ->get();
+    }
+
     public function show(Venue $venue)
     {
-        return $venue->load(['courts.sport', 'equipment', 'facilitator:id,name,email']);
+        return $venue->load(['courts.sports', 'equipment', 'facilitator:id,name,email']);
     }
 
     public function store(Request $request)
@@ -36,13 +53,54 @@ class VenueController extends Controller
             'longitude' => ['required', 'numeric', 'between:-180,180'],
             'description' => ['nullable', 'string'],
             'amenities' => ['nullable', 'array'],
+            'opens_at' => ['nullable', 'date_format:H:i', 'required_with:closes_at'],
+            'closes_at' => ['nullable', 'date_format:H:i', 'after:opens_at', 'required_with:opens_at'],
+            'courts' => ['nullable', 'array'],
+            'courts.*.name' => ['nullable', 'string', 'max:255'],
+            // Each entry is one physical court and the sport(s) it supports —
+            // a court can carry more than one (e.g. a tennis court also
+            // lined for pickleball), so this is a list, not a single id.
+            'courts.*.sport_ids' => ['nullable', 'array'],
+            'courts.*.sport_ids.*' => ['integer', 'exists:sports,id'],
+            'equipment' => ['nullable', 'array'],
+            'equipment.*.name' => ['required', 'string', 'max:255'],
+            'equipment.*.quantity' => ['required', 'integer', 'min:1'],
         ]);
 
-        $venue = $request->user()->venues()->create($data);
+        $courts = $data['courts'] ?? [];
+        $equipment = $data['equipment'] ?? [];
+        unset($data['courts'], $data['equipment']);
+
+        $venue = DB::transaction(function () use ($request, $data, $courts, $equipment) {
+            $venue = $request->user()->venues()->create($data);
+
+            // Courts the facilitator adds at creation time (each with its
+            // own name and sport(s)) become the venue's initial courts —
+            // the same courts.sports pivot every other sport-filtered venue
+            // query relies on (player directory, matchmaking venue picker).
+            // Finer-grained changes later still go through the courts manager.
+            foreach ($courts as $i => $entry) {
+                $court = $venue->courts()->create([
+                    'name' => ($entry['name'] ?? null) ?: 'Court '.($i + 1),
+                    'type' => 'court',
+                ]);
+                $court->sports()->sync($entry['sport_ids'] ?? []);
+            }
+
+            foreach ($equipment as $item) {
+                $venue->equipment()->create([
+                    'name' => $item['name'],
+                    'quantity_total' => $item['quantity'],
+                    'quantity_available' => $item['quantity'],
+                ]);
+            }
+
+            return $venue;
+        });
 
         SystemMetricUpdated::dispatch('total_venues', Venue::count());
 
-        return response()->json($venue, 201);
+        return response()->json($venue->fresh(['courts.sports', 'equipment']), 201);
     }
 
     public function update(Request $request, Venue $venue)
@@ -56,6 +114,9 @@ class VenueController extends Controller
             'longitude' => ['sometimes', 'numeric', 'between:-180,180'],
             'description' => ['nullable', 'string'],
             'amenities' => ['nullable', 'array'],
+            'opens_at' => ['nullable', 'date_format:H:i', 'required_with:closes_at'],
+            'closes_at' => ['nullable', 'date_format:H:i', 'after:opens_at', 'required_with:opens_at'],
+            'status' => ['sometimes', 'in:active,inactive'],
         ]);
 
         $venue->update($data);
@@ -77,7 +138,7 @@ class VenueController extends Controller
         $this->authorize('viewSchedule', $venue);
 
         return $venue->venueRegistrations()
-            ->with(['user:id,name,email', 'court:id,name'])
+            ->with(['user:id,name,email', 'court:id,name', 'conversation:id,venue_registration_id'])
             ->orderBy('starts_at')
             ->get()
             ->map(fn ($registration) => [
@@ -89,6 +150,7 @@ class VenueController extends Controller
                 'status' => $registration->status,
                 'purpose' => $registration->purpose,
                 'user' => $registration->user,
+                'conversation_id' => $registration->conversation?->id,
             ]);
     }
 

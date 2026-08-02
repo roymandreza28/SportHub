@@ -1,4 +1,5 @@
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
+import { useEffect } from 'react'
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
@@ -24,6 +25,24 @@ function ClickHandler({ onPick }: { onPick: (lat: number, lng: number) => void }
   return null
 }
 
+// Leaflet measures its container's size the moment it mounts. Inside a modal
+// that's still settling its layout (ours renders in a scrollable panel that
+// pops in), that measurement can happen before the container has its real
+// size — Leaflet then computes tile/marker positions for the wrong
+// dimensions, which is why the marker was appearing to float off in the
+// middle of the form instead of on the map. Re-measuring once the modal has
+// settled fixes it.
+function InvalidateSizeOnMount() {
+  const map = useMap()
+
+  useEffect(() => {
+    const timer = setTimeout(() => map.invalidateSize(), 150)
+    return () => clearTimeout(timer)
+  }, [map])
+
+  return null
+}
+
 export function LocationPicker({
   latitude,
   longitude,
@@ -41,6 +60,7 @@ export function LocationPicker({
       />
       <Marker position={[latitude, longitude]} icon={defaultIcon} />
       <ClickHandler onPick={onChange} />
+      <InvalidateSizeOnMount />
     </MapContainer>
   )
 }
