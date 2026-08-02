@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchEvaluations } from '../../lib/coachApi'
+import { SKILL_LEVEL_LABELS, type SkillLevelTier } from '../../lib/skillLevels'
 
-const LEVEL_HEIGHT: Record<string, string> = {
+const LEVEL_HEIGHT: Record<SkillLevelTier, string> = {
   beginner: '25%',
-  intermediate: '50%',
-  advanced: '75%',
-  pro: '100%',
+  casual_player: '50%',
+  developing_athlete: '75%',
+  competitive_athlete: '100%',
 }
 
 export function PlayerSkillHistoryChart({ playerId }: { playerId: number }) {
@@ -27,7 +28,7 @@ export function PlayerSkillHistoryChart({ playerId }: { playerId: number }) {
         {chronological.map((evaluation) => (
           <div
             key={evaluation.id}
-            title={`${evaluation.skill_level.sport.name}: ${evaluation.skill_level.level} on ${new Date(evaluation.created_at).toLocaleDateString()}`}
+            title={`${evaluation.skill_level.sport.name}: ${SKILL_LEVEL_LABELS[evaluation.skill_level.level]} on ${new Date(evaluation.created_at).toLocaleDateString()}`}
             className="w-4 rounded-t-sm bg-gradient-to-t from-teal-600 to-teal-400"
             style={{ height: LEVEL_HEIGHT[evaluation.skill_level.level] }}
           />
@@ -38,7 +39,7 @@ export function PlayerSkillHistoryChart({ playerId }: { playerId: number }) {
           <li key={evaluation.id} className="py-1.5">
             <span className="text-slate-400">{new Date(evaluation.created_at).toLocaleDateString()}</span> —{' '}
             {evaluation.skill_level.sport.name}:{' '}
-            <strong className="font-semibold text-slate-800">{evaluation.skill_level.level}</strong>
+            <strong className="font-semibold text-slate-800">{SKILL_LEVEL_LABELS[evaluation.skill_level.level]}</strong>
             {evaluation.skill_level.score && ` (${evaluation.skill_level.score})`} by {evaluation.coach.name}
             {evaluation.notes && ` — "${evaluation.notes}"`}
           </li>

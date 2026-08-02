@@ -2,11 +2,10 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createEvaluation, type PlayerSearchResult } from '../../lib/coachApi'
 import { fetchSports } from '../../lib/venueApi'
+import { SKILL_LEVELS, SKILL_LEVEL_LABELS, type SkillLevelTier } from '../../lib/skillLevels'
 import { PlayerSearchPicker } from './PlayerSearchPicker'
 import { PlayerSkillHistoryChart } from './PlayerSkillHistoryChart'
 import { buttonPrimary, fieldGroup, input, label, select, textarea } from '../../lib/formStyles'
-
-const LEVELS = ['beginner', 'intermediate', 'advanced', 'pro'] as const
 
 export function EvaluationForm() {
   const queryClient = useQueryClient()
@@ -14,7 +13,7 @@ export function EvaluationForm() {
 
   const [player, setPlayer] = useState<PlayerSearchResult | null>(null)
   const [sportId, setSportId] = useState<number | ''>('')
-  const [level, setLevel] = useState<(typeof LEVELS)[number]>('beginner')
+  const [level, setLevel] = useState<SkillLevelTier>('beginner')
   const [score, setScore] = useState('')
   const [notes, setNotes] = useState('')
 
@@ -62,12 +61,12 @@ export function EvaluationForm() {
               <label className={label}>Level</label>
               <select
                 value={level}
-                onChange={(e) => setLevel(e.target.value as (typeof LEVELS)[number])}
+                onChange={(e) => setLevel(e.target.value as SkillLevelTier)}
                 className={select}
               >
-                {LEVELS.map((l) => (
+                {SKILL_LEVELS.map((l) => (
                   <option key={l} value={l}>
-                    {l}
+                    {SKILL_LEVEL_LABELS[l]}
                   </option>
                 ))}
               </select>

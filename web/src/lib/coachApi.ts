@@ -1,5 +1,6 @@
 import { api } from './api'
 import type { Sport } from './venueApi'
+import type { SkillLevelTier } from './skillLevels'
 
 export type PlayerSearchResult = { id: number; name: string; email: string }
 
@@ -20,7 +21,7 @@ export type EvaluationEntry = {
   coach: { id: number; name: string }
   skill_level: {
     id: number
-    level: 'beginner' | 'intermediate' | 'advanced' | 'pro'
+    level: SkillLevelTier
     score: string | null
     sport: Sport
   }
@@ -49,7 +50,7 @@ export async function fetchEvaluations(playerId: number) {
 export async function createEvaluation(input: {
   player_id: number
   sport_id: number
-  level: 'beginner' | 'intermediate' | 'advanced' | 'pro'
+  level: SkillLevelTier
   score?: number
   criteria?: Record<string, unknown>
   notes?: string

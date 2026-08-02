@@ -61,7 +61,7 @@ it('creates an evaluation that upserts the current skill level and keeps prior e
     $second = $this->actingAs($coach)->postJson('/api/evaluations', [
         'player_id' => $player->id,
         'sport_id' => $sport->id,
-        'level' => 'intermediate',
+        'level' => 'casual_player',
         'score' => 55,
         'notes' => 'Improved',
     ])->assertCreated();
@@ -78,7 +78,7 @@ it('creates an evaluation that upserts the current skill level and keeps prior e
 
     $this->assertDatabaseHas('skill_levels', [
         'player_profile_id' => $player->fresh()->playerProfile->id,
-        'level' => 'intermediate',
+        'level' => 'casual_player',
         'score' => 55,
     ]);
 });
@@ -92,7 +92,7 @@ it('auto-provisions a player profile when evaluating a player who never touched 
     $this->actingAs($coach)->postJson('/api/evaluations', [
         'player_id' => $player->id,
         'sport_id' => $sport->id,
-        'level' => 'advanced',
+        'level' => 'developing_athlete',
     ])->assertCreated();
 
     $this->assertDatabaseHas('player_profiles', ['user_id' => $player->id]);
@@ -106,6 +106,6 @@ it('denies evaluation creation to a non-coach role', function () {
     $this->actingAs($player)->postJson('/api/evaluations', [
         'player_id' => $otherPlayer->id,
         'sport_id' => $sport->id,
-        'level' => 'pro',
+        'level' => 'competitive_athlete',
     ])->assertForbidden();
 });
