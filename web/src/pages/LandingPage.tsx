@@ -168,7 +168,10 @@ export function LandingPage() {
             <a href="#about" className="hover:text-slate-900">About</a>
             <a href="#get-started" className="hover:text-slate-900">Get started</a>
           </div>
-          <div className="flex items-center gap-3 sm:gap-4">
+          {/* Sign In / Join Now only have room to sit inline with the nav
+              links from md up — below that they move into the dropdown
+              menu below, alongside the hamburger that opens it. */}
+          <div className="hidden items-center gap-4 md:flex">
             <button
               onClick={() => openAuth('login')}
               className="text-sm font-medium text-slate-600 hover:text-slate-900"
@@ -182,17 +185,17 @@ export function LandingPage() {
               Join Now
               <span aria-hidden="true">&rarr;</span>
             </button>
-            <button
-              onClick={() => setMobileMenuOpen((v) => !v)}
-              aria-label="Toggle menu"
-              aria-expanded={mobileMenuOpen}
-              className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 md:hidden"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-5 w-5">
-                {mobileMenuOpen ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 6h16M4 12h16M4 18h16" />}
-              </svg>
-            </button>
           </div>
+          <button
+            onClick={() => setMobileMenuOpen((v) => !v)}
+            aria-label="Toggle menu"
+            aria-expanded={mobileMenuOpen}
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 md:hidden"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-5 w-5">
+              {mobileMenuOpen ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 6h16M4 12h16M4 18h16" />}
+            </svg>
+          </button>
         </div>
         {mobileMenuOpen && (
           <div className="flex flex-col gap-1 border-t border-slate-100 px-6 py-3 text-sm font-medium text-slate-600 md:hidden">
@@ -200,6 +203,21 @@ export function LandingPage() {
             <a href="#features" onClick={() => setMobileMenuOpen(false)} className="rounded px-2 py-2 hover:bg-slate-50">Features</a>
             <a href="#about" onClick={() => setMobileMenuOpen(false)} className="rounded px-2 py-2 hover:bg-slate-50">About</a>
             <a href="#get-started" onClick={() => setMobileMenuOpen(false)} className="rounded px-2 py-2 hover:bg-slate-50">Get started</a>
+            <div className="mt-2 flex flex-col gap-2 border-t border-slate-100 pt-3">
+              <button
+                onClick={() => openAuth('login')}
+                className="rounded-md border border-slate-200 px-4 py-2.5 text-center font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => openAuth('register')}
+                className="flex items-center justify-center gap-1.5 rounded-md bg-teal-600 px-4 py-2.5 text-center font-semibold text-white hover:bg-teal-700"
+              >
+                Join Now
+                <span aria-hidden="true">&rarr;</span>
+              </button>
+            </div>
           </div>
         )}
       </nav>

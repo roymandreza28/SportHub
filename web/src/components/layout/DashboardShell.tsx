@@ -4,7 +4,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { UserSearchBar } from '../social/UserSearchBar'
 import { HeaderMessagesMenu } from './HeaderMessagesMenu'
 import { HeaderNotificationsMenu } from './HeaderNotificationsMenu'
-import { IconChevronLeft } from './icons'
+import { IconChevronDown, IconChevronLeft } from './icons'
 import { UserMenu } from './UserMenu'
 
 export type NavItem = {
@@ -26,12 +26,20 @@ export function DashboardShell({
 }) {
   const { hasRole } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const showSocialHeader = hasRole('player', 'coach')
+
+  function handleNavigate(id: string) {
+    onNavigate(id)
+    setMobileNavOpen(false)
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-50">
+      {/* Desktop/laptop sidebar — unchanged, just hidden below md so it
+          never competes for space with the mobile hamburger dropdown. */}
       <aside
-        className={`sticky top-0 flex h-screen shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white py-6 transition-all ${
+        className={`sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white py-6 transition-all md:flex ${
           collapsed ? 'w-20 px-2' : 'w-64 px-4'
         }`}
       >
@@ -66,13 +74,28 @@ export function DashboardShell({
       </aside>
 
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-slate-200 bg-white/90 px-8 py-4 backdrop-blur">
+        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-4 backdrop-blur sm:gap-4 sm:px-8">
+          {/* Desktop-only sidebar collapse toggle. */}
           <button
             onClick={() => setCollapsed((c) => !c)}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+            className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 md:flex"
           >
             <IconChevronLeft className={`h-4 w-4 transition-transform ${collapsed ? 'rotate-180' : ''}`} />
+          </button>
+
+          {/* Mobile-only: the logo itself is the menu trigger, opening the
+              dropdown nav below instead of a permanent sidebar, which has no
+              room on a small screen. The chevron keeps it legible as "tap to
+              open a menu" rather than reading as a plain, static logo. */}
+          <button
+            onClick={() => setMobileNavOpen((v) => !v)}
+            aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileNavOpen}
+            className="flex shrink-0 items-center gap-1 rounded-lg py-1 pl-1 pr-1.5 hover:bg-slate-50 md:hidden"
+          >
+            <img src="/logo.png" alt="SportHub menu" className="h-8 w-8 shrink-0" />
+            <IconChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${mobileNavOpen ? 'rotate-180' : ''}`} />
           </button>
 
           <div className="flex flex-1 items-center justify-center">{showSocialHeader && <UserSearchBar />}</div>
@@ -84,7 +107,26 @@ export function DashboardShell({
           </div>
         </header>
 
-        <main className="mx-auto max-w-6xl px-6 py-8 sm:px-8">{children}</main>
+        {mobileNavOpen && (
+          <nav className="flex flex-col gap-1 border-b border-slate-200 bg-white px-4 py-3 md:hidden">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleNavigate(item.id)}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition ${
+                  activeId === item.id
+                    ? 'bg-teal-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <item.icon className="h-5 w-5 shrink-0" />
+                {item.label}
+              </button>
+            ))}
+          </nav>
+        )}
+
+        <main className="mx-auto max-w-6xl px-4 py-8 sm:px-8">{children}</main>
       </div>
     </div>
   )
