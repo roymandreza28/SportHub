@@ -130,6 +130,15 @@ class User extends Authenticatable
         return $this->hasMany(ChatMessage::class);
     }
 
+    // Deliberately shadows Notifiable's own notifications() (the built-in
+    // polymorphic DatabaseNotification relation) — this app never calls
+    // ->notify(), so there's no DatabaseNotification table or usage to
+    // conflict with; this is the app's own simple per-user feed instead.
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(Notification::class);
+    }
+
     public function friendshipsAsRequester(): HasMany
     {
         return $this->hasMany(Friendship::class, 'requester_id');

@@ -8,6 +8,7 @@ use App\Models\SportFormat;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -95,7 +96,17 @@ class TeamController extends Controller
                 $member = $team->members()->create(['user_id' => $invitee->id, 'status' => 'invited']);
             }
 
-            TeamInviteSent::dispatch($member->fresh(['team.sport', 'team.sportFormat', 'team.captain']));
+            $member = $member->fresh(['team.sport', 'team.sportFormat', 'team.captain']);
+
+            TeamInviteSent::dispatch($member);
+
+            NotificationService::send($invitee, 'team_invite', [
+                'team_member_id' => $member->id,
+                'team_id' => $member->team->id,
+                'team_name' => $member->team->name,
+                'sport_name' => $member->team->sport->name,
+                'captain_name' => $member->team->captain->name,
+            ]);
 
             return response()->json($member, 201);
         });

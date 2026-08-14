@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Events\MatchmakingPairFound;
 use App\Models\MatchmakingMatch;
 use App\Models\MatchmakingRequest;
+use App\Models\Sport;
 use App\Models\SportFormat;
 use App\Models\Team;
 use App\Services\MatchmakingCleanupService;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -122,6 +124,22 @@ class MatchmakingRequestController extends Controller
                 $mine->update(['status' => 'matched']);
 
                 MatchmakingPairFound::dispatch($candidate->fresh(), $mine->fresh());
+
+                $sportName = Sport::find($data['sport_id'])?->name;
+
+                NotificationService::send($candidate->user_id, 'matchmaking_paired', [
+                    'matchmaking_request_id' => $candidate->id,
+                    'opponent_id' => $user->id,
+                    'opponent_name' => $user->name,
+                    'sport_name' => $sportName,
+                ]);
+
+                NotificationService::send($user, 'matchmaking_paired', [
+                    'matchmaking_request_id' => $mine->id,
+                    'opponent_id' => $candidate->user_id,
+                    'opponent_name' => $candidate->user->name,
+                    'sport_name' => $sportName,
+                ]);
             }
 
             return response()->json($mine->fresh(['sport', 'venue', 'sportFormat', 'team.members.user:id,name,email']), 201);

@@ -33,6 +33,8 @@ export function HeaderMessagesMenu() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [open])
 
+  const unreadCount = (conversations ?? []).filter((c) => isConversationUnread(c, user?.id)).length
+
   const filtered = (conversations ?? [])
     .filter((c) => (tab === 'unread' ? isConversationUnread(c, user?.id) : tab === 'groups' ? c.type === 'group' : true))
     .filter((c) => conversationTitle(c, user?.id).toLowerCase().includes(search.toLowerCase()))
@@ -52,9 +54,14 @@ export function HeaderMessagesMenu() {
       <button
         onClick={() => setOpen(true)}
         aria-label="Messages"
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100"
+        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100"
       >
         <IconMessageCircle className="h-5 w-5" />
+        {unreadCount > 0 && (
+          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-semibold text-white">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
       </button>
 
       {open && (

@@ -7,6 +7,7 @@ use App\Events\FriendRequestSent;
 use App\Http\Controllers\Controller;
 use App\Models\Friendship;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -79,7 +80,15 @@ class FriendshipController extends Controller
                 ]);
             }
 
-            FriendRequestSent::dispatch($friendship->fresh(['requester']));
+            $friendship = $friendship->fresh(['requester']);
+
+            FriendRequestSent::dispatch($friendship);
+
+            NotificationService::send($addressee, 'friend_request', [
+                'friendship_id' => $friendship->id,
+                'requester_id' => $friendship->requester->id,
+                'requester_name' => $friendship->requester->name,
+            ]);
 
             return response()->json($friendship, 201);
         });
@@ -91,7 +100,15 @@ class FriendshipController extends Controller
 
         $friendship->update(['status' => 'accepted']);
 
-        FriendRequestAccepted::dispatch($friendship->fresh(['addressee']));
+        $friendship = $friendship->fresh(['addressee', 'requester']);
+
+        FriendRequestAccepted::dispatch($friendship);
+
+        NotificationService::send($friendship->requester, 'friend_request_accepted', [
+            'friendship_id' => $friendship->id,
+            'addressee_id' => $friendship->addressee->id,
+            'addressee_name' => $friendship->addressee->name,
+        ]);
 
         return $friendship;
     }

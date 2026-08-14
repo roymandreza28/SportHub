@@ -8,6 +8,7 @@ use App\Models\Court;
 use App\Models\Venue;
 use App\Models\VenueRegistration;
 use App\Services\BookingConversationCleanupService;
+use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -102,6 +103,13 @@ class VenueRegistrationController extends Controller
 
         if ($data['status'] === 'approved') {
             $this->ensureBookingConversation($venueRegistration);
+
+            NotificationService::send($venueRegistration->user_id, 'booking_approved', [
+                'venue_registration_id' => $venueRegistration->id,
+                'venue_id' => $venueRegistration->venue->id,
+                'venue_name' => $venueRegistration->venue->name,
+                'starts_at' => $venueRegistration->starts_at,
+            ]);
         }
 
         VenueRegistrationUpdated::dispatch($venueRegistration->fresh());
