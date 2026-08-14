@@ -6,6 +6,17 @@ use App\Models\SportFormat;
 use App\Models\Team;
 
 it('denies team creation to a role without the permission', function () {
+    $facilitator = userWithRole('venue_facilitator');
+    $sport = Sport::create(['name' => 'Basketball']);
+    $format = SportFormat::create(['sport_id' => $sport->id, 'name' => '5v5', 'players_per_side' => 5]);
+
+    $this->actingAs($facilitator)->postJson('/api/teams', [
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+    ])->assertForbidden();
+});
+
+it('lets a coach create and matchmake a team too, not just players', function () {
     $coach = userWithRole('coach');
     $sport = Sport::create(['name' => 'Basketball']);
     $format = SportFormat::create(['sport_id' => $sport->id, 'name' => '5v5', 'players_per_side' => 5]);
@@ -13,7 +24,46 @@ it('denies team creation to a role without the permission', function () {
     $this->actingAs($coach)->postJson('/api/teams', [
         'sport_id' => $sport->id,
         'sport_format_id' => $format->id,
-    ])->assertForbidden();
+    ])->assertCreated();
+});
+
+it('notifies the invitee when invited to a team, regardless of whether captain or invitee is a coach or player', function () {
+    $coachCaptain = userWithRole('coach');
+    $playerInvitee = userWithRole('player');
+    $playerCaptain = userWithRole('player');
+    $coachInvitee = userWithRole('coach');
+    $sport = Sport::create(['name' => 'Volleyball']);
+    $format = SportFormat::create(['sport_id' => $sport->id, 'name' => '6v6', 'players_per_side' => 6]);
+
+    Friendship::create([
+        'requester_id' => $coachCaptain->id, 'addressee_id' => $playerInvitee->id, 'status' => 'accepted',
+        'pair_key' => Friendship::pairKeyFor($coachCaptain->id, $playerInvitee->id),
+    ]);
+    Friendship::create([
+        'requester_id' => $playerCaptain->id, 'addressee_id' => $coachInvitee->id, 'status' => 'accepted',
+        'pair_key' => Friendship::pairKeyFor($playerCaptain->id, $coachInvitee->id),
+    ]);
+
+    $coachTeam = $this->actingAs($coachCaptain)->postJson('/api/teams', [
+        'sport_id' => $sport->id, 'sport_format_id' => $format->id,
+    ])->json();
+    $playerTeam = $this->actingAs($playerCaptain)->postJson('/api/teams', [
+        'sport_id' => $sport->id, 'sport_format_id' => $format->id,
+    ])->json();
+
+    $this->actingAs($coachCaptain)->postJson("/api/teams/{$coachTeam['id']}/invite", ['user_id' => $playerInvitee->id])
+        ->assertCreated();
+    $this->actingAs($playerCaptain)->postJson("/api/teams/{$playerTeam['id']}/invite", ['user_id' => $coachInvitee->id])
+        ->assertCreated();
+
+    $playerNotifications = $this->actingAs($playerInvitee)->getJson('/api/notifications')->assertOk();
+    expect($playerNotifications->json('0.type'))->toBe('team_invite');
+    expect($playerNotifications->json('0.data.captain_name'))->toBe($coachCaptain->name);
+    expect($playerNotifications->json('0.data.team_name'))->toBe($coachTeam['name']);
+
+    $coachNotifications = $this->actingAs($coachInvitee)->getJson('/api/notifications')->assertOk();
+    expect($coachNotifications->json('0.type'))->toBe('team_invite');
+    expect($coachNotifications->json('0.data.captain_name'))->toBe($playerCaptain->name);
 });
 
 it('rejects creating a team for a format that does not require one', function () {
@@ -91,6 +141,27 @@ it('lets a captain remove a member and drops the team back to forming', function
 
     $this->actingAs($captain)->deleteJson("/api/teams/{$team->id}/members/{$memberRow->id}")->assertNoContent();
 
+    expect($team->fresh()->status)->toBe('forming');
+});
+
+it('lets a non-captain member quit the team on their own, not just the captain remove them', function () {
+    $captain = userWithRole('coach');
+    $sport = Sport::create(['name' => 'Volleyball']);
+    $format = SportFormat::create(['sport_id' => $sport->id, 'name' => '6v6', 'players_per_side' => 6]);
+
+    // createReadyTeam fills the remaining roster slots with freshly-created
+    // players, so grab any non-captain row from the finished team.
+    $team = createReadyTeam($captain, $sport, $format);
+    $memberRow = $team->members()->where('user_id', '!=', $captain->id)->first();
+    $memberUser = $memberRow->user;
+
+    // Someone with no stake in the team cannot remove this member.
+    $outsider = userWithRole('player');
+    $this->actingAs($outsider)->deleteJson("/api/teams/{$team->id}/members/{$memberRow->id}")->assertForbidden();
+
+    // The member themself can quit without being the captain.
+    $this->actingAs($memberUser)->deleteJson("/api/teams/{$team->id}/members/{$memberRow->id}")->assertNoContent();
+    $this->assertDatabaseMissing('team_members', ['id' => $memberRow->id]);
     expect($team->fresh()->status)->toBe('forming');
 });
 

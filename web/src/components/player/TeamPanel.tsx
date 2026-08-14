@@ -223,6 +223,18 @@ export function TeamPanel() {
                       Remove
                     </button>
                   )}
+                  {/* A joined (non-captain) member can quit on their own —
+                      not just the captain removing them. Pending invites are
+                      handled separately above via Accept/Decline, so this
+                      only applies once a member has actually accepted. */}
+                  {!team.is_captain && m.user_id === user?.id && m.status === 'accepted' && (
+                    <button
+                      onClick={() => remove.mutate({ teamId: team.id, memberId: m.id })}
+                      className="font-medium text-red-600 hover:text-red-700"
+                    >
+                      Leave
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

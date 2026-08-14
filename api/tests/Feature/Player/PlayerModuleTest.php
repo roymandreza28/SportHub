@@ -56,6 +56,24 @@ it('pairs two open matchmaking requests for the same sport and exposes the oppon
     expect($mineB->json('0.opponent.id'))->toBe($playerA->id);
 });
 
+it('lets a coach matchmake too, pairing across roles the same as two players', function () {
+    $player = userWithRole('player');
+    $coach = userWithRole('coach');
+    $sport = Sport::create(['name' => 'Table Tennis']);
+    $format = SportFormat::create(['sport_id' => $sport->id, 'name' => 'Singles', 'players_per_side' => 1]);
+
+    $this->actingAs($player)->postJson('/api/matchmaking-requests', ['sport_id' => $sport->id, 'sport_format_id' => $format->id])
+        ->assertCreated()
+        ->assertJsonPath('status', 'open');
+
+    $this->actingAs($coach)->postJson('/api/matchmaking-requests', ['sport_id' => $sport->id, 'sport_format_id' => $format->id])
+        ->assertCreated()
+        ->assertJsonPath('status', 'matched');
+
+    $mineCoach = $this->actingAs($coach)->getJson('/api/matchmaking-requests/mine')->assertOk();
+    expect($mineCoach->json('0.opponent.id'))->toBe($player->id);
+});
+
 it('does not pair requests for different sports', function () {
     $playerA = userWithRole('player');
     $playerB = userWithRole('player');

@@ -6,6 +6,7 @@ import { fetchMyTeams } from '../../lib/teamsApi'
 import { useAuth } from '../../lib/AuthContext'
 import { echo } from '../../lib/echo'
 import { buttonGhost, buttonPrimary, chip, fieldGroup, input, label, select } from '../../lib/formStyles'
+import { MatchmakingLoader } from './MatchmakingLoader'
 import { TeamPanel } from './TeamPanel'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -131,6 +132,14 @@ export function MatchmakingPanel() {
 
   const canSubmit = !!sportId && !!formatId && (!needsTeam || !!teamId) && !request.isPending
 
+  // A player/coach can have more than one sport queued at once, so this is
+  // "every still-searching request", not just the one just submitted — each
+  // gets its own sport-specific loading card. Anything already resolved
+  // (matched/expired/cancelled) moves down into the plain history list below
+  // instead, so it isn't shown twice.
+  const openRequests = (requests ?? []).filter((r) => r.status === 'open')
+  const resolvedRequests = (requests ?? []).filter((r) => r.status !== 'open')
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -150,6 +159,19 @@ export function MatchmakingPanel() {
       {showTeams && (
         <div className="rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
           <TeamPanel />
+        </div>
+      )}
+
+      {openRequests.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {openRequests.map((req) => (
+            <MatchmakingLoader
+              key={req.id}
+              sportName={req.sport.name}
+              cancelling={cancel.isPending}
+              onCancel={() => cancel.mutate(req.id)}
+            />
+          ))}
         </div>
       )}
 
@@ -247,7 +269,7 @@ export function MatchmakingPanel() {
       </div>
 
       <ul className="flex flex-col gap-2">
-        {requests?.map((req) => (
+        {resolvedRequests.map((req) => (
           <li
             key={req.id}
             className="flex items-center justify-between rounded-lg border border-slate-100 bg-white p-3 shadow-sm"
@@ -273,11 +295,6 @@ export function MatchmakingPanel() {
                 </p>
               )}
             </div>
-            {req.status === 'open' && (
-              <button onClick={() => cancel.mutate(req.id)} className="text-xs font-medium text-red-600 hover:text-red-700">
-                Cancel
-              </button>
-            )}
           </li>
         ))}
       </ul>
