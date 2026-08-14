@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchNews } from '../../lib/organizerApi'
+import { NewsMediaGrid } from '../newsfeed/NewsMediaGrid'
 
 export function NewsFeed() {
   const { data: news, isLoading } = useQuery({ queryKey: ['news'], queryFn: fetchNews })
@@ -17,6 +18,7 @@ export function NewsFeed() {
             {item.author.name} — {item.published_at && new Date(item.published_at).toLocaleDateString()}
           </p>
           <p className="mt-2 text-sm text-slate-700">{item.body}</p>
+          <NewsMediaGrid media={item.media} />
         </article>
       ))}
     </div>

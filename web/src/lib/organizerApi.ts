@@ -36,6 +36,12 @@ export type Bracket = {
   matches: BracketMatch[]
 }
 
+export type NewsMediaItem = {
+  id: number
+  type: 'image' | 'video'
+  url: string
+}
+
 export type NewsItem = {
   id: number
   title: string
@@ -43,6 +49,7 @@ export type NewsItem = {
   cover_image_url: string | null
   published_at: string | null
   author: { id: number; name: string }
+  media: NewsMediaItem[]
 }
 
 export type LivestreamItem = {
@@ -101,8 +108,14 @@ export async function fetchNews() {
   return data
 }
 
-export async function createNews(input: { title: string; body: string; cover_image_url?: string }) {
-  const { data } = await api.post<NewsItem>('/api/news', input)
+export async function createNews(input: { title: string; body: string; media?: File[] }) {
+  const form = new FormData()
+  form.append('title', input.title)
+  form.append('body', input.body)
+  for (const file of input.media ?? []) {
+    form.append('media[]', file)
+  }
+  const { data } = await api.post<NewsItem>('/api/news', form)
   return data
 }
 
