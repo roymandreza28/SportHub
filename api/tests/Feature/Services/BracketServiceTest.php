@@ -96,3 +96,34 @@ it('rebuilds structure as a jsonb-ready array grouped by round', function () {
     expect($bracket->structure[0])->toHaveCount(2); // round 1: 2 matches
     expect($bracket->structure[1])->toHaveCount(1); // round 2 (final): 1 match
 });
+
+it('embeds participant/winner names and round numbers in structure, and leaves an undecided next round open', function () {
+    $tournament = makeTournament('single_elimination', 4);
+    $bracket = app(BracketService::class)->generate($tournament);
+
+    $round1 = $bracket->structure[0];
+    $firstMatch = $bracket->matches()->where('round', 1)->orderBy('id')->first();
+    expect($round1[0]['round'])->toBe(1);
+    expect($round1[0]['participant_a']['id'])->toBe($firstMatch->participant_a_id);
+    expect($round1[0]['participant_a']['name'])->toBe(User::find($firstMatch->participant_a_id)->name);
+
+    // Neither round-1 match has been played yet, so the final is still
+    // entirely undetermined — both slots open, no winner.
+    $final = $bracket->structure[1][0];
+    expect($final['round'])->toBe(2);
+    expect($final['participant_a_id'])->toBeNull();
+    expect($final['participant_b_id'])->toBeNull();
+    expect($final['participant_a'])->toBeNull();
+    expect($final['participant_b'])->toBeNull();
+    expect($final['winner'])->toBeNull();
+
+    // Play round 1 through; the final should now show both real names.
+    foreach ($bracket->matches()->where('round', 1)->get() as $match) {
+        $match->update(['score_a' => 21, 'score_b' => 10, 'status' => 'completed', 'winner_id' => $match->participant_a_id]);
+        app(BracketService::class)->advanceWinner($match->fresh());
+    }
+
+    $finalNow = $bracket->fresh()->structure[1][0];
+    expect($finalNow['participant_a']['name'])->not->toBeNull();
+    expect($finalNow['participant_b']['name'])->not->toBeNull();
+});

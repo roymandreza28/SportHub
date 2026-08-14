@@ -32,6 +32,8 @@ class BracketService
         $bracket = $bracket->fresh();
         BracketUpdated::dispatch($bracket);
 
+        $this->notifyParticipants($tournament, "The bracket for {$tournament->name} is set — check your matchup!");
+
         return $bracket;
     }
 
@@ -137,6 +139,8 @@ class BracketService
             $bracket->update(['structure' => $this->buildStructure($bracket)]);
             BracketUpdated::dispatch($bracket->fresh());
 
+            $this->notifyParticipants($tournament, "{$tournament->name} has ended — thanks for playing!");
+
             return;
         }
 
@@ -155,24 +159,49 @@ class BracketService
 
         if ($didAdvanceRound) {
             RoundAdvanced::dispatch($tournament->id, $match->round + 1);
+            $this->notifyParticipants($tournament, "Round {$nextMatch->round} has started in {$tournament->name}.");
         }
+    }
+
+    // Every registrant gets notified, not just the two players in the match
+    // that triggered the advance — "your tournament moved forward" is
+    // relevant to the whole field, not just whoever just played.
+    private function notifyParticipants(Tournament $tournament, string $message): void
+    {
+        $tournament->registrations()->pluck('user_id')->unique()->each(
+            fn ($userId) => NotificationService::send($userId, 'tournament_update', [
+                'tournament_id' => $tournament->id,
+                'tournament_name' => $tournament->name,
+                'message' => $message,
+            ])
+        );
     }
 
     public function buildStructure(Bracket $bracket): array
     {
         return $bracket->matches()
+            // The frontend bracket viewer renders straight from this
+            // `structure` blob (not the sibling `matches` relation), so
+            // participant/winner names have to be embedded here directly —
+            // without this eager load every card would only have raw ids to
+            // show.
+            ->with(['participantA:id,name', 'participantB:id,name', 'winner:id,name'])
             ->orderBy('round')
             ->orderBy('id')
             ->get()
             ->groupBy('round')
             ->map(fn (Collection $matches) => $matches->map(fn (GameMatch $m) => [
                 'id' => $m->id,
+                'round' => $m->round,
                 'participant_a_id' => $m->participant_a_id,
                 'participant_b_id' => $m->participant_b_id,
+                'participant_a' => $m->participantA ? ['id' => $m->participantA->id, 'name' => $m->participantA->name] : null,
+                'participant_b' => $m->participantB ? ['id' => $m->participantB->id, 'name' => $m->participantB->name] : null,
                 'score_a' => $m->score_a,
                 'score_b' => $m->score_b,
                 'status' => $m->status,
                 'winner_id' => $m->winner_id,
+                'winner' => $m->winner ? ['id' => $m->winner->id, 'name' => $m->winner->name] : null,
             ])->values())
             ->values()
             ->toArray();
