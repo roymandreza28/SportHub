@@ -164,6 +164,14 @@ export function IconChevronDown(props: IconProps) {
   return base(<path d="m5 8.5 7 7 7-7" />, props)
 }
 
+export function IconMenu(props: IconProps) {
+  return base(<path d="M4 6h16M4 12h16M4 18h16" />, props)
+}
+
+export function IconX(props: IconProps) {
+  return base(<path d="M6 6l12 12M18 6 6 18" />, props)
+}
+
 export function IconUserPlus(props: IconProps) {
   return base(
     <>
@@ -197,6 +205,36 @@ export function IconSearch(props: IconProps) {
     <>
       <circle cx="10.5" cy="10.5" r="6.5" />
       <path d="m20 20-4.8-4.8" />
+    </>,
+    props
+  )
+}
+
+export function IconNewspaper(props: IconProps) {
+  return base(
+    <>
+      <path d="M4 5.5h12A1.5 1.5 0 0 1 17.5 7v12A1.5 1.5 0 0 1 16 20.5H6A1.5 1.5 0 0 1 4.5 19V6a.5.5 0 0 1 .5-.5Z" />
+      <path d="M17.5 8.5H19a1 1 0 0 1 1 1V18a2 2 0 0 1-2 2" />
+      <path d="M7.5 9h6M7.5 12h6M7.5 15h4" />
+    </>,
+    props
+  )
+}
+
+export function IconHeart(props: IconProps) {
+  return base(
+    <path d="M12 20s-7-4.4-9.3-9C1 7.8 2.7 4.5 6 4.5c2 0 3.4 1.1 6 3.4 2.6-2.3 4-3.4 6-3.4 3.3 0 5 3.3 3.3 6.5-2.3 4.6-9.3 9-9.3 9Z" />,
+    props
+  )
+}
+
+export function IconShare(props: IconProps) {
+  return base(
+    <>
+      <circle cx="18" cy="5.5" r="2.3" />
+      <circle cx="6" cy="12" r="2.3" />
+      <circle cx="18" cy="18.5" r="2.3" />
+      <path d="m8 10.8 8-4.1M8 13.2l8 4.1" />
     </>,
     props
   )

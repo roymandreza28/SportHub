@@ -11,7 +11,10 @@ use App\Http\Controllers\EvaluationController;
 use App\Http\Controllers\LivestreamController;
 use App\Http\Controllers\MatchController;
 use App\Http\Controllers\MatchmakingRequestController;
+use App\Http\Controllers\NewsCommentController;
 use App\Http\Controllers\NewsController;
+use App\Http\Controllers\NewsReactionController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PlayerProfileController;
 use App\Http\Controllers\SkillLevelController;
 use App\Http\Controllers\Social\ConversationController;
@@ -55,6 +58,7 @@ Route::get('/tournaments/{tournament}/bracket', [TournamentController::class, 'b
 
 Route::get('/news', [NewsController::class, 'index']);
 Route::get('/news/{news}', [NewsController::class, 'show']);
+Route::get('/news/{news}/comments', [NewsCommentController::class, 'index']);
 
 Route::get('/livestreams', [LivestreamController::class, 'index']);
 Route::get('/livestreams/{livestream}', [LivestreamController::class, 'show']);
@@ -136,6 +140,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:player|coach')->group(function () {
         Route::get('/venue-registrations/mine', [VenueRegistrationController::class, 'mine']);
         Route::post('/venue-registrations', [VenueRegistrationController::class, 'store']);
+
+        // Read-only Newsfeed: player/coach can react, comment, and (via the
+        // existing friend-messaging system on the frontend) share an
+        // organizer's article, but never create/edit/delete one — that stays
+        // gated behind the 'manage news' permission below, organizer-only.
+        Route::post('/news/{news}/comments', [NewsCommentController::class, 'store']);
+        Route::delete('/news-comments/{newsComment}', [NewsCommentController::class, 'destroy']);
+        Route::post('/news/{news}/react', [NewsReactionController::class, 'toggle']);
+
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+        Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
     });
 
     Route::middleware('role:player')->group(function () {
@@ -143,7 +159,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/player-profile', [PlayerProfileController::class, 'update']);
 
         Route::get('/skill-levels/mine', [SkillLevelController::class, 'mine']);
+    });
 
+    // Matchmaking and the teams it depends on for multi-player formats are
+    // open to coaches too, not just players.
+    Route::middleware('role:player|coach')->group(function () {
         Route::get('/matchmaking-requests/mine', [MatchmakingRequestController::class, 'mine']);
         Route::post('/matchmaking-requests', [MatchmakingRequestController::class, 'store']);
         Route::delete('/matchmaking-requests/{matchmakingRequest}', [MatchmakingRequestController::class, 'destroy']);

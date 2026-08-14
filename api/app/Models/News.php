@@ -28,4 +28,19 @@ class News extends Model
     {
         return $this->hasMany(Livestream::class);
     }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(NewsComment::class);
+    }
+
+    public function reactions(): HasMany
+    {
+        return $this->hasMany(NewsReaction::class);
+    }
+
+    public function media(): HasMany
+    {
+        return $this->hasMany(NewsMedia::class)->orderBy('position');
+    }
 }

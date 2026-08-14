@@ -8,9 +8,22 @@ import { Avatar } from '../layout/Avatar'
 export function NewConversationModal({
   onClose,
   onCreated,
+  title = 'New conversation',
+  helperText,
+  submitLabel = 'Start',
+  submitPendingLabel = 'Starting...',
+  singleSelect = false,
 }: {
   onClose: () => void
   onCreated: (conversationId: number) => void
+  title?: string
+  helperText?: string
+  submitLabel?: string
+  submitPendingLabel?: string
+  // Sharing something to exactly one friend doesn't need the "turn this
+  // into a group" affordance below — restrict to picking a single friend
+  // and skip straight to a direct conversation.
+  singleSelect?: boolean
 }) {
   const queryClient = useQueryClient()
   const { data: friends } = useQuery({ queryKey: ['social', 'friends'], queryFn: fetchFriends })
@@ -33,6 +46,7 @@ export function NewConversationModal({
 
   function toggle(id: number) {
     setSelected((prev) => {
+      if (singleSelect) return prev.has(id) ? new Set() : new Set([id])
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -40,12 +54,13 @@ export function NewConversationModal({
     })
   }
 
-  const isGroup = selected.size > 1 || !!groupName
+  const isGroup = !singleSelect && (selected.size > 1 || !!groupName)
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/60 p-4">
       <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
-        <h3 className="text-base font-bold text-slate-900">New conversation</h3>
+        <h3 className="text-base font-bold text-slate-900">{title}</h3>
+        {helperText && <p className="mt-1 text-sm text-slate-500">{helperText}</p>}
 
         <div className="mt-4 flex flex-col gap-3">
           <div className={fieldGroup}>
@@ -58,7 +73,7 @@ export function NewConversationModal({
                   className="flex items-center gap-2.5 border-b border-slate-50 px-3 py-2 text-sm font-medium text-slate-700 last:border-0 hover:bg-slate-50"
                 >
                   <input
-                    type="checkbox"
+                    type={singleSelect ? 'radio' : 'checkbox'}
                     checked={selected.has(friend.user.id)}
                     onChange={() => toggle(friend.user.id)}
                     className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
@@ -95,7 +110,7 @@ export function NewConversationModal({
             disabled={selected.size === 0 || (isGroup && !groupName) || mutation.isPending}
             className={buttonPrimary}
           >
-            {mutation.isPending ? 'Starting...' : 'Start'}
+            {mutation.isPending ? submitPendingLabel : submitLabel}
           </button>
         </div>
       </div>

@@ -14,7 +14,8 @@ import {
   StatusBadge,
   type NavItem,
 } from '../components/layout/DashboardShell'
-import { IconCalendar, IconHome, IconMapPin, IconTarget, IconUsers } from '../components/layout/icons'
+import { IconCalendar, IconHome, IconMapPin, IconNewspaper, IconTarget, IconUsers } from '../components/layout/icons'
+import { Newsfeed } from '../components/newsfeed/Newsfeed'
 import { VenueDirectory } from '../components/player/VenueDirectory'
 import { VenueRegistrationForm } from '../components/player/VenueRegistrationForm'
 import { PlayerProfileEditor } from '../components/player/PlayerProfileEditor'
@@ -32,6 +33,7 @@ import { buttonSecondary } from '../lib/formStyles'
 const NAV_ITEMS: NavItem[] = [
   { id: 'overview', label: 'Dashboard', icon: IconHome },
   { id: 'profile', label: 'Profile', icon: IconUsers },
+  { id: 'newsfeed', label: 'Newsfeed', icon: IconNewspaper },
   { id: 'matchmaking', label: 'Matchmaking', icon: IconTarget },
   { id: 'bookings', label: 'Bookings', icon: IconCalendar },
   { id: 'venues', label: 'Venues', icon: IconMapPin },
@@ -142,6 +144,12 @@ export function PlayerPage() {
             </Section>
           </div>
         </>
+      )}
+
+      {active === 'newsfeed' && (
+        <Section title="Newsfeed" description="News from organizers — react, comment, and share with friends.">
+          <Newsfeed />
+        </Section>
       )}
 
       {active === 'matchmaking' && (

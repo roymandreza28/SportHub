@@ -13,7 +13,9 @@ import {
   StatusBadge,
   type NavItem,
 } from '../components/layout/DashboardShell'
-import { IconClipboard, IconHome, IconTrophy, IconUsers } from '../components/layout/icons'
+import { IconClipboard, IconHome, IconNewspaper, IconTarget, IconTrophy, IconUsers } from '../components/layout/icons'
+import { Newsfeed } from '../components/newsfeed/Newsfeed'
+import { MatchmakingPanel } from '../components/player/MatchmakingPanel'
 import { TournamentRegistrationForm } from '../components/coach/TournamentRegistrationForm'
 import { EvaluationForm } from '../components/coach/EvaluationForm'
 import { MyPosts } from '../components/social/MyPosts'
@@ -28,6 +30,8 @@ import { buttonSecondary } from '../lib/formStyles'
 const NAV_ITEMS: NavItem[] = [
   { id: 'overview', label: 'Dashboard', icon: IconHome },
   { id: 'profile', label: 'Profile', icon: IconUsers },
+  { id: 'newsfeed', label: 'Newsfeed', icon: IconNewspaper },
+  { id: 'matchmaking', label: 'Matchmaking', icon: IconTarget },
   { id: 'registrations', label: 'Tournament Registration', icon: IconTrophy },
   { id: 'evaluations', label: 'Evaluations', icon: IconClipboard },
 ]
@@ -120,6 +124,18 @@ export function CoachPage() {
             </Section>
           </div>
         </>
+      )}
+
+      {active === 'newsfeed' && (
+        <Section title="Newsfeed" description="News from organizers — react, comment, and share with friends.">
+          <Newsfeed />
+        </Section>
+      )}
+
+      {active === 'matchmaking' && (
+        <Section title="Matchmaking" description="Find an opponent for a sport, live.">
+          <MatchmakingPanel />
+        </Section>
       )}
 
       {active === 'registrations' && (
