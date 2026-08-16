@@ -35,7 +35,11 @@ class LivestreamController extends Controller
         $user = $request->user();
 
         if (! empty($data['tournament_id'])) {
-            abort_unless(Tournament::findOrFail($data['tournament_id'])->organizer_id === $user->id, 403);
+            $tournament = Tournament::findOrFail($data['tournament_id']);
+            abort_unless(
+                $tournament->organizer_id === $user->id || $tournament->livestream_organizer_id === $user->id,
+                403
+            );
         }
 
         if (! empty($data['news_id'])) {

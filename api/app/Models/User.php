@@ -29,11 +29,19 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'first_name',
+        'middle_name',
+        'last_name',
         'email',
+        'birthday',
+        'address',
         'password',
         'is_active',
+        'verification_status',
         'avatar_path',
         'cover_path',
+        'proof_of_address_path',
+        'coach_eligibility_proof_path',
     ];
 
     /**
@@ -49,6 +57,7 @@ class User extends Authenticatable
      */
     protected $attributes = [
         'is_active' => true,
+        'verification_status' => 'verified',
     ];
 
     /**
@@ -59,6 +68,11 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        // Raw storage paths to sensitive verification documents — nothing
+        // downstream needs these off a plain serialized User, unlike
+        // avatar/cover which are meant to be public-facing.
+        'proof_of_address_path',
+        'coach_eligibility_proof_path',
     ];
 
     /**
@@ -72,6 +86,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'birthday' => 'date',
         ];
     }
 

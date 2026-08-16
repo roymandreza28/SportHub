@@ -26,6 +26,26 @@ it('lets a coach register a player for an open tournament and rejects duplicate 
         ->assertStatus(422);
 });
 
+it('denies tournament registration to a coach whose account is still pending verification', function () {
+    $coach = userWithRole('coach');
+    $coach->update(['verification_status' => 'pending']);
+    $player = userWithRole('player');
+    $organizer = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Basketball']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $organizer->id,
+        'sport_id' => $sport->id,
+        'name' => 'Open Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(),
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $player->id])
+        ->assertStatus(403);
+});
+
 it('rejects registration for a tournament that is not draft or open', function () {
     $coach = userWithRole('coach');
     $player = userWithRole('player');

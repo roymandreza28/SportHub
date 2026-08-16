@@ -48,6 +48,12 @@ class MatchmakingRequestController extends Controller
     {
         $this->authorize('create', MatchmakingRequest::class);
 
+        abort_if(
+            $request->user()->verification_status !== 'verified',
+            403,
+            "Your account is still under verification. You can't join or create a match yet."
+        );
+
         $data = $request->validate([
             'sport_id' => ['required', 'exists:sports,id'],
             'sport_format_id' => ['required', 'exists:sport_formats,id'],

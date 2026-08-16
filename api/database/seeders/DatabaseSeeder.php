@@ -20,6 +20,8 @@ class DatabaseSeeder extends Seeder
         $demoUsers = [
             'admin' => 'Ada Admin',
             'organizer' => 'Olu Organizer',
+            'venue_organizer' => 'Val Venue Organizer',
+            'livestream_organizer' => 'Livvy Livestream Organizer',
             'venue_facilitator' => 'Fay Facilitator',
             'player' => 'Pat Player',
             'coach' => 'Cody Coach',

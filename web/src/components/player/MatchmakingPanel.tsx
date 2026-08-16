@@ -130,7 +130,8 @@ export function MatchmakingPanel() {
     setTeamId('')
   }
 
-  const canSubmit = !!sportId && !!formatId && (!needsTeam || !!teamId) && !request.isPending
+  const isVerified = user?.verification_status === 'verified'
+  const canSubmit = isVerified && !!sportId && !!formatId && (!needsTeam || !!teamId) && !request.isPending
 
   // A player/coach can have more than one sport queued at once, so this is
   // "every still-searching request", not just the one just submitted — each
@@ -263,9 +264,14 @@ export function MatchmakingPanel() {
           </>
         )}
 
-        <button onClick={() => request.mutate()} disabled={!canSubmit} className={`${buttonPrimary} self-start`}>
-          {mode === 'join' ? 'Find a match' : 'Create match'}
-        </button>
+        <div className="flex flex-col gap-1.5">
+          <button onClick={() => request.mutate()} disabled={!canSubmit} className={`${buttonPrimary} self-start`}>
+            {mode === 'join' ? 'Find a match' : 'Create match'}
+          </button>
+          {!isVerified && (
+            <p className="text-xs text-amber-700">Matchmaking is unavailable until your account is verified.</p>
+          )}
+        </div>
       </div>
 
       <ul className="flex flex-col gap-2">

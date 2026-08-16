@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
-import { deleteUser, updateUserPassword, updateUserStatus, type AdminUser } from '../../lib/adminApi'
+import { deleteUser, updateUserPassword, updateUserStatus, updateUserVerification, type AdminUser } from '../../lib/adminApi'
+import type { VerificationStatus } from '../../lib/AuthContext'
 import { buttonDanger, buttonPrimary, buttonSecondary, fieldGroup, input, label } from '../../lib/formStyles'
 
 function extractErrorMessage(error: unknown): string {
@@ -38,6 +39,11 @@ export function UserActionsModal({ user, onClose }: { user: AdminUser; onClose: 
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteUser(user.id),
+    onSuccess: invalidateAndClose,
+  })
+
+  const verificationMutation = useMutation({
+    mutationFn: (status: VerificationStatus) => updateUserVerification(user.id, status),
     onSuccess: invalidateAndClose,
   })
 
@@ -83,6 +89,29 @@ export function UserActionsModal({ user, onClose }: { user: AdminUser; onClose: 
             </button>
             {statusMutation.isError && (
               <p className="text-xs text-red-600">{extractErrorMessage(statusMutation.error)}</p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5 border-t border-slate-100 pt-4">
+            <label className={label}>Verification ({user.verification_status})</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => verificationMutation.mutate('verified')}
+                disabled={user.verification_status === 'verified' || verificationMutation.isPending}
+                className={buttonPrimary}
+              >
+                Verify account
+              </button>
+              <button
+                onClick={() => verificationMutation.mutate('rejected')}
+                disabled={user.verification_status === 'rejected' || verificationMutation.isPending}
+                className={buttonDanger}
+              >
+                Reject
+              </button>
+            </div>
+            {verificationMutation.isError && (
+              <p className="text-xs text-red-600">{extractErrorMessage(verificationMutation.error)}</p>
             )}
           </div>
 

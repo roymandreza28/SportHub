@@ -80,11 +80,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('role:admin')->prefix('admin')->group(function () {
         Route::get('/users', [AdminUserController::class, 'index']);
+        Route::get('/users/pending-verifications', [AdminUserController::class, 'pendingVerifications']);
         Route::patch('/users/{user}/roles', [AdminUserController::class, 'updateRoles']);
         Route::patch('/users/{user}/password', [AdminUserController::class, 'updatePassword']);
         Route::patch('/users/{user}/status', [AdminUserController::class, 'updateStatus']);
+        Route::patch('/users/{user}/verification', [AdminUserController::class, 'updateVerification']);
         Route::delete('/users/{user}', [AdminUserController::class, 'destroy']);
         Route::post('/facilitators', [AdminUserController::class, 'createFacilitator']);
+        Route::post('/organizers', [AdminUserController::class, 'createOrganizer']);
         Route::get('/dashboard/metrics', [AdminDashboardController::class, 'metrics']);
         Route::get('/audit-log', [AuditLogController::class, 'index']);
     });
@@ -200,12 +203,26 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/tournaments/{tournament}', [TournamentController::class, 'update']);
         Route::post('/tournaments/{tournament}/generate-bracket', [TournamentController::class, 'generateBracket']);
 
-        Route::patch('/matches/{match}/score', [MatchController::class, 'updateScore']);
-
         Route::post('/news', [NewsController::class, 'store']);
         Route::patch('/news/{news}', [NewsController::class, 'update']);
         Route::delete('/news/{news}', [NewsController::class, 'destroy']);
+    });
 
+    Route::get('/organizers/available', [TournamentController::class, 'availableOrganizers'])
+        ->middleware('role:organizer|admin');
+
+    // Venue organizers run the live scoreboard for whichever tournament they
+    // were assigned to, alongside the main organizer role — scoped further
+    // by MatchPolicy::updateScore() to that specific tournament assignment.
+    Route::middleware('role:organizer|venue_organizer|admin')->group(function () {
+        Route::patch('/matches/{match}/score', [MatchController::class, 'updateScore']);
+    });
+
+    // Livestream organizers feed camera footage into whichever tournament's
+    // stream they were assigned to, alongside the main organizer role —
+    // scoped further by LivestreamController::store() and LivestreamPolicy
+    // to that specific tournament assignment.
+    Route::middleware('role:organizer|livestream_organizer|admin')->group(function () {
         Route::post('/livestreams', [LivestreamController::class, 'store']);
         Route::patch('/livestreams/{livestream}', [LivestreamController::class, 'update']);
         Route::delete('/livestreams/{livestream}', [LivestreamController::class, 'destroy']);

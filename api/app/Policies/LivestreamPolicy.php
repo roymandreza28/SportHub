@@ -19,7 +19,10 @@ class LivestreamPolicy
         }
 
         if ($livestream->tournament_id) {
-            return $livestream->tournament->organizer_id === $user->id;
+            // A livestream organizer feeds footage into whichever
+            // tournament's stream the main organizer assigned them to.
+            return $livestream->tournament->organizer_id === $user->id
+                || $livestream->tournament->livestream_organizer_id === $user->id;
         }
 
         if ($livestream->news_id) {

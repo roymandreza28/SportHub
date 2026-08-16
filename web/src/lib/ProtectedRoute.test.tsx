@@ -58,14 +58,14 @@ describe('ProtectedRoute', () => {
   })
 
   it('renders the protected content when authenticated with no role restriction', () => {
-    mockAuth({ user: { id: 1, name: 'Test', email: 't@test.com', roles: [], avatar_url: null } })
+    mockAuth({ user: { id: 1, name: 'Test', email: 't@test.com', roles: [], avatar_url: null, verification_status: 'verified' as const } })
     renderAt('/anywhere')
     expect(screen.getByText('Protected content')).toBeInTheDocument()
   })
 
   it('redirects to /dashboard when authenticated but missing the required role', () => {
     mockAuth({
-      user: { id: 1, name: 'Test', email: 't@test.com', roles: ['player'], avatar_url: null },
+      user: { id: 1, name: 'Test', email: 't@test.com', roles: ['player'], avatar_url: null, verification_status: 'verified' as const },
       hasRole: () => false,
     })
     renderAt('/admin')
@@ -74,7 +74,7 @@ describe('ProtectedRoute', () => {
 
   it('renders the protected content when the user has the required role', () => {
     mockAuth({
-      user: { id: 1, name: 'Test', email: 't@test.com', roles: ['admin'], avatar_url: null },
+      user: { id: 1, name: 'Test', email: 't@test.com', roles: ['admin'], avatar_url: null, verification_status: 'verified' as const },
       hasRole: (...roles) => roles.includes('admin'),
     })
     renderAt('/admin')

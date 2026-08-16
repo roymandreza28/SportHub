@@ -1,8 +1,11 @@
 import { api } from './api'
 import type { Sport } from './venueApi'
 
-export type TournamentFormat = 'single_elimination' | 'double_elimination' | 'round_robin'
+export type TournamentFormat = 'single_elimination' | 'double_elimination' | 'round_robin' | 'group_stage' | 'swiss'
 export type TournamentStatus = 'draft' | 'open' | 'in_progress' | 'completed' | 'cancelled'
+export type ScoringType = 'single_score' | 'best_of_sets'
+
+export type OrganizerOption = { id: number; name: string; email: string }
 
 export type Tournament = {
   id: number
@@ -12,15 +15,27 @@ export type Tournament = {
   starts_at: string
   sport: Sport
   venue: { id: number; name: string } | null
+  organizer_id: number
+  venue_organizer_id: number | null
+  livestream_organizer_id: number | null
+  venue_organizer?: { id: number; name: string } | null
+  livestream_organizer?: { id: number; name: string } | null
+  scoring_type: ScoringType
+  sets_to_win: number | null
 }
+
+export type SetScore = { score_a: number; score_b: number }
 
 export type BracketMatch = {
   id: number
   round: number
+  group_number?: number | null
+  bracket_type?: 'winners' | 'losers' | 'final' | 'swiss' | null
   participant_a_id: number | null
   participant_b_id: number | null
   score_a: number
   score_b: number
+  sets?: SetScore[] | null
   status: 'scheduled' | 'live' | 'completed'
   winner_id: number | null
   participant_a?: { id: number; name: string } | null
@@ -80,8 +95,19 @@ export async function createTournament(input: {
   format: TournamentFormat
   starts_at: string
   venue_id?: number
+  venue_organizer_id?: number
+  livestream_organizer_id?: number
+  scoring_type?: ScoringType
+  sets_to_win?: number
 }) {
   const { data } = await api.post<Tournament>('/api/tournaments', input)
+  return data
+}
+
+export async function fetchAvailableOrganizers() {
+  const { data } = await api.get<{ venue_organizers: OrganizerOption[]; livestream_organizers: OrganizerOption[] }>(
+    '/api/organizers/available'
+  )
   return data
 }
 
@@ -100,6 +126,11 @@ export async function updateMatchScore(
   input: { score_a: number; score_b: number; status?: 'scheduled' | 'live' | 'completed' }
 ) {
   const { data } = await api.patch<BracketMatch>(`/api/matches/${matchId}/score`, input)
+  return data
+}
+
+export async function updateMatchSets(matchId: number, sets: SetScore[]) {
+  const { data } = await api.patch<BracketMatch>(`/api/matches/${matchId}/score`, { sets })
   return data
 }
 

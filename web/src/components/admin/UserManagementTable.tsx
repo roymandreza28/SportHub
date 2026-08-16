@@ -33,6 +33,7 @@ export function UserManagementTable() {
               <th className={tableHeadCell}>Email</th>
               <th className={tableHeadCell}>Roles</th>
               <th className={tableHeadCell}>Status</th>
+              <th className={tableHeadCell}>Verification</th>
               <th className={tableHeadCell} />
             </tr>
           </thead>
@@ -61,6 +62,19 @@ export function UserManagementTable() {
                     }`}
                   >
                     {user.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
+                <td className={tableCell}>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
+                      user.verification_status === 'verified'
+                        ? 'bg-green-100 text-green-700'
+                        : user.verification_status === 'rejected'
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {user.verification_status}
                   </span>
                 </td>
                 <td className={`${tableCell} text-right`}>

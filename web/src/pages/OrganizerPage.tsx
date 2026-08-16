@@ -22,20 +22,33 @@ import { LivestreamCreateForm } from '../components/organizer/LivestreamCreateFo
 import { LivestreamEmbed } from '../components/organizer/LivestreamEmbed'
 import { LivestreamChat } from '../components/organizer/LivestreamChat'
 
-const NAV_ITEMS: NavItem[] = [
-  { id: 'overview', label: 'Dashboard', icon: IconHome },
-  { id: 'tournaments', label: 'Tournaments', icon: IconTrophy },
-  { id: 'news', label: 'News', icon: IconFileText },
-  { id: 'livestreams', label: 'Livestreams', icon: IconRadio },
-]
-
 export function OrganizerPage() {
-  const { user } = useAuth()
+  const { user, hasRole } = useAuth()
+  const isMainOrganizer = hasRole('organizer')
+  const canScoreMatches = isMainOrganizer || hasRole('venue_organizer')
+  const canManageLivestreams = isMainOrganizer || hasRole('livestream_organizer')
+
+  const NAV_ITEMS: NavItem[] = [
+    { id: 'overview', label: 'Dashboard', icon: IconHome },
+    ...(canScoreMatches
+      ? [{ id: 'tournaments', label: isMainOrganizer ? 'Tournaments' : 'Scoreboard', icon: IconTrophy }]
+      : []),
+    ...(isMainOrganizer ? [{ id: 'news', label: 'News', icon: IconFileText }] : []),
+    ...(canManageLivestreams ? [{ id: 'livestreams', label: 'Livestreams', icon: IconRadio }] : []),
+  ]
+
   const { data: tournaments } = useQuery({ queryKey: ['organizer', 'tournaments'], queryFn: fetchOrganizerTournaments })
   const { data: livestreams } = useQuery({ queryKey: ['livestreams'], queryFn: fetchLivestreams })
   const [active, setActive] = useState(NAV_ITEMS[0].id)
 
-  const myTournaments = (tournaments ?? []).slice(0, 20)
+  const myTournaments = (tournaments ?? [])
+    .filter((t) => {
+      if (isMainOrganizer) return true
+      if (hasRole('venue_organizer')) return t.venue_organizer_id === user?.id
+      if (hasRole('livestream_organizer')) return t.livestream_organizer_id === user?.id
+      return false
+    })
+    .slice(0, 20)
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
   const [activeMatch, setActiveMatch] = useState<BracketMatch | null>(null)
 
@@ -51,47 +64,74 @@ export function OrganizerPage() {
       {active === 'overview' && (
         <>
           <div className="mb-6">
-            <h1 className="text-2xl font-bold text-slate-900">Organizer</h1>
-            <p className="mt-1 text-sm text-slate-500">Tournaments, brackets, news, and livestreams.</p>
+            <h1 className="text-2xl font-bold text-slate-900">
+              {isMainOrganizer ? 'Organizer' : canScoreMatches ? 'Venue Organizer' : 'Livestream Organizer'}
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {isMainOrganizer
+                ? 'Tournaments, brackets, news, and livestreams.'
+                : canScoreMatches
+                  ? 'Run the live scoreboard for any ongoing tournament.'
+                  : 'Feed camera footage into any tournament livestream.'}
+            </p>
           </div>
 
           <StatCardGrid>
-            <StatCard label="Tournaments" value={myTournaments.length} />
-            <StatCard label="In progress" value={inProgressCount} />
-            <StatCard label="Livestreams" value={myLivestreams.length} />
-            <StatCard label="Live now" value={liveStreamCount} />
+            {canScoreMatches && (
+              <>
+                <StatCard label="Tournaments" value={myTournaments.length} />
+                <StatCard label="In progress" value={inProgressCount} />
+              </>
+            )}
+            {canManageLivestreams && (
+              <>
+                <StatCard label="Livestreams" value={myLivestreams.length} />
+                <StatCard label="Live now" value={liveStreamCount} />
+              </>
+            )}
           </StatCardGrid>
 
-          <ListPreview
-            title="Your Tournaments"
-            description="Every tournament you've created, most recent first."
-            emptyText="No tournaments yet — create one in Tournaments."
-            rows={myTournaments.map((t) => (
-              <ListRow
-                key={t.id}
-                primary={t.name}
-                secondary={`${t.sport.name} — ${new Date(t.starts_at).toLocaleDateString()}${t.venue ? ` at ${t.venue.name}` : ''}`}
-                badge={<StatusBadge status={t.status} />}
-              />
-            ))}
-            action={
-              <button
-                onClick={() => setActive('tournaments')}
-                className="text-sm font-medium text-teal-600 hover:text-teal-700"
-              >
-                Create tournament &rarr;
-              </button>
-            }
-          />
+          {canScoreMatches && (
+            <ListPreview
+              title={isMainOrganizer ? 'Your Tournaments' : 'Tournaments'}
+              description={isMainOrganizer ? "Every tournament you've created, most recent first." : "Every tournament you've been assigned to, most recent first."}
+              emptyText={isMainOrganizer ? 'No tournaments yet.' : 'No tournaments assigned to you yet.'}
+              rows={myTournaments.map((t) => (
+                <ListRow
+                  key={t.id}
+                  primary={t.name}
+                  secondary={`${t.sport.name} — ${new Date(t.starts_at).toLocaleDateString()}${t.venue ? ` at ${t.venue.name}` : ''}`}
+                  badge={<StatusBadge status={t.status} />}
+                />
+              ))}
+              action={
+                <button
+                  onClick={() => setActive('tournaments')}
+                  className="text-sm font-medium text-teal-600 hover:text-teal-700"
+                >
+                  {isMainOrganizer ? 'Create tournament' : 'Open scoreboard'} &rarr;
+                </button>
+              }
+            />
+          )}
         </>
       )}
 
       {active === 'tournaments' && (
-        <Section title="Tournaments" description="Create a tournament and manage its bracket.">
-          <TournamentWizard />
+        <Section
+          title={isMainOrganizer ? 'Tournaments' : 'Scoreboard'}
+          description={
+            isMainOrganizer
+              ? 'Create a tournament and manage its bracket.'
+              : 'Pick a tournament to run its live scoreboard.'
+          }
+        >
+          {isMainOrganizer && <TournamentWizard />}
 
-          <div className="mt-4 border-t border-slate-100 pt-4">
-            <h3 className="mb-2 text-sm font-medium text-slate-700">Your tournaments</h3>
+          <div className={isMainOrganizer ? 'mt-4 border-t border-slate-100 pt-4' : ''}>
+            <h3 className="mb-2 text-sm font-medium text-slate-700">
+              {isMainOrganizer ? 'Your tournaments' : 'Tournaments'}
+            </h3>
             <div className="mb-3 flex flex-wrap gap-2">
               {myTournaments.map((t) => (
                 <button
@@ -112,7 +152,12 @@ export function OrganizerPage() {
 
           {activeMatch && selectedTournamentId && (
             <div className="mt-4 border-t border-slate-100 pt-4">
-              <ScoreboardLive match={activeMatch} tournamentId={selectedTournamentId} onClose={() => setActiveMatch(null)} />
+              <ScoreboardLive
+                match={activeMatch}
+                tournamentId={selectedTournamentId}
+                tournament={myTournaments.find((t) => t.id === selectedTournamentId)}
+                onClose={() => setActiveMatch(null)}
+              />
             </div>
           )}
         </Section>

@@ -32,6 +32,10 @@ function notificationText(n: NotificationItem): { title: string; subtitle?: stri
         title: `${n.data.captain_name} invited you to join "${n.data.team_name}"`,
         subtitle: n.data.sport_name as string,
       }
+    case 'account_pending_verification':
+    case 'account_verified':
+    case 'account_rejected':
+      return { title: n.data.message as string }
     default:
       return { title: 'New notification' }
   }

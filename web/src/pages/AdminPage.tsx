@@ -1,15 +1,18 @@
 import { useState } from 'react'
 import { DashboardShell, Section, StatCard, StatCardGrid, type NavItem } from '../components/layout/DashboardShell'
-import { IconFileText, IconHome, IconUserCog, IconUsers } from '../components/layout/icons'
+import { IconFileText, IconHome, IconShieldCheck, IconUserCog, IconUsers } from '../components/layout/icons'
 import { useAdminMetrics } from '../components/admin/useAdminMetrics'
 import { FacilitatorCreateForm } from '../components/admin/FacilitatorCreateForm'
+import { OrganizerCreateForm } from '../components/admin/OrganizerCreateForm'
 import { UserManagementTable } from '../components/admin/UserManagementTable'
+import { VerificationQueue } from '../components/admin/VerificationQueue'
 import { AuditLogTable } from '../components/admin/AuditLogTable'
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'overview', label: 'Dashboard', icon: IconHome },
   { id: 'users', label: 'Users Management', icon: IconUsers },
-  { id: 'facilitators', label: 'Facilitators', icon: IconUserCog },
+  { id: 'verification', label: 'Verification', icon: IconShieldCheck },
+  { id: 'facilitators', label: 'Facilitators & Organizers', icon: IconUserCog },
   { id: 'audit-log', label: 'Audit Log', icon: IconFileText },
 ]
 
@@ -54,14 +57,28 @@ export function AdminPage() {
       )}
 
       {active === 'facilitators' && (
-        <Section title="Facilitators" description="Create a new venue facilitator account.">
-          <FacilitatorCreateForm />
-        </Section>
+        <>
+          <Section title="Facilitators" description="Create a new venue facilitator account.">
+            <FacilitatorCreateForm />
+          </Section>
+
+          <div className="mt-8">
+            <Section title="Organizers" description="Create a main, venue, or livestream organizer account.">
+              <OrganizerCreateForm />
+            </Section>
+          </div>
+        </>
       )}
 
       {active === 'users' && (
         <Section title="Users Management" description="Search users and manage their accounts.">
           <UserManagementTable />
+        </Section>
+      )}
+
+      {active === 'verification' && (
+        <Section title="Verification" description="Review player and coach accounts awaiting verification.">
+          <VerificationQueue />
         </Section>
       )}
 

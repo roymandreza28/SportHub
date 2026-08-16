@@ -200,6 +200,16 @@ export function IconBell(props: IconProps) {
   )
 }
 
+export function IconShieldCheck(props: IconProps) {
+  return base(
+    <>
+      <path d="M12 3.5 5 6v5.5c0 4.6 2.9 7.9 7 9 4.1-1.1 7-4.4 7-9V6l-7-2.5Z" />
+      <path d="m9 12 2 2 4-4" />
+    </>,
+    props
+  )
+}
+
 export function IconSearch(props: IconProps) {
   return base(
     <>

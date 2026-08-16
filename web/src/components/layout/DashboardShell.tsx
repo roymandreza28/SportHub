@@ -24,10 +24,14 @@ export function DashboardShell({
   onNavigate: (id: string) => void
   children: ReactNode
 }) {
-  const { hasRole } = useAuth()
+  const { user, hasRole } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const showSocialHeader = hasRole('player', 'coach')
+  // Facilitators/organizers/admins are never self-registered through the
+  // public form, so this only ever applies to player/coach accounts.
+  const showVerificationBanner =
+    hasRole('player', 'coach') && (user?.verification_status === 'pending' || user?.verification_status === 'rejected')
 
   function handleNavigate(id: string) {
     onNavigate(id)
@@ -126,7 +130,29 @@ export function DashboardShell({
           </nav>
         )}
 
-        <main className="mx-auto max-w-6xl px-4 py-8 sm:px-8">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
+          {showVerificationBanner && (
+            <div
+              className={`mb-6 rounded-lg border p-4 text-sm ${
+                user?.verification_status === 'rejected'
+                  ? 'border-red-200 bg-red-50 text-red-800'
+                  : 'border-amber-200 bg-amber-50 text-amber-800'
+              }`}
+            >
+              <p className="font-semibold">
+                {user?.verification_status === 'rejected'
+                  ? 'Your account verification was rejected.'
+                  : "Your account is under verification — you can't access other services at the moment."}
+              </p>
+              <p className="mt-1">
+                {user?.verification_status === 'rejected'
+                  ? 'Please contact an administrator for help.'
+                  : "An admin needs to review the proof you submitted at registration before you can join or create a match, join a team, or register for a tournament. Your profile and browsing are still available in the meantime."}
+              </p>
+            </div>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   )

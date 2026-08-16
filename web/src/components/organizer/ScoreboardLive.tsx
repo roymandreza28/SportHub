@@ -1,12 +1,135 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { updateMatchScore, type BracketMatch } from '../../lib/organizerApi'
+import { updateMatchScore, updateMatchSets, type BracketMatch, type SetScore, type Tournament } from '../../lib/organizerApi'
 import { echo } from '../../lib/echo'
 import { buttonPrimary, buttonSecondary, buttonSuccess } from '../../lib/formStyles'
 
 type LiveUpdate = { score_a: number; score_b: number; status?: string }
 
-export function ScoreboardLive({
+function SetsScoreboard({
+  match,
+  tournament,
+  tournamentId,
+  onClose,
+}: {
+  match: BracketMatch
+  tournament: Tournament
+  tournamentId: number
+  onClose: () => void
+}) {
+  const queryClient = useQueryClient()
+  const [sets, setSets] = useState<SetScore[]>(match.sets ?? [])
+  const [currentA, setCurrentA] = useState(0)
+  const [currentB, setCurrentB] = useState(0)
+
+  useEffect(() => {
+    setSets(match.sets ?? [])
+  }, [match])
+
+  const canPlay = match.participant_a_id !== null && match.participant_b_id !== null
+  const setsToWin = tournament.sets_to_win ?? 3
+  const setsWonA = sets.filter((s) => s.score_a > s.score_b).length
+  const setsWonB = sets.filter((s) => s.score_b > s.score_a).length
+  const isDecided = match.status === 'completed'
+
+  const save = useMutation({
+    mutationFn: (nextSets: SetScore[]) => updateMatchSets(match.id, nextSets),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organizer', 'bracket', tournamentId] })
+    },
+  })
+
+  function recordSet() {
+    const nextSets = [...sets, { score_a: currentA, score_b: currentB }]
+    setSets(nextSets)
+    setCurrentA(0)
+    setCurrentB(0)
+    save.mutate(nextSets)
+  }
+
+  function removeLastSet() {
+    const nextSets = sets.slice(0, -1)
+    setSets(nextSets)
+    save.mutate(nextSets)
+  }
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/60 p-4">
+      <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
+        <h3 className="text-base font-bold text-slate-900">Scoreboard — Match #{match.id}</h3>
+        <p className="mt-0.5 text-xs text-slate-500">Best of {setsToWin * 2 - 1} sets — first to {setsToWin} wins.</p>
+
+        {!canPlay && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+            Both participants aren&apos;t determined yet.
+          </p>
+        )}
+
+        <div className="mt-3 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+          <span>{match.participant_a?.name ?? 'TBD'}</span>
+          <span className="tabular-nums text-teal-700">{setsWonA} - {setsWonB}</span>
+          <span>{match.participant_b?.name ?? 'TBD'}</span>
+        </div>
+
+        {sets.length > 0 && (
+          <ul className="mt-3 flex flex-col gap-1 text-xs text-slate-600">
+            {sets.map((s, i) => (
+              <li key={i} className="flex items-center justify-between rounded-md border border-slate-100 px-2 py-1">
+                <span>Set {i + 1}</span>
+                <span className="tabular-nums font-medium">{s.score_a} - {s.score_b}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {isDecided ? (
+          <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-xs font-semibold text-green-700">
+            Match complete — {(setsWonA > setsWonB ? match.participant_a?.name : match.participant_b?.name) ?? 'Winner'} wins.
+          </p>
+        ) : (
+          <div className="mt-3 flex items-end gap-2">
+            <label className="flex flex-1 flex-col gap-1 text-xs font-medium text-slate-600">
+              {match.participant_a?.name ?? 'A'}
+              <input
+                type="number"
+                min={0}
+                value={currentA}
+                onChange={(e) => setCurrentA(Number(e.target.value))}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-right tabular-nums focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100"
+              />
+            </label>
+            <label className="flex flex-1 flex-col gap-1 text-xs font-medium text-slate-600">
+              {match.participant_b?.name ?? 'B'}
+              <input
+                type="number"
+                min={0}
+                value={currentB}
+                onChange={(e) => setCurrentB(Number(e.target.value))}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-right tabular-nums focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100"
+              />
+            </label>
+            <button onClick={recordSet} disabled={!canPlay || save.isPending} className={buttonPrimary}>
+              Record set
+            </button>
+          </div>
+        )}
+
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          {sets.length > 0 && !isDecided && (
+            <button onClick={removeLastSet} disabled={save.isPending} className={buttonSecondary}>
+              Undo last set
+            </button>
+          )}
+          <button onClick={onClose} className={buttonSecondary}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SingleScoreScoreboard({
   match,
   tournamentId,
   onClose,
@@ -108,4 +231,22 @@ export function ScoreboardLive({
       </div>
     </div>
   )
+}
+
+export function ScoreboardLive({
+  match,
+  tournamentId,
+  tournament,
+  onClose,
+}: {
+  match: BracketMatch
+  tournamentId: number
+  tournament?: Tournament
+  onClose: () => void
+}) {
+  if (tournament?.scoring_type === 'best_of_sets') {
+    return <SetsScoreboard match={match} tournament={tournament} tournamentId={tournamentId} onClose={onClose} />
+  }
+
+  return <SingleScoreScoreboard match={match} tournamentId={tournamentId} onClose={onClose} />
 }

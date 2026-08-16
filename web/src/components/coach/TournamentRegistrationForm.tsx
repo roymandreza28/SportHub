@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { fetchTournaments, registerPlayerForTournament, type PlayerSearchResult } from '../../lib/coachApi'
 import { PlayerSearchPicker } from './PlayerSearchPicker'
+import { useAuth } from '../../lib/AuthContext'
 import { buttonPrimary, fieldGroup, label, select } from '../../lib/formStyles'
 
 export function TournamentRegistrationForm() {
+  const { user } = useAuth()
+  const isVerified = user?.verification_status === 'verified'
   const { data: tournaments } = useQuery({ queryKey: ['tournaments', 'open'], queryFn: () => fetchTournaments('open') })
   const [tournamentId, setTournamentId] = useState<number | ''>('')
   const [player, setPlayer] = useState<PlayerSearchResult | null>(null)
@@ -49,11 +52,14 @@ export function TournamentRegistrationForm() {
 
       <button
         onClick={() => mutation.mutate()}
-        disabled={!tournamentId || !player || mutation.isPending}
+        disabled={!isVerified || !tournamentId || !player || mutation.isPending}
         className={`${buttonPrimary} self-start`}
       >
         {mutation.isPending ? 'Registering...' : 'Register player'}
       </button>
+      {!isVerified && (
+        <p className="text-xs text-amber-700">Tournament registration is unavailable until your account is verified.</p>
+      )}
 
       {message && (
         <p className={`text-sm ${message.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>{message.text}</p>

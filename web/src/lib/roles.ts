@@ -4,11 +4,21 @@ import type { Role } from './AuthContext'
 // account also carries the player role, so a coach can be evaluated/booked
 // like any other player. Priority order only matters for that combination —
 // admin/organizer/venue_facilitator never co-occur with anything else.
-const ROLE_PRIORITY: Role[] = ['admin', 'organizer', 'venue_facilitator', 'coach', 'player']
+const ROLE_PRIORITY: Role[] = [
+  'admin',
+  'organizer',
+  'venue_organizer',
+  'livestream_organizer',
+  'venue_facilitator',
+  'coach',
+  'player',
+]
 
 const ROLE_PATHS: Record<Role, string> = {
   admin: '/admin',
   organizer: '/organizer',
+  venue_organizer: '/organizer',
+  livestream_organizer: '/organizer',
   venue_facilitator: '/facilitator',
   coach: '/coach',
   player: '/player',

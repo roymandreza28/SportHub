@@ -39,7 +39,9 @@ export function AuthModal({
         // without a separate overlay element.
         if (e.target === dialogRef.current) onClose()
       }}
-      className="fixed inset-0 m-auto h-fit w-[calc(100%-2rem)] max-w-sm rounded-xl border-none bg-white p-0 shadow-2xl backdrop:bg-slate-900/60"
+      className={`fixed inset-0 m-auto h-fit max-h-[90vh] w-[calc(100%-2rem)] overflow-y-auto rounded-xl border-none bg-white p-0 shadow-2xl backdrop:bg-slate-900/60 ${
+        mode === 'register' ? 'max-w-xl' : 'max-w-sm'
+      }`}
     >
       <div className="flex flex-col gap-4 p-6">
         <div className="flex items-center justify-between">

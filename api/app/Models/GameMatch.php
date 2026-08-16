@@ -11,14 +11,15 @@ class GameMatch extends Model
     protected $table = 'matches';
 
     protected $fillable = [
-        'bracket_id', 'round', 'participant_a_id', 'participant_b_id',
-        'score_a', 'score_b', 'status', 'court_id', 'scheduled_at', 'winner_id',
+        'bracket_id', 'round', 'group_number', 'bracket_type', 'bracket_position', 'participant_a_id', 'participant_b_id',
+        'score_a', 'score_b', 'sets', 'status', 'court_id', 'scheduled_at', 'winner_id',
     ];
 
     protected function casts(): array
     {
         return [
             'scheduled_at' => 'datetime',
+            'sets' => 'array',
         ];
     }
 

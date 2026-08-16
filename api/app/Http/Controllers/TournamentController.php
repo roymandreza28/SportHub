@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tournament;
+use App\Models\User;
 use App\Services\BracketService;
 use Illuminate\Http\Request;
 
@@ -19,7 +20,21 @@ class TournamentController extends Controller
 
     public function show(Tournament $tournament)
     {
-        return $tournament->load('sport:id,name', 'venue:id,name', 'organizer:id,name');
+        return $tournament->load(
+            'sport:id,name', 'venue:id,name', 'organizer:id,name',
+            'venueOrganizer:id,name', 'livestreamOrganizer:id,name'
+        );
+    }
+
+    // A main organizer can assign one venue organizer (scoreboard) and one
+    // livestream organizer (camera feed) per tournament — MatchPolicy and
+    // LivestreamPolicy scope those roles' access to exactly this tournament.
+    public function availableOrganizers()
+    {
+        return [
+            'venue_organizers' => User::role('venue_organizer')->select('id', 'name', 'email')->orderBy('name')->get(),
+            'livestream_organizers' => User::role('livestream_organizer')->select('id', 'name', 'email')->orderBy('name')->get(),
+        ];
     }
 
     public function store(Request $request)
@@ -29,10 +44,14 @@ class TournamentController extends Controller
         $data = $request->validate([
             'sport_id' => ['required', 'exists:sports,id'],
             'name' => ['required', 'string', 'max:255'],
-            'format' => ['required', 'in:single_elimination,double_elimination,round_robin'],
+            'format' => ['required', 'in:single_elimination,double_elimination,round_robin,group_stage,swiss'],
             'starts_at' => ['required', 'date'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
             'venue_id' => ['nullable', 'exists:venues,id'],
+            'venue_organizer_id' => ['nullable', 'exists:users,id', $this->hasRoleRule('venue_organizer')],
+            'livestream_organizer_id' => ['nullable', 'exists:users,id', $this->hasRoleRule('livestream_organizer')],
+            'scoring_type' => ['sometimes', 'in:single_score,best_of_sets'],
+            'sets_to_win' => ['required_if:scoring_type,best_of_sets', 'nullable', 'integer', 'min:2', 'max:4'],
         ]);
 
         $tournament = $request->user()->organizedTournaments()->create([
@@ -40,7 +59,10 @@ class TournamentController extends Controller
             'status' => 'draft',
         ]);
 
-        return response()->json($tournament->load('sport:id,name', 'venue:id,name'), 201);
+        return response()->json(
+            $tournament->load('sport:id,name', 'venue:id,name', 'venueOrganizer:id,name', 'livestreamOrganizer:id,name'),
+            201
+        );
     }
 
     public function update(Request $request, Tournament $tournament)
@@ -53,11 +75,22 @@ class TournamentController extends Controller
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
             'venue_id' => ['nullable', 'exists:venues,id'],
             'status' => ['sometimes', 'in:draft,open,in_progress,completed,cancelled'],
+            'venue_organizer_id' => ['nullable', 'exists:users,id', $this->hasRoleRule('venue_organizer')],
+            'livestream_organizer_id' => ['nullable', 'exists:users,id', $this->hasRoleRule('livestream_organizer')],
         ]);
 
         $tournament->update($data);
 
         return $tournament;
+    }
+
+    private function hasRoleRule(string $role): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) use ($role) {
+            if ($value && ! User::find($value)?->hasRole($role)) {
+                $fail("The selected {$attribute} is not a {$role}.");
+            }
+        };
     }
 
     public function generateBracket(Tournament $tournament, BracketService $bracketService)

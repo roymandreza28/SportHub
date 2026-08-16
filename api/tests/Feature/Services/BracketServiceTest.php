@@ -33,6 +33,26 @@ function makeTournament(string $format, int $playerCount): Tournament
     return $tournament;
 }
 
+/**
+ * Mirrors MatchController::updateScore()'s completion logic (winner
+ * derived from the score, advanceWinner() always called even on a tie) so
+ * these tests exercise BracketService the same way the real HTTP endpoint
+ * does, without the HTTP/auth overhead.
+ */
+function completeMatch(BracketService $service, GameMatch $match, int $scoreA, int $scoreB): GameMatch
+{
+    $winnerId = match (true) {
+        $scoreA > $scoreB => $match->participant_a_id,
+        $scoreB > $scoreA => $match->participant_b_id,
+        default => null,
+    };
+
+    $match->update(['score_a' => $scoreA, 'score_b' => $scoreB, 'status' => 'completed', 'winner_id' => $winnerId]);
+    $service->advanceWinner($match->fresh());
+
+    return $match->fresh();
+}
+
 it('gives every match at most one bye, never two, for any player count from 2 to 16', function (int $playerCount) {
     $tournament = makeTournament('single_elimination', $playerCount);
     $bracket = app(BracketService::class)->generate($tournament);
@@ -127,3 +147,368 @@ it('embeds participant/winner names and round numbers in structure, and leaves a
     expect($finalNow['participant_a']['name'])->not->toBeNull();
     expect($finalNow['participant_b']['name'])->not->toBeNull();
 });
+
+// ---- Group stage ----
+
+it('splits players into balanced groups of at most 4 and round-robins within each', function () {
+    $tournament = makeTournament('group_stage', 9);
+    $bracket = app(BracketService::class)->generate($tournament);
+
+    $matches = $bracket->matches;
+    expect($matches->every(fn (GameMatch $m) => $m->group_number !== null))->toBeTrue();
+    expect($matches->every(fn (GameMatch $m) => $m->round === 1))->toBeTrue();
+
+    $byGroup = $matches->groupBy('group_number');
+    expect($byGroup)->toHaveCount(3); // ceil(9/4) = 3 groups
+
+    // 9 players across 3 groups deals to sizes 3/3/3 -> C(3,2)=3 matches each.
+    foreach ($byGroup as $groupMatches) {
+        expect($groupMatches)->toHaveCount(3);
+    }
+});
+
+it('starts a knockout stage automatically once every group match is completed', function () {
+    $tournament = makeTournament('group_stage', 8);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    $groupMatches = $bracket->matches()->whereNotNull('group_number')->get();
+    expect($groupMatches)->toHaveCount(12); // 2 groups of 4 -> C(4,2)=6 each
+
+    foreach ($groupMatches as $match) {
+        completeMatch($service, $match, 21, 10);
+    }
+
+    $knockoutMatches = $bracket->fresh()->matches()->whereNull('group_number')->get();
+    // 2 groups -> top 2 each -> 4 qualifiers -> single elimination bracket of 2 rounds.
+    expect($knockoutMatches)->toHaveCount(3);
+    expect($knockoutMatches->where('round', 2))->toHaveCount(2);
+    expect($knockoutMatches->where('round', 3))->toHaveCount(1);
+});
+
+it('completes a group_stage tournament by ranking the group then playing the knockout through', function () {
+    $tournament = makeTournament('group_stage', 4);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    // A single group of 4 -> C(4,2) = 6 round-robin matches, top 2 advance
+    // to a 1-match knockout final.
+    $groupMatches = $bracket->matches()->whereNotNull('group_number')->orderBy('id')->get();
+    expect($groupMatches)->toHaveCount(6);
+
+    foreach ($groupMatches as $match) {
+        completeMatch($service, $match, 21, 10); // participant_a always wins
+    }
+
+    $final = $bracket->fresh()->matches()->whereNull('group_number')->first();
+    expect($final)->not->toBeNull();
+    expect($final->participant_a_id)->not->toBeNull();
+    expect($final->participant_b_id)->not->toBeNull();
+
+    completeMatch($service, $final, 21, 15);
+
+    expect($tournament->fresh()->status)->toBe('completed');
+});
+
+it('still starts the knockout stage when the deciding group match ends in a tie', function () {
+    $tournament = makeTournament('group_stage', 4);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    $groupMatches = $bracket->matches()->whereNotNull('group_number')->orderBy('id')->get();
+
+    foreach ($groupMatches as $i => $match) {
+        // Every match ties except the last one — a tie must not prevent the
+        // group-completion check from ever running (regression: the
+        // controller used to skip advanceWinner() entirely when there was
+        // no winner, which would leave a tied group's knockout stage stuck).
+        if ($i === $groupMatches->count() - 1) {
+            completeMatch($service, $match, 10, 10);
+        } else {
+            completeMatch($service, $match, 21, 10);
+        }
+    }
+
+    $knockoutExists = $bracket->fresh()->matches()->whereNull('group_number')->exists();
+    expect($knockoutExists)->toBeTrue();
+});
+
+// ---- Double elimination ----
+
+it('generates a winners bracket, losers bracket, and grand final for a power-of-two field', function () {
+    $tournament = makeTournament('double_elimination', 4);
+    $bracket = app(BracketService::class)->generate($tournament);
+
+    $matches = $bracket->matches;
+    expect($matches->where('bracket_type', 'winners'))->toHaveCount(3); // 2 R1 + 1 final
+    expect($matches->where('bracket_type', 'losers'))->toHaveCount(2); // LBR1 + LBR2, 1 match each
+    expect($matches->where('bracket_type', 'final'))->toHaveCount(1);
+});
+
+it('routes a winners-bracket loser through the losers bracket to a grand-final rematch', function () {
+    $tournament = makeTournament('double_elimination', 4);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    $wbR1 = $bracket->matches()->where('bracket_type', 'winners')->where('round', 1)->orderBy('id')->get();
+    [$p0, $p1] = [$wbR1[0]->participant_a_id, $wbR1[0]->participant_b_id];
+    [$p2, $p3] = [$wbR1[1]->participant_a_id, $wbR1[1]->participant_b_id];
+
+    completeMatch($service, $wbR1[0], 21, 10); // p0 beats p1
+    completeMatch($service, $wbR1[1], 21, 10); // p2 beats p3
+
+    $wbFinal = $bracket->fresh()->matches()->where('bracket_type', 'winners')->where('round', 2)->first();
+    expect($wbFinal->participant_a_id)->toBe($p0);
+    expect($wbFinal->participant_b_id)->toBe($p2);
+
+    completeMatch($service, $wbFinal->fresh(), 21, 15); // p0 beats p2 -> p0 is WB champion
+
+    $lbR1 = $bracket->fresh()->matches()->where('bracket_type', 'losers')->where('round', 101)->first();
+    expect([$lbR1->participant_a_id, $lbR1->participant_b_id])->toEqualCanonicalizing([$p1, $p3]);
+
+    completeMatch($service, $lbR1->fresh(), 21, 18); // loser of p1/p3 is eliminated for real (2nd loss)
+
+    $lbR2 = $bracket->fresh()->matches()->where('bracket_type', 'losers')->where('round', 102)->first();
+    expect($lbR2->participant_b_id)->toBe($p2); // p2 (WB final loser) dropped in here
+
+    $lbChampion = $lbR2->participant_a_id === $lbR2->participant_b_id ? null : $lbR2->winner_id;
+    completeMatch($service, $lbR2->fresh(), 21, 19);
+
+    $final = $bracket->fresh()->matches()->where('bracket_type', 'final')->first();
+    expect($final->participant_a_id)->toBe($p0); // WB champion waits in the grand final
+    expect($final->participant_b_id)->not->toBeNull(); // LB champion joins once decided
+
+    completeMatch($service, $final->fresh(), 21, 17);
+
+    expect($tournament->fresh()->status)->toBe('completed');
+});
+
+it('completes immediately from the winners bracket when there are only two entrants', function () {
+    $tournament = makeTournament('double_elimination', 2);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    expect($bracket->matches)->toHaveCount(1); // no losers bracket or grand final possible with just 2 entrants
+
+    $only = $bracket->matches->first();
+    completeMatch($service, $only, 21, 10);
+
+    expect($tournament->fresh()->status)->toBe('completed');
+});
+
+it('gives a losers-bracket entrant a free pass when their pairing has no opponent (winners-bracket bye)', function () {
+    // 3 players -> bracket size 4 -> 1 bye in winners round 1.
+    $tournament = makeTournament('double_elimination', 3);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    $wbR1 = $bracket->matches()->where('bracket_type', 'winners')->where('round', 1)->orderBy('id')->get();
+    $byeMatch = $wbR1->first(fn (GameMatch $m) => $m->status === 'completed');
+    $realMatch = $wbR1->first(fn (GameMatch $m) => $m->status === 'scheduled');
+    expect($byeMatch)->not->toBeNull();
+    expect($realMatch)->not->toBeNull();
+
+    $byeWinner = $byeMatch->winner_id;
+    $realLoser = $realMatch->participant_a_id;
+    $realWinner = $realMatch->participant_b_id;
+
+    completeMatch($service, $realMatch, 10, 21); // participant_b (realWinner) wins
+
+    // The bye's "opponent" in the losers bracket never existed, so the real
+    // match's loser should already show as the winner of that losers-round-1
+    // pairing without anyone needing to play it.
+    $lbR1 = $bracket->fresh()->matches()->where('bracket_type', 'losers')->where('round', 101)->first();
+    expect($lbR1->status)->toBe('completed');
+    expect($lbR1->winner_id)->toBe($realLoser);
+
+    $wbFinal = $bracket->fresh()->matches()->where('bracket_type', 'winners')->where('round', 2)->first();
+    expect([$wbFinal->participant_a_id, $wbFinal->participant_b_id])->toEqualCanonicalizing([$byeWinner, $realWinner]);
+
+    completeMatch($service, $wbFinal->fresh(), 15, 21); // participant_b wins the WB final
+
+    $final = $bracket->fresh()->matches()->where('bracket_type', 'final')->first();
+    completeMatch($service, $final->fresh(), 10, 15);
+
+    expect($tournament->fresh()->status)->toBe('completed');
+});
+
+it('always reaches completion regardless of how many byes the field needs', function (int $playerCount) {
+    $tournament = makeTournament('double_elimination', $playerCount);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    for ($guard = 0; $guard < 100; $guard++) {
+        $tournament->refresh();
+        if ($tournament->status === 'completed') {
+            break;
+        }
+
+        $playable = $bracket->fresh()->matches()
+            ->where('status', 'scheduled')
+            ->whereNotNull('participant_a_id')
+            ->whereNotNull('participant_b_id')
+            ->first();
+
+        if (! $playable) {
+            break;
+        }
+
+        completeMatch($service, $playable, 21, 10);
+    }
+
+    expect($tournament->fresh()->status)->toBe('completed');
+})->with([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+
+it('does not get stuck when two winners-bracket byes feed the same losers-bracket pairing', function () {
+    // 6 players -> bracket size 8 -> 2 byes, both landing in winners round-1
+    // matches 0 and 1, which are losers-round-1's own pairing — neither
+    // produces a loser, so that losers match must be skipped entirely
+    // rather than left permanently unplayable.
+    $tournament = makeTournament('double_elimination', 6);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    $lbR1 = $bracket->matches()->where('bracket_type', 'losers')->where('round', 101)->get();
+    expect($lbR1)->toHaveCount(1); // the both-byes pairing (position 0) was skipped
+
+    // Play every real match with participant_a winning, following the
+    // bracket forward however it evolves, until the tournament finishes.
+    for ($guard = 0; $guard < 50; $guard++) {
+        $tournament->refresh();
+        if ($tournament->status === 'completed') {
+            break;
+        }
+
+        $playable = $bracket->fresh()->matches()
+            ->where('status', 'scheduled')
+            ->whereNotNull('participant_a_id')
+            ->whereNotNull('participant_b_id')
+            ->first();
+
+        if (! $playable) {
+            break;
+        }
+
+        completeMatch($service, $playable, 21, 10);
+    }
+
+    expect($tournament->fresh()->status)->toBe('completed');
+});
+
+// ---- Swiss system ----
+
+it('pairs every player exactly once per round with no elimination', function () {
+    $tournament = makeTournament('swiss', 8);
+    $bracket = app(BracketService::class)->generate($tournament);
+
+    $round1 = $bracket->matches()->where('bracket_type', 'swiss')->where('round', 1)->get();
+    expect($round1)->toHaveCount(4); // 8 players, even count -> no bye
+
+    $playerIds = $round1->flatMap(fn (GameMatch $m) => [$m->participant_a_id, $m->participant_b_id]);
+    expect($playerIds->unique())->toHaveCount(8);
+});
+
+it('gives an odd field a bye that counts as an automatic win, favoring whoever has not had one', function () {
+    $tournament = makeTournament('swiss', 5);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    $round1 = $bracket->matches()->where('bracket_type', 'swiss')->where('round', 1)->get();
+    expect($round1)->toHaveCount(3); // 2 real matches + 1 bye for 5 players
+
+    $bye1 = $round1->first(fn (GameMatch $m) => is_null($m->participant_b_id));
+    expect($bye1->status)->toBe('completed');
+    expect($bye1->winner_id)->toBe($bye1->participant_a_id);
+
+    foreach ($round1->where('status', 'scheduled') as $match) {
+        completeMatch($service, $match, 21, 10);
+    }
+
+    $round2 = $bracket->fresh()->matches()->where('bracket_type', 'swiss')->where('round', 2)->get();
+    $bye2 = $round2->first(fn (GameMatch $m) => is_null($m->participant_b_id));
+    expect($bye2)->not->toBeNull();
+    // The round-1 bye recipient must not be the one sitting out again while
+    // 4 other players have never had a bye.
+    expect($bye2->participant_a_id)->not->toBe($bye1->participant_a_id);
+});
+
+it('advances to the next swiss round only once every match in the round is complete', function () {
+    $tournament = makeTournament('swiss', 4);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    $round1 = $bracket->matches()->where('bracket_type', 'swiss')->where('round', 1)->get();
+    expect($round1)->toHaveCount(2);
+
+    completeMatch($service, $round1->first(), 21, 10);
+
+    expect($bracket->fresh()->matches()->where('bracket_type', 'swiss')->where('round', 2)->exists())->toBeFalse();
+
+    completeMatch($service, $round1->last(), 21, 10);
+
+    expect($bracket->fresh()->matches()->where('bracket_type', 'swiss')->where('round', 2)->exists())->toBeTrue();
+});
+
+it('runs ceil(log2(playerCount)) rounds then completes with standings reflecting every result', function () {
+    $tournament = makeTournament('swiss', 8); // ceil(log2(8)) = 3 rounds
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    $roundsPlayed = 0;
+    for ($guard = 0; $guard < 20; $guard++) {
+        $tournament->refresh();
+        if ($tournament->status === 'completed') {
+            break;
+        }
+
+        $playable = $bracket->fresh()->matches()->where('bracket_type', 'swiss')
+            ->where('status', 'scheduled')->get();
+
+        if ($playable->isEmpty()) {
+            break;
+        }
+
+        foreach ($playable as $match) {
+            completeMatch($service, $match, 21, 10); // participant_a always wins
+        }
+        $roundsPlayed++;
+    }
+
+    expect($roundsPlayed)->toBe(3);
+    expect($tournament->fresh()->status)->toBe('completed');
+
+    $maxRound = $bracket->fresh()->matches()->where('bracket_type', 'swiss')->max('round');
+    expect($maxRound)->toBe(3);
+});
+
+it('completes a swiss tournament immediately when only one player is registered', function () {
+    $tournament = makeTournament('swiss', 1);
+    $service = app(BracketService::class);
+    $service->generate($tournament);
+
+    expect($tournament->fresh()->status)->toBe('completed');
+});
+
+it('always reaches completion for any player count, odd or even', function (int $playerCount) {
+    $tournament = makeTournament('swiss', $playerCount);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    for ($guard = 0; $guard < 20; $guard++) {
+        $tournament->refresh();
+        if ($tournament->status === 'completed') {
+            break;
+        }
+
+        $playable = $bracket->fresh()->matches()->where('bracket_type', 'swiss')->where('status', 'scheduled')->get();
+        if ($playable->isEmpty()) {
+            break;
+        }
+
+        foreach ($playable as $match) {
+            completeMatch($service, $match, 21, 10);
+        }
+    }
+
+    expect($tournament->fresh()->status)->toBe('completed');
+})->with([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16]);

@@ -14,6 +14,12 @@ class TournamentRegistrationController extends Controller
     {
         $this->authorize('create', TournamentRegistration::class);
 
+        abort_if(
+            $request->user()->verification_status !== 'verified',
+            403,
+            "Your account is still under verification. You can't register a player for a tournament yet."
+        );
+
         $data = $request->validate([
             'user_id' => ['required', 'exists:users,id'],
         ]);

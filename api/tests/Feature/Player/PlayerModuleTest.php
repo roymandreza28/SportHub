@@ -18,6 +18,18 @@ it('auto-provisions a player profile on first access', function () {
     $this->actingAs($player)->getJson('/api/player-profile')->assertOk();
 });
 
+it('denies matchmaking (join or create a match) to an account still pending verification', function () {
+    $player = userWithRole('player');
+    $player->update(['verification_status' => 'pending']);
+    $sport = Sport::create(['name' => 'Basketball']);
+    $format = SportFormat::create(['sport_id' => $sport->id, 'name' => 'Singles', 'players_per_side' => 1]);
+
+    $this->actingAs($player)->postJson('/api/matchmaking-requests', [
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+    ])->assertStatus(403);
+});
+
 it('updates the player profile', function () {
     $player = userWithRole('player');
     $sport = Sport::create(['name' => 'Basketball']);

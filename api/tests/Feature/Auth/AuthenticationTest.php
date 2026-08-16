@@ -5,18 +5,108 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
-it('registers a new user, logs them in via session, and defaults them to player', function () {
-    $response = $this->postJson('/api/register', [
-        'name' => 'New User',
-        'email' => 'newuser@example.com',
-        'password' => 'password123',
-        'password_confirmation' => 'password123',
-    ]);
+function baseRegistrationPayload(array $overrides = []): array
+{
+    return array_merge([
+        'first_name' => 'New',
+        'middle_name' => 'Q',
+        'last_name' => 'User',
+        'email' => 'newuser'.uniqid().'@example.com',
+        'birthday' => '2000-05-15',
+        'address' => '123 Rizal St, Morong, Rizal',
+        'proof_of_address' => UploadedFile::fake()->create('id.jpg', 100, 'image/jpeg'),
+        'role' => 'player',
+        'password' => 'Password123',
+        'password_confirmation' => 'Password123',
+    ], $overrides);
+}
+
+it('registers a new player, combines the name parts, logs them in, and stores their proof of address', function () {
+    Storage::fake('public');
+
+    $response = $this->postJson('/api/register', baseRegistrationPayload());
 
     $response->assertOk();
     $response->assertJsonPath('roles', ['player']);
+    $response->assertJsonPath('name', 'New Q User');
 
-    $this->assertDatabaseHas('users', ['email' => 'newuser@example.com']);
+    $user = User::where('email', $response->json('email'))->first();
+    $this->assertDatabaseHas('users', ['id' => $user->id, 'first_name' => 'New', 'last_name' => 'User']);
+    expect($user->proof_of_address_path)->not->toBeNull();
+    Storage::disk('public')->assertExists($user->proof_of_address_path);
+});
+
+it('starts a freshly-registered account pending verification and notifies them of it', function () {
+    Storage::fake('public');
+
+    $response = $this->postJson('/api/register', baseRegistrationPayload());
+    $response->assertOk();
+
+    $user = User::where('email', $response->json('email'))->first();
+    expect($user->verification_status)->toBe('pending');
+
+    $notifications = $this->actingAs($user)->getJson('/api/notifications')->json();
+    expect(collect($notifications)->contains(fn ($n) => $n['type'] === 'account_pending_verification'))->toBeTrue();
+});
+
+it('registers a coach with eligibility proof and grants both the coach and player roles', function () {
+    Storage::fake('public');
+
+    $response = $this->postJson('/api/register', baseRegistrationPayload([
+        'role' => 'coach',
+        'coach_eligibility_proof' => UploadedFile::fake()->create('license.pdf', 200, 'application/pdf'),
+    ]));
+
+    $response->assertOk();
+    expect($response->json('roles'))->toEqualCanonicalizing(['coach', 'player']);
+
+    $user = User::where('email', $response->json('email'))->first();
+    expect($user->coach_eligibility_proof_path)->not->toBeNull();
+    Storage::disk('public')->assertExists($user->coach_eligibility_proof_path);
+});
+
+it('rejects a coach registration with no eligibility proof', function () {
+    $payload = baseRegistrationPayload(['role' => 'coach']);
+    unset($payload['coach_eligibility_proof']);
+
+    $this->postJson('/api/register', $payload)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('coach_eligibility_proof');
+});
+
+it('rejects a password missing an uppercase letter or a number', function () {
+    $this->postJson('/api/register', baseRegistrationPayload([
+        'password' => 'lowercaseonly',
+        'password_confirmation' => 'lowercaseonly',
+    ]))->assertStatus(422)->assertJsonValidationErrors('password');
+
+    $this->postJson('/api/register', baseRegistrationPayload([
+        'password' => 'NoNumbersHere',
+        'password_confirmation' => 'NoNumbersHere',
+    ]))->assertStatus(422)->assertJsonValidationErrors('password');
+});
+
+it('rejects a password that is just the birthday in a common date format', function () {
+    $this->postJson('/api/register', baseRegistrationPayload([
+        'birthday' => '2000-05-15',
+        'password' => '2000-05-15',
+        'password_confirmation' => '2000-05-15',
+    ]))->assertStatus(422)->assertJsonValidationErrors('password');
+
+    $this->postJson('/api/register', baseRegistrationPayload([
+        'birthday' => '2000-05-15',
+        'password' => '05152000',
+        'password_confirmation' => '05152000',
+    ]))->assertStatus(422)->assertJsonValidationErrors('password');
+});
+
+it('rejects registration missing proof of address', function () {
+    $payload = baseRegistrationPayload();
+    unset($payload['proof_of_address']);
+
+    $this->postJson('/api/register', $payload)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('proof_of_address');
 });
 
 it('logs in an existing user and rejects bad credentials', function () {

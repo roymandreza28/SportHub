@@ -1,7 +1,15 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, ensureCsrfCookie } from './api'
 
-export type Role = 'admin' | 'organizer' | 'venue_facilitator' | 'player' | 'coach'
+export type Role =
+  | 'admin'
+  | 'organizer'
+  | 'venue_organizer'
+  | 'livestream_organizer'
+  | 'venue_facilitator'
+  | 'player'
+  | 'coach'
+export type VerificationStatus = 'pending' | 'verified' | 'rejected'
 
 type User = {
   id: number
@@ -9,13 +17,14 @@ type User = {
   email: string
   roles: Role[]
   avatar_url: string | null
+  verification_status: VerificationStatus
 }
 
 type AuthContextValue = {
   user: User | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (name: string, email: string, password: string, passwordConfirmation: string) => Promise<void>
+  register: (formData: FormData) => Promise<void>
   logout: () => Promise<void>
   hasRole: (...roles: Role[]) => boolean
   refreshUser: () => Promise<void>
@@ -65,15 +74,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data)
   }
 
-  async function register(name: string, email: string, password: string, passwordConfirmation: string) {
+  async function register(formData: FormData) {
     authAction.current++
     await ensureCsrfCookie()
-    const { data } = await api.post<User>('/api/register', {
-      name,
-      email,
-      password,
-      password_confirmation: passwordConfirmation,
-    })
+    const { data } = await api.post<User>('/api/register', formData)
     setUser(data)
   }
 

@@ -7,6 +7,9 @@ export type NotificationType =
   | 'matchmaking_paired'
   | 'tournament_update'
   | 'team_invite'
+  | 'account_pending_verification'
+  | 'account_verified'
+  | 'account_rejected'
 
 export type NotificationItem = {
   id: number
