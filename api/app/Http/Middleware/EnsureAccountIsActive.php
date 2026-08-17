@@ -14,9 +14,16 @@ class EnsureAccountIsActive
         $user = $request->user();
 
         if ($user && ! $user->is_active) {
-            Auth::guard('web')->logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
+            // A session only exists for a stateful-domain/cookie request —
+            // the token-only frontend never sends one, so SANCTUM_STATEFUL_
+            // DOMAINS is deliberately left empty in production (see
+            // api/.env.production.example) and no request ever gets one.
+            // Calling session() when none exists throws instead of no-op-ing.
+            if ($request->hasSession()) {
+                Auth::guard('web')->logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+            }
 
             return response()->json([
                 'message' => 'Your account has been deactivated. Please contact an administrator.',
