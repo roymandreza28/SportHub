@@ -26,6 +26,43 @@ it('lets a coach register a player for an open tournament and rejects duplicate 
         ->assertStatus(422);
 });
 
+it('makes a freshly-created tournament visible to coaches only after the organizer opens it for registration', function () {
+    $coach = userWithRole('coach');
+    $player = userWithRole('player');
+    $organizer = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Basketball']);
+
+    // Mirrors the real flow: POST /api/tournaments never accepts a status
+    // field and always creates a draft (TournamentController::store()).
+    $create = $this->actingAs($organizer)->postJson('/api/tournaments', [
+        'sport_id' => $sport->id,
+        'name' => 'Freshly Created Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek()->toIso8601String(),
+    ]);
+    $create->assertCreated();
+    expect($create->json('status'))->toBe('draft');
+    $tournamentId = $create->json('id');
+
+    // The coach module only ever fetches ?status=open — a draft tournament
+    // must not appear there, or a coach could try to register for a
+    // tournament the organizer hasn't finished setting up yet.
+    $beforeOpen = $this->actingAs($coach)->getJson('/api/tournaments?status=open');
+    expect(collect($beforeOpen->json())->pluck('id'))->not->toContain($tournamentId);
+
+    // The organizer explicitly opens registration (the step that was
+    // previously missing from the frontend entirely).
+    $this->actingAs($organizer)->patchJson("/api/tournaments/{$tournamentId}", ['status' => 'open'])
+        ->assertOk()
+        ->assertJsonPath('status', 'open');
+
+    $afterOpen = $this->actingAs($coach)->getJson('/api/tournaments?status=open');
+    expect(collect($afterOpen->json())->pluck('id'))->toContain($tournamentId);
+
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournamentId}/registrations", ['user_id' => $player->id])
+        ->assertCreated();
+});
+
 it('denies tournament registration to a coach whose account is still pending verification', function () {
     $coach = userWithRole('coach');
     $coach->update(['verification_status' => 'pending']);

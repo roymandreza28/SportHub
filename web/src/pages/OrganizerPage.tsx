@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { fetchOrganizerTournaments, fetchLivestreams, type BracketMatch } from '../lib/organizerApi'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { fetchOrganizerTournaments, fetchLivestreams, updateTournament, type BracketMatch } from '../lib/organizerApi'
 import { useAuth } from '../lib/AuthContext'
 import {
   DashboardShell,
@@ -13,6 +13,7 @@ import {
   type NavItem,
 } from '../components/layout/DashboardShell'
 import { IconFileText, IconHome, IconRadio, IconTrophy } from '../components/layout/icons'
+import { buttonPrimary } from '../lib/formStyles'
 import { TournamentWizard } from '../components/organizer/TournamentWizard'
 import { BracketView } from '../components/organizer/BracketView'
 import { ScoreboardLive } from '../components/organizer/ScoreboardLive'
@@ -37,9 +38,20 @@ export function OrganizerPage() {
     ...(canManageLivestreams ? [{ id: 'livestreams', label: 'Livestreams', icon: IconRadio }] : []),
   ]
 
+  const queryClient = useQueryClient()
   const { data: tournaments } = useQuery({ queryKey: ['organizer', 'tournaments'], queryFn: fetchOrganizerTournaments })
   const { data: livestreams } = useQuery({ queryKey: ['livestreams'], queryFn: fetchLivestreams })
   const [active, setActive] = useState(NAV_ITEMS[0].id)
+
+  // A new tournament starts as a draft so an organizer can finish setting
+  // it up before coaches see it — but coaches only ever fetch status=open
+  // tournaments to register for, so this is the step that actually makes
+  // a tournament joinable. Without it, every tournament stays invisible to
+  // coaches indefinitely.
+  const openRegistrationMutation = useMutation({
+    mutationFn: (tournamentId: number) => updateTournament(tournamentId, { status: 'open' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] }),
+  })
 
   const myTournaments = (tournaments ?? [])
     .filter((t) => {
@@ -146,7 +158,24 @@ export function OrganizerPage() {
               ))}
             </div>
             {selectedTournamentId && (
-              <BracketView tournamentId={selectedTournamentId} onSelectMatch={setActiveMatch} />
+              <>
+                {isMainOrganizer && myTournaments.find((t) => t.id === selectedTournamentId)?.status === 'draft' && (
+                  <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <p className="flex-1 text-xs text-amber-800">
+                      This tournament is still a draft — coaches can&apos;t see it or register players until you
+                      open it for registration.
+                    </p>
+                    <button
+                      onClick={() => openRegistrationMutation.mutate(selectedTournamentId)}
+                      disabled={openRegistrationMutation.isPending}
+                      className={buttonPrimary}
+                    >
+                      {openRegistrationMutation.isPending ? 'Opening...' : 'Open for registration'}
+                    </button>
+                  </div>
+                )}
+                <BracketView tournamentId={selectedTournamentId} onSelectMatch={setActiveMatch} />
+              </>
             )}
           </div>
 

@@ -104,6 +104,14 @@ export async function createTournament(input: {
   return data
 }
 
+export async function updateTournament(
+  tournamentId: number,
+  input: Partial<{ name: string; starts_at: string; venue_id: number; status: TournamentStatus }>
+) {
+  const { data } = await api.patch<Tournament>(`/api/tournaments/${tournamentId}`, input)
+  return data
+}
+
 export async function fetchAvailableOrganizers() {
   const { data } = await api.get<{ venue_organizers: OrganizerOption[]; livestream_organizers: OrganizerOption[] }>(
     '/api/organizers/available'
