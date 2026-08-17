@@ -92,10 +92,12 @@ class AuthController extends Controller
             'message' => "Your account is under verification. You can't access other services at the moment.",
         ]);
 
-        Auth::login($user);
-        $request->session()->regenerate();
+        // Bearer token, not a session cookie — the frontend and API live on
+        // unrelated domains (Vercel + Render), and browsers won't share a
+        // cookie between them regardless of CORS config.
+        $token = $user->createToken('spa')->plainTextToken;
 
-        return response()->json($this->withRoles($user->fresh()));
+        return response()->json([...$this->withRoles($user->fresh()), 'token' => $token]);
     }
 
     // Rejects a password that's just the birthday typed in any of the
@@ -122,23 +124,26 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        if (! Auth::attempt($credentials)) {
+        // Auth::validate() only checks the credentials — it deliberately
+        // never establishes a session, since a bearer token (below) is the
+        // only thing the SPA actually authenticates with going forward.
+        if (! Auth::validate($credentials)) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
         }
 
-        if (! Auth::user()->is_active) {
-            Auth::logout();
+        $user = User::where('email', $credentials['email'])->first();
 
+        if (! $user->is_active) {
             throw ValidationException::withMessages([
                 'email' => ['Your account has been deactivated. Please contact an administrator.'],
             ]);
         }
 
-        $request->session()->regenerate();
+        $token = $user->createToken('spa')->plainTextToken;
 
-        return response()->json($this->withRoles(Auth::user()));
+        return response()->json([...$this->withRoles($user), 'token' => $token]);
     }
 
     public function updatePassword(Request $request)
@@ -174,9 +179,17 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        Auth::guard('web')->logout();
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        $token = $request->user()->currentAccessToken();
+
+        // Revokes only the token this request authenticated with, not every
+        // token the user holds — logging out on one device shouldn't sign
+        // out their other sessions. A real PersonalAccessToken is what
+        // every actual API request authenticates with; TransientToken is
+        // Sanctum's stand-in for session-guard auth (e.g. tests using
+        // actingAs()) and has nothing to revoke.
+        if ($token instanceof \Laravel\Sanctum\PersonalAccessToken) {
+            $token->delete();
+        }
 
         return response()->noContent();
     }

@@ -4,6 +4,7 @@ use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Sanctum\PersonalAccessToken;
 
 function baseRegistrationPayload(array $overrides = []): array
 {
@@ -29,6 +30,7 @@ it('registers a new player, combines the name parts, logs them in, and stores th
     $response->assertOk();
     $response->assertJsonPath('roles', ['player']);
     $response->assertJsonPath('name', 'New Q User');
+    expect($response->json('token'))->toBeString()->not->toBeEmpty();
 
     $user = User::where('email', $response->json('email'))->first();
     $this->assertDatabaseHas('users', ['id' => $user->id, 'first_name' => 'New', 'last_name' => 'User']);
@@ -115,9 +117,10 @@ it('logs in an existing user and rejects bad credentials', function () {
     $this->postJson('/api/login', ['email' => $user->email, 'password' => 'wrong-password'])
         ->assertStatus(422);
 
-    $this->postJson('/api/login', ['email' => $user->email, 'password' => 'correct-password'])
-        ->assertOk()
-        ->assertJsonPath('email', $user->email);
+    $response = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'correct-password']);
+    $response->assertOk();
+    $response->assertJsonPath('email', $user->email);
+    expect($response->json('token'))->toBeString()->not->toBeEmpty();
 });
 
 it('returns the authenticated user with roles on /api/user', function () {
@@ -133,10 +136,34 @@ it('rejects unauthenticated access to /api/user with a clean 401, not a redirect
     $this->getJson('/api/user')->assertStatus(401);
 });
 
-it('logs out and invalidates the session', function () {
+it('does not error logging out a session-authenticated (non-token) request', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)->postJson('/api/logout')->assertNoContent();
+});
+
+it('revokes the bearer token used to log in, deleting it from the database', function () {
+    $user = User::factory()->create(['password' => bcrypt('correct-password')]);
+
+    $login = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'correct-password']);
+    $token = $login->json('token');
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->getJson('/api/user')
+        ->assertOk();
+
+    expect(PersonalAccessToken::count())->toBe(1);
+
+    $this->withHeader('Authorization', "Bearer {$token}")
+        ->postJson('/api/logout')
+        ->assertNoContent();
+
+    // The guard caches its resolved user for the lifetime of a single
+    // test's shared application container, so a follow-up request in the
+    // same test can't reliably re-prove the token is rejected (every real
+    // HTTP request boots a fresh app instance, where this doesn't apply) —
+    // asserting the token row itself is gone is what's actually reliable.
+    expect(PersonalAccessToken::count())->toBe(0);
 });
 
 it('rejects login for a deactivated account', function () {

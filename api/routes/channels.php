@@ -4,6 +4,13 @@ use App\Models\Conversation;
 use App\Models\Venue;
 use Illuminate\Support\Facades\Broadcast;
 
+// Overrides Laravel's default auto-registered /broadcasting/auth route,
+// which uses the 'web' (session-cookie) guard — incompatible with the
+// Bearer-token auth the frontend uses so login works across the Vercel/
+// Render domain split. 'auth:sanctum' accepts the same token every other
+// API request already sends.
+Broadcast::routes(['middleware' => ['auth:sanctum']]);
+
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 });

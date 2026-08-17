@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { api, ensureCsrfCookie } from './api'
+import { api, clearStoredToken, getStoredToken, setStoredToken } from './api'
 
 export type Role =
   | 'admin'
@@ -19,6 +19,8 @@ type User = {
   avatar_url: string | null
   verification_status: VerificationStatus
 }
+
+type LoginResponse = User & { token: string }
 
 type AuthContextValue = {
   user: User | null
@@ -45,11 +47,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function fetchUser() {
     const gen = authAction.current
+    // No stored token means there's nothing to authenticate with — skip the
+    // request entirely rather than making a call that can only 401.
+    if (!getStoredToken()) {
+      setIsLoading(false)
+      return
+    }
     try {
       const { data } = await api.get<User>('/api/user')
       if (authAction.current === gen) setUser(data)
     } catch {
       if (authAction.current === gen) setUser(null)
+      clearStoredToken()
     } finally {
       setIsLoading(false)
     }
@@ -58,33 +67,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (hasInitialized.current) return
     hasInitialized.current = true
-    // Establish the session/CSRF cookie before any other request touches the
-    // API. Firing fetchUser() concurrently with a later login/register call's
-    // own ensureCsrfCookie() lets two requests race to create independent
-    // sessions — whichever Set-Cookie the browser applies last silently wins,
-    // which can leave the XSRF token mismatched with the active session
-    // (419). Sequencing this first guarantees a single session for the page.
-    ensureCsrfCookie().finally(fetchUser)
+    fetchUser()
   }, [])
 
   async function login(email: string, password: string) {
     authAction.current++
-    await ensureCsrfCookie()
-    const { data } = await api.post<User>('/api/login', { email, password })
+    const { data } = await api.post<LoginResponse>('/api/login', { email, password })
+    setStoredToken(data.token)
     setUser(data)
   }
 
   async function register(formData: FormData) {
     authAction.current++
-    await ensureCsrfCookie()
-    const { data } = await api.post<User>('/api/register', formData)
+    const { data } = await api.post<LoginResponse>('/api/register', formData)
+    setStoredToken(data.token)
     setUser(data)
   }
 
   async function logout() {
     authAction.current++
-    await api.post('/api/logout')
-    setUser(null)
+    try {
+      await api.post('/api/logout')
+    } finally {
+      clearStoredToken()
+      setUser(null)
+    }
   }
 
   function hasRole(...roles: Role[]) {

@@ -2,11 +2,13 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider, useAuth } from './AuthContext'
-import { api, ensureCsrfCookie } from './api'
+import { api, clearStoredToken, getStoredToken, setStoredToken } from './api'
 
 vi.mock('./api', () => ({
   api: { get: vi.fn(), post: vi.fn() },
-  ensureCsrfCookie: vi.fn(),
+  getStoredToken: vi.fn(),
+  setStoredToken: vi.fn(),
+  clearStoredToken: vi.fn(),
 }))
 
 function Probe() {
@@ -28,11 +30,13 @@ describe('AuthProvider', () => {
   beforeEach(() => {
     vi.mocked(api.get).mockReset()
     vi.mocked(api.post).mockReset()
-    vi.mocked(ensureCsrfCookie).mockReset()
-    vi.mocked(ensureCsrfCookie).mockResolvedValue(undefined)
+    vi.mocked(getStoredToken).mockReset()
+    vi.mocked(setStoredToken).mockReset()
+    vi.mocked(clearStoredToken).mockReset()
   })
 
-  it('fetches the current user on mount and reflects roles via hasRole', async () => {
+  it('fetches the current user on mount when a token is already stored', async () => {
+    vi.mocked(getStoredToken).mockReturnValue('existing-token')
     vi.mocked(api.get).mockResolvedValue({
       data: { id: 1, name: 'Ada Admin', email: 'a@test.com', roles: ['admin'] },
     })
@@ -50,7 +54,21 @@ describe('AuthProvider', () => {
     expect(api.get).toHaveBeenCalledWith('/api/user')
   })
 
-  it('shows not-logged-in when the initial /api/user check fails (401)', async () => {
+  it('skips the /api/user check entirely when no token is stored', async () => {
+    vi.mocked(getStoredToken).mockReturnValue(null)
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>
+    )
+
+    await waitFor(() => expect(screen.getByText('Not logged in')).toBeInTheDocument())
+    expect(api.get).not.toHaveBeenCalled()
+  })
+
+  it('shows not-logged-in and clears the token when the stored token is rejected (401)', async () => {
+    vi.mocked(getStoredToken).mockReturnValue('stale-token')
     vi.mocked(api.get).mockRejectedValue(new Error('401'))
 
     render(
@@ -60,12 +78,13 @@ describe('AuthProvider', () => {
     )
 
     await waitFor(() => expect(screen.getByText('Not logged in')).toBeInTheDocument())
+    expect(clearStoredToken).toHaveBeenCalled()
   })
 
-  it('logs in via ensureCsrfCookie + POST /api/login and updates user state', async () => {
-    vi.mocked(api.get).mockRejectedValue(new Error('401'))
+  it('logs in via POST /api/login, stores the returned token, and updates user state', async () => {
+    vi.mocked(getStoredToken).mockReturnValue(null)
     vi.mocked(api.post).mockResolvedValue({
-      data: { id: 2, name: 'Pat Player', email: 'p@test.com', roles: ['player'] },
+      data: { id: 2, name: 'Pat Player', email: 'p@test.com', roles: ['player'], token: 'new-token' },
     })
 
     render(
@@ -79,11 +98,12 @@ describe('AuthProvider', () => {
     await userEvent.click(screen.getByText('Log in'))
 
     await waitFor(() => expect(screen.getByText('Logged in as Pat Player')).toBeInTheDocument())
-    expect(ensureCsrfCookie).toHaveBeenCalled()
     expect(api.post).toHaveBeenCalledWith('/api/login', { email: 'a@test.com', password: 'password' })
+    expect(setStoredToken).toHaveBeenCalledWith('new-token')
   })
 
-  it('logs out and clears user state', async () => {
+  it('logs out, clears the stored token, and clears user state', async () => {
+    vi.mocked(getStoredToken).mockReturnValue('existing-token')
     vi.mocked(api.get).mockResolvedValue({
       data: { id: 1, name: 'Ada Admin', email: 'a@test.com', roles: ['admin'] },
     })
@@ -101,5 +121,6 @@ describe('AuthProvider', () => {
 
     await waitFor(() => expect(screen.getByText('Not logged in')).toBeInTheDocument())
     expect(api.post).toHaveBeenCalledWith('/api/logout')
+    expect(clearStoredToken).toHaveBeenCalled()
   })
 })
