@@ -34,8 +34,15 @@ if [ "$1" = "supervisord" ]; then
     # flag set across multiple boots is harmless, not just a one-time
     # allowance. Unset SEED_ON_BOOT (or leave it unset) once seeding is done
     # so ordinary restarts don't pay the extra query cost.
+    #
+    # `|| true`, deliberately: without it, a failed seed — e.g. a duplicate-
+    # key error from a slow-starting container getting killed and restarted
+    # mid-seed, which happened here — takes the whole script down under
+    # `set -e` before nginx/php-fpm ever start, which then loops forever
+    # (Render restarts the crashed container, which fails the same way).
+    # Seeding is not essential to serving traffic; let it log and move on.
     if [ "$SEED_ON_BOOT" = "true" ]; then
-        php artisan db:seed --force
+        php artisan db:seed --force || echo "db:seed failed — continuing boot anyway"
     fi
 fi
 
