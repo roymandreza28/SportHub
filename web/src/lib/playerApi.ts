@@ -88,7 +88,7 @@ export type MyVenueRegistration = {
   starts_at: string
   ends_at: string
   purpose: string | null
-  venue: { id: number; name: string }
+  venue: { id: number; name: string; address: string; latitude: string; longitude: string }
   court: { id: number; name: string } | null
   // Only present once the booking is approved — a direct conversation with
   // the venue's facilitator, auto-created on approval and auto-(soft)deleted
@@ -98,5 +98,24 @@ export type MyVenueRegistration = {
 
 export async function fetchMyVenueRegistrations() {
   const { data } = await api.get<MyVenueRegistration[]>('/api/venue-registrations/mine')
+  return data
+}
+
+export type PlayerTournamentRegistration = {
+  id: number
+  status: 'pending' | 'confirmed' | 'withdrawn'
+  registered_by: { id: number; name: string } | null
+  tournament: {
+    id: number
+    name: string
+    status: 'draft' | 'open' | 'in_progress' | 'completed' | 'cancelled'
+    starts_at: string
+    sport: Sport
+    venue: { id: number; name: string } | null
+  }
+}
+
+export async function fetchMyTournamentRegistrationsAsPlayer() {
+  const { data } = await api.get<PlayerTournamentRegistration[]>('/api/tournament-registrations/mine-as-player')
   return data
 }

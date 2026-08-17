@@ -4,6 +4,8 @@ use App\Models\PlayerProfile;
 use App\Models\Sport;
 use App\Models\SkillLevel;
 use App\Models\SportFormat;
+use App\Models\Tournament;
+use App\Models\TournamentRegistration;
 
 it('auto-provisions a player profile on first access', function () {
     $player = userWithRole('player');
@@ -163,6 +165,42 @@ it('does not pair an unassessed player with an assessed player for the same spor
 
     $this->actingAs($playerB)->postJson('/api/matchmaking-requests', ['sport_id' => $sport->id, 'sport_format_id' => $format->id])
         ->assertJsonPath('status', 'open');
+});
+
+it('lets a player see their own tournament registrations, not another players', function () {
+    $player = userWithRole('player');
+    $otherPlayer = userWithRole('player');
+    $coach = userWithRole('coach');
+    $organizer = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Basketball']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $organizer->id,
+        'sport_id' => $sport->id,
+        'name' => 'Open Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(),
+        'status' => 'open',
+    ]);
+
+    TournamentRegistration::create([
+        'tournament_id' => $tournament->id,
+        'user_id' => $player->id,
+        'registered_by' => $coach->id,
+        'status' => 'pending',
+    ]);
+    TournamentRegistration::create([
+        'tournament_id' => $tournament->id,
+        'user_id' => $otherPlayer->id,
+        'registered_by' => $coach->id,
+        'status' => 'pending',
+    ]);
+
+    $mine = $this->actingAs($player)->getJson('/api/tournament-registrations/mine-as-player')->assertOk();
+
+    expect($mine->json())->toHaveCount(1);
+    expect($mine->json('0.tournament.id'))->toBe($tournament->id);
+    expect($mine->json('0.registered_by.id'))->toBe($coach->id);
 });
 
 it('denies cancelling another players matchmaking request', function () {

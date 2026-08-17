@@ -14,6 +14,66 @@ it('denies tournament creation and match scoring to a non-organizer role', funct
     ])->assertForbidden();
 });
 
+it('auto-starts an open tournament past its start time the next time tournaments are listed', function () {
+    $organizer = userWithRole('organizer');
+    $player = userWithRole('player');
+    $sport = Sport::create(['name' => 'Basketball']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $organizer->id,
+        'sport_id' => $sport->id,
+        'name' => 'Auto-Start Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->subMinute(),
+        'status' => 'open',
+    ]);
+
+    foreach (range(1, 2) as $i) {
+        TournamentRegistration::create([
+            'tournament_id' => $tournament->id,
+            'user_id' => userWithRole('player')->id,
+            'status' => 'pending',
+        ]);
+    }
+
+    $this->actingAs($organizer)->getJson('/api/tournaments')->assertOk();
+
+    $tournament->refresh();
+    expect($tournament->status)->toBe('in_progress');
+    expect($tournament->bracket)->not->toBeNull();
+    expect($tournament->bracket->matches)->toHaveCount(1);
+
+    // A player relies on 'open' to know they can still join — this must
+    // never happen while an organizer just deep-links a tournament page.
+    $this->assertDatabaseMissing('tournaments', ['id' => $tournament->id, 'status' => 'open']);
+});
+
+it('does not auto-start an open tournament past its start time with fewer than two registrants', function () {
+    $organizer = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Basketball']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $organizer->id,
+        'sport_id' => $sport->id,
+        'name' => 'Understaffed Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->subMinute(),
+        'status' => 'open',
+    ]);
+
+    TournamentRegistration::create([
+        'tournament_id' => $tournament->id,
+        'user_id' => userWithRole('player')->id,
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($organizer)->getJson('/api/tournaments')->assertOk();
+
+    $tournament->refresh();
+    expect($tournament->status)->toBe('open');
+    expect($tournament->bracket)->toBeNull();
+});
+
 it('creates a tournament, generates a bracket, and plays it through to completion via HTTP', function () {
     $organizer = userWithRole('organizer');
     $sport = Sport::create(['name' => 'Basketball']);

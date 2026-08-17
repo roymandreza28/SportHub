@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\SystemMetricUpdated;
 use App\Models\Venue;
+use App\Support\Broadcasting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -98,7 +99,7 @@ class VenueController extends Controller
             return $venue;
         });
 
-        SystemMetricUpdated::dispatch('total_venues', Venue::count());
+        Broadcasting::safely(fn () => SystemMetricUpdated::dispatch('total_venues', Venue::count()));
 
         return response()->json($venue->fresh(['courts.sports', 'equipment']), 201);
     }

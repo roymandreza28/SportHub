@@ -7,32 +7,72 @@ use App\Events\RoundAdvanced;
 use App\Models\Bracket;
 use App\Models\GameMatch;
 use App\Models\Tournament;
+use App\Support\Broadcasting;
+use App\Support\MatchParticipants;
 use Illuminate\Support\Collection;
 
 class BracketService
 {
+    // No queue/scheduler infrastructure runs in this app's deployment, so
+    // there's no cron ticking down a countdown — instead this runs
+    // opportunistically wherever tournaments are listed/read (see
+    // TournamentController::index()/bracket()), catching any tournament
+    // whose scheduled start time has passed while it was still open for
+    // registration and kicking off its bracket automatically. Seeding order
+    // is whatever generate() below already does — a shuffle, never
+    // registration order — so this doesn't need its own randomization.
+    public function autoStartExpired(): void
+    {
+        Tournament::query()
+            ->where('status', 'open')
+            ->where('starts_at', '<=', now())
+            ->whereDoesntHave('bracket')
+            ->get()
+            ->each(function (Tournament $tournament) {
+                $registeredCount = $tournament->registrations()->whereIn('status', ['pending', 'confirmed'])->count();
+
+                // Too few registrants to form even one match — leave it open
+                // rather than generating a broken/empty bracket. It'll be
+                // picked up again on the next read once more people join.
+                if ($registeredCount < 2) {
+                    return;
+                }
+
+                $this->generate($tournament);
+                $tournament->update(['status' => 'in_progress']);
+            });
+    }
+
     public function generate(Tournament $tournament): Bracket
     {
-        $playerIds = $tournament->registrations()
+        $isTeamTournament = $tournament->sport_format_id !== null;
+
+        $participantIds = $tournament->registrations()
             ->whereIn('status', ['pending', 'confirmed'])
-            ->pluck('user_id')
+            ->pluck($isTeamTournament ? 'team_id' : 'user_id')
             ->shuffle()
             ->values();
 
         $bracket = $tournament->bracket()->create(['current_round' => 1]);
 
-        match ($tournament->format) {
-            'round_robin' => $this->generateRoundRobin($bracket, $playerIds),
-            'group_stage' => $this->generateGroupStage($bracket, $playerIds),
-            'double_elimination' => $this->generateDoubleElimination($bracket, $playerIds),
-            'swiss' => $this->generateSwiss($bracket, $playerIds),
-            default => $this->generateSingleElimination($bracket, $playerIds),
-        };
+        if ($isTeamTournament) {
+            // Team tournaments are single_elimination-only for now (enforced
+            // at tournament creation) — no other format branch needed here.
+            $this->generateSingleElimination($bracket, $participantIds, 1, true);
+        } else {
+            match ($tournament->format) {
+                'round_robin' => $this->generateRoundRobin($bracket, $participantIds),
+                'group_stage' => $this->generateGroupStage($bracket, $participantIds),
+                'double_elimination' => $this->generateDoubleElimination($bracket, $participantIds),
+                'swiss' => $this->generateSwiss($bracket, $participantIds),
+                default => $this->generateSingleElimination($bracket, $participantIds),
+            };
+        }
 
         $bracket->update(['structure' => $this->buildStructure($bracket)]);
 
         $bracket = $bracket->fresh();
-        BracketUpdated::dispatch($bracket);
+        Broadcasting::safely(fn () => BracketUpdated::dispatch($bracket));
 
         $this->notifyParticipants($tournament, "The bracket for {$tournament->name} is set — check your matchup!");
 
@@ -141,7 +181,7 @@ class BracketService
 
     // ---- Single elimination (also serves group_stage's knockout phase) ----
 
-    protected function generateSingleElimination(Bracket $bracket, Collection $playerIds, int $startRound = 1): void
+    protected function generateSingleElimination(Bracket $bracket, Collection $playerIds, int $startRound = 1, bool $teamMode = false): void
     {
         $count = max($playerIds->count(), 2);
         $bracketSize = 2 ** (int) ceil(log($count, 2));
@@ -166,6 +206,10 @@ class BracketService
         }
         $slots = collect($slots);
 
+        $aField = $teamMode ? 'participant_a_team_id' : 'participant_a_id';
+        $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
+        $winnerField = $teamMode ? 'winner_team_id' : 'winner_id';
+
         $completedByeMatches = [];
 
         for ($i = 0; $i < $roundCount; $i++) {
@@ -176,10 +220,10 @@ class BracketService
 
             $match = $bracket->matches()->create([
                 'round' => $startRound,
-                'participant_a_id' => $a,
-                'participant_b_id' => $b,
+                $aField => $a,
+                $bField => $b,
                 'status' => $isBye ? 'completed' : 'scheduled',
-                'winner_id' => $winnerId,
+                $winnerField => $winnerId,
             ]);
 
             if ($isBye && $winnerId) {
@@ -315,7 +359,7 @@ class BracketService
         };
 
         $bracket->update(['structure' => $this->buildStructure($bracket)]);
-        BracketUpdated::dispatch($bracket->fresh());
+        Broadcasting::safely(fn () => BracketUpdated::dispatch($bracket->fresh()));
     }
 
     private function completeDoubleElimination(Tournament $tournament): void
@@ -546,7 +590,7 @@ class BracketService
 
         if ($roundMatches->contains(fn (GameMatch $m) => $m->status !== 'completed')) {
             $bracket->update(['structure' => $this->buildStructure($bracket)]);
-            BracketUpdated::dispatch($bracket->fresh());
+            Broadcasting::safely(fn () => BracketUpdated::dispatch($bracket->fresh()));
 
             return;
         }
@@ -557,7 +601,7 @@ class BracketService
         if ($currentRound >= $totalRounds) {
             $tournament->update(['status' => 'completed']);
             $bracket->update(['structure' => $this->buildStructure($bracket)]);
-            BracketUpdated::dispatch($bracket->fresh());
+            Broadcasting::safely(fn () => BracketUpdated::dispatch($bracket->fresh()));
 
             $this->notifyParticipants($tournament, "{$tournament->name} has ended — thanks for playing!");
 
@@ -573,8 +617,8 @@ class BracketService
             'structure' => $this->buildStructure($bracket),
         ]);
 
-        BracketUpdated::dispatch($bracket->fresh());
-        RoundAdvanced::dispatch($tournament->id, $nextRound);
+        Broadcasting::safely(fn () => BracketUpdated::dispatch($bracket->fresh()));
+        Broadcasting::safely(fn () => RoundAdvanced::dispatch($tournament->id, $nextRound));
         $this->notifyParticipants($tournament, "Round {$nextRound} has started in {$tournament->name}.");
 
         $byeMatches = $bracket->matches()->where('bracket_type', 'swiss')->where('round', $nextRound)
@@ -643,7 +687,7 @@ class BracketService
         if ($tournament->format === 'group_stage' && $match->group_number !== null) {
             $this->maybeStartGroupKnockout($bracket);
             $bracket->update(['structure' => $this->buildStructure($bracket)]);
-            BracketUpdated::dispatch($bracket->fresh());
+            Broadcasting::safely(fn () => BracketUpdated::dispatch($bracket->fresh()));
 
             return;
         }
@@ -672,7 +716,7 @@ class BracketService
         if ($nextRoundMatches->isEmpty()) {
             $tournament->update(['status' => 'completed']);
             $bracket->update(['structure' => $this->buildStructure($bracket)]);
-            BracketUpdated::dispatch($bracket->fresh());
+            Broadcasting::safely(fn () => BracketUpdated::dispatch($bracket->fresh()));
 
             $this->notifyParticipants($tournament, "{$tournament->name} has ended — thanks for playing!");
 
@@ -680,8 +724,14 @@ class BracketService
         }
 
         $nextMatch = $nextRoundMatches[intdiv($index, 2)];
-        $slot = $index % 2 === 0 ? 'participant_a_id' : 'participant_b_id';
-        $nextMatch->update([$slot => $match->winner_id]);
+        $isTeamTournament = $tournament->sport_format_id !== null;
+        $slot = match (true) {
+            $isTeamTournament && $index % 2 === 0 => 'participant_a_team_id',
+            $isTeamTournament => 'participant_b_team_id',
+            $index % 2 === 0 => 'participant_a_id',
+            default => 'participant_b_id',
+        };
+        $nextMatch->update([$slot => $isTeamTournament ? $match->winner_team_id : $match->winner_id]);
 
         $didAdvanceRound = $match->round + 1 > $bracket->current_round;
 
@@ -690,20 +740,29 @@ class BracketService
             'structure' => $this->buildStructure($bracket),
         ]);
 
-        BracketUpdated::dispatch($bracket->fresh());
+        Broadcasting::safely(fn () => BracketUpdated::dispatch($bracket->fresh()));
 
         if ($didAdvanceRound) {
-            RoundAdvanced::dispatch($tournament->id, $match->round + 1);
+            Broadcasting::safely(fn () => RoundAdvanced::dispatch($tournament->id, $match->round + 1));
             $this->notifyParticipants($tournament, "Round {$nextMatch->round} has started in {$tournament->name}.");
         }
     }
 
     // Every registrant gets notified, not just the two players in the match
     // that triggered the advance — "your tournament moved forward" is
-    // relevant to the whole field, not just whoever just played.
+    // relevant to the whole field, not just whoever just played. For a team
+    // tournament that means every accepted member of every registered team,
+    // not just the team's captain.
     private function notifyParticipants(Tournament $tournament, string $message): void
     {
-        $tournament->registrations()->pluck('user_id')->unique()->each(
+        $userIds = $tournament->sport_format_id !== null
+            ? $tournament->registrations()->with('team.members')->get()
+                ->flatMap(fn ($registration) => $registration->team
+                    ?->members->where('status', 'accepted')->pluck('user_id') ?? collect())
+                ->unique()
+            : $tournament->registrations()->pluck('user_id')->unique();
+
+        $userIds->each(
             fn ($userId) => NotificationService::send($userId, 'tournament_update', [
                 'tournament_id' => $tournament->id,
                 'tournament_name' => $tournament->name,
@@ -719,8 +778,13 @@ class BracketService
             // `structure` blob (not the sibling `matches` relation), so
             // participant/winner names have to be embedded here directly —
             // without this eager load every card would only have raw ids to
-            // show.
-            ->with(['participantA:id,name', 'participantB:id,name', 'winner:id,name'])
+            // show. Team relations are loaded too so a team match's slots can
+            // be normalized to the same {id, name} shape as an individual
+            // match's — see MatchParticipants.
+            ->with([
+                'participantA:id,name', 'participantB:id,name', 'winner:id,name',
+                'participantATeam:id,name', 'participantBTeam:id,name', 'winnerTeam:id,name',
+            ])
             ->orderBy('round')
             ->orderBy('id')
             ->get()
@@ -732,13 +796,13 @@ class BracketService
                 'bracket_type' => $m->bracket_type,
                 'participant_a_id' => $m->participant_a_id,
                 'participant_b_id' => $m->participant_b_id,
-                'participant_a' => $m->participantA ? ['id' => $m->participantA->id, 'name' => $m->participantA->name] : null,
-                'participant_b' => $m->participantB ? ['id' => $m->participantB->id, 'name' => $m->participantB->name] : null,
+                'participant_a' => MatchParticipants::shape($m->participant_a_team_id, $m->participantATeam, $m->participantA),
+                'participant_b' => MatchParticipants::shape($m->participant_b_team_id, $m->participantBTeam, $m->participantB),
                 'score_a' => $m->score_a,
                 'score_b' => $m->score_b,
                 'status' => $m->status,
                 'winner_id' => $m->winner_id,
-                'winner' => $m->winner ? ['id' => $m->winner->id, 'name' => $m->winner->name] : null,
+                'winner' => MatchParticipants::shape($m->winner_team_id, $m->winnerTeam, $m->winner),
             ])->values())
             ->values()
             ->toArray();

@@ -6,6 +6,8 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import 'leaflet/dist/leaflet.css'
 import type { Venue } from '../../lib/venueApi'
 
+type MappableVenue = { id: number; name: string; address: string; latitude: string; longitude: string }
+
 // Vite doesn't resolve Leaflet's default marker image paths automatically — wire them explicitly.
 const defaultIcon = L.icon({
   iconUrl: markerIcon,
@@ -17,7 +19,7 @@ const defaultIcon = L.icon({
   shadowSize: [41, 41],
 })
 
-export function VenueMap({ venues, onSelect }: { venues: Venue[]; onSelect?: (venue: Venue) => void }) {
+export function VenueMap<T extends MappableVenue = Venue>({ venues, onSelect }: { venues: T[]; onSelect?: (venue: T) => void }) {
   // Falls back to Morong, Rizal when there are no venues yet.
   const center: [number, number] =
     venues.length > 0 ? [Number(venues[0].latitude), Number(venues[0].longitude)] : [14.5192, 121.2331]

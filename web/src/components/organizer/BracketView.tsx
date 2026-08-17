@@ -26,8 +26,8 @@ function MatchCard({
   onClick?: () => void
   cardRef?: (el: HTMLDivElement | null) => void
 }) {
-  const aDetermined = !!match.participant_a_id
-  const bDetermined = !!match.participant_b_id
+  const aDetermined = !!match.participant_a
+  const bDetermined = !!match.participant_b
   const isOpen = !aDetermined && !bDetermined
   const aName = match.participant_a?.name ?? 'TBD'
   const bName = match.participant_b?.name ?? 'TBD'
@@ -52,7 +52,7 @@ function MatchCard({
           className={`flex justify-between ${
             !aDetermined
               ? 'italic text-slate-400'
-              : match.winner_id === match.participant_a_id
+              : match.winner && match.winner.id === match.participant_a?.id
                 ? 'font-semibold text-teal-700'
                 : 'text-slate-700'
           }`}
@@ -64,7 +64,7 @@ function MatchCard({
           className={`mt-1 flex justify-between ${
             !bDetermined
               ? 'italic text-slate-400'
-              : match.winner_id === match.participant_b_id
+              : match.winner && match.winner.id === match.participant_b?.id
                 ? 'font-semibold text-teal-700'
                 : 'text-slate-700'
           }`}

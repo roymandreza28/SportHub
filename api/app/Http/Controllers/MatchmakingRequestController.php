@@ -10,6 +10,7 @@ use App\Models\SportFormat;
 use App\Models\Team;
 use App\Services\MatchmakingCleanupService;
 use App\Services\NotificationService;
+use App\Support\Broadcasting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -129,7 +130,7 @@ class MatchmakingRequestController extends Controller
                 $candidate->update(['status' => 'matched']);
                 $mine->update(['status' => 'matched']);
 
-                MatchmakingPairFound::dispatch($candidate->fresh(), $mine->fresh());
+                Broadcasting::safely(fn () => MatchmakingPairFound::dispatch($candidate->fresh(), $mine->fresh()));
 
                 $sportName = Sport::find($data['sport_id'])?->name;
 

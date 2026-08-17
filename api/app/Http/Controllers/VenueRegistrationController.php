@@ -9,6 +9,7 @@ use App\Models\Venue;
 use App\Models\VenueRegistration;
 use App\Services\BookingConversationCleanupService;
 use App\Services\NotificationService;
+use App\Support\Broadcasting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +27,7 @@ class VenueRegistrationController extends Controller
 
         return $request->user()->venueRegistrations()
             ->with([
-                'venue' => fn ($q) => $q->withTrashed()->select('id', 'name'),
+                'venue' => fn ($q) => $q->withTrashed()->select('id', 'name', 'address', 'latitude', 'longitude'),
                 'court:id,name',
                 'conversation:id,venue_registration_id',
             ])
@@ -86,7 +87,7 @@ class VenueRegistrationController extends Controller
             'status' => 'pending',
         ]);
 
-        VenueRegistrationUpdated::dispatch($registration);
+        Broadcasting::safely(fn () => VenueRegistrationUpdated::dispatch($registration));
 
         return response()->json($registration->load('venue:id,name', 'court:id,name'), 201);
     }
@@ -112,7 +113,7 @@ class VenueRegistrationController extends Controller
             ]);
         }
 
-        VenueRegistrationUpdated::dispatch($venueRegistration->fresh());
+        Broadcasting::safely(fn () => VenueRegistrationUpdated::dispatch($venueRegistration->fresh()));
 
         return $venueRegistration->load('user:id,name,email', 'court:id,name', 'conversation:id,venue_registration_id');
     }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\ChatMessageSent;
 use App\Models\Livestream;
+use App\Support\Broadcasting;
 use Illuminate\Http\Request;
 
 class ChatMessageController extends Controller
@@ -29,7 +30,7 @@ class ChatMessageController extends Controller
 
         $message->load('user:id,name');
 
-        ChatMessageSent::dispatch($message);
+        Broadcasting::safely(fn () => ChatMessageSent::dispatch($message));
 
         return response()->json($message, 201);
     }

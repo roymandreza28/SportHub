@@ -3,6 +3,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { updateMatchScore, updateMatchSets, type BracketMatch, type SetScore, type Tournament } from '../../lib/organizerApi'
 import { echo } from '../../lib/echo'
 import { buttonPrimary, buttonSecondary, buttonSuccess } from '../../lib/formStyles'
+import { BasketballScoreboard } from './BasketballScoreboard'
+import { Basketball3x3Scoreboard } from './Basketball3x3Scoreboard'
+import { VolleyballScoreboard } from './VolleyballScoreboard'
+import { BadmintonScoreboard } from './BadmintonScoreboard'
+import { PickleballScoreboard } from './PickleballScoreboard'
+import { TableTennisScoreboard } from './TableTennisScoreboard'
+import { TennisScoreboard } from './TennisScoreboard'
 
 type LiveUpdate = { score_a: number; score_b: number; status?: string }
 
@@ -26,7 +33,7 @@ function SetsScoreboard({
     setSets(match.sets ?? [])
   }, [match])
 
-  const canPlay = match.participant_a_id !== null && match.participant_b_id !== null
+  const canPlay = match.participant_a !== null && match.participant_b !== null
   const setsToWin = tournament.sets_to_win ?? 3
   const setsWonA = sets.filter((s) => s.score_a > s.score_b).length
   const setsWonB = sets.filter((s) => s.score_b > s.score_a).length
@@ -167,7 +174,7 @@ function SingleScoreScoreboard({
     }
   }, [match.id, tournamentId, queryClient])
 
-  const canPlay = match.participant_a_id !== null && match.participant_b_id !== null
+  const canPlay = match.participant_a !== null && match.participant_b !== null
 
   const save = useMutation({
     mutationFn: (status?: 'live' | 'completed') => updateMatchScore(match.id, { score_a: scoreA, score_b: scoreB, status }),
@@ -244,6 +251,41 @@ export function ScoreboardLive({
   tournament?: Tournament
   onClose: () => void
 }) {
+  // Basketball and volleyball get sport-accurate scoreboards; every other
+  // sport keeps the generic single-score/best-of-sets boards below. The rich
+  // quarters/clock/foul-bonus basketball board assumes NBA/FIBA-style 5v5
+  // rules, so it only applies to 5v5 team tournaments — 3x3 gets its own
+  // FIBA-3x3-rules board below (it's a separate discipline, not small-sided
+  // 5v5), and individual basketball tournaments fall back to the generic
+  // board further down.
+  if (tournament?.sport.name === 'Basketball' && tournament.sport_format?.players_per_side === 5) {
+    return <BasketballScoreboard match={match} tournamentId={tournamentId} onClose={onClose} />
+  }
+
+  if (tournament?.sport.name === 'Basketball' && tournament.sport_format?.players_per_side === 3) {
+    return <Basketball3x3Scoreboard match={match} tournamentId={tournamentId} onClose={onClose} />
+  }
+
+  if (tournament?.sport.name === 'Volleyball') {
+    return <VolleyballScoreboard match={match} tournament={tournament} tournamentId={tournamentId} onClose={onClose} />
+  }
+
+  if (tournament?.sport.name === 'Badminton') {
+    return <BadmintonScoreboard match={match} tournament={tournament} tournamentId={tournamentId} onClose={onClose} />
+  }
+
+  if (tournament?.sport.name === 'Pickleball') {
+    return <PickleballScoreboard match={match} tournament={tournament} tournamentId={tournamentId} onClose={onClose} />
+  }
+
+  if (tournament?.sport.name === 'Table Tennis') {
+    return <TableTennisScoreboard match={match} tournament={tournament} tournamentId={tournamentId} onClose={onClose} />
+  }
+
+  if (tournament?.sport.name === 'Tennis') {
+    return <TennisScoreboard match={match} tournament={tournament} tournamentId={tournamentId} onClose={onClose} />
+  }
+
   if (tournament?.scoring_type === 'best_of_sets') {
     return <SetsScoreboard match={match} tournament={tournament} tournamentId={tournamentId} onClose={onClose} />
   }

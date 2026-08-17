@@ -63,6 +63,35 @@ it('makes a freshly-created tournament visible to coaches only after the organiz
         ->assertCreated();
 });
 
+it('lists only the registrations a coach created, not registrations made by other coaches', function () {
+    $coach = userWithRole('coach');
+    $otherCoach = userWithRole('coach');
+    $player = userWithRole('player');
+    $otherPlayer = userWithRole('player');
+    $organizer = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Basketball']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $organizer->id,
+        'sport_id' => $sport->id,
+        'name' => 'Open Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(),
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $player->id])
+        ->assertCreated();
+    $this->actingAs($otherCoach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $otherPlayer->id])
+        ->assertCreated();
+
+    $mine = $this->actingAs($coach)->getJson('/api/tournament-registrations/mine')->assertOk();
+
+    expect($mine->json())->toHaveCount(1);
+    expect($mine->json('0.user.id'))->toBe($player->id);
+    expect($mine->json('0.tournament.id'))->toBe($tournament->id);
+});
+
 it('denies tournament registration to a coach whose account is still pending verification', function () {
     $coach = userWithRole('coach');
     $coach->update(['verification_status' => 'pending']);

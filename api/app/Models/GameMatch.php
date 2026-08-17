@@ -12,7 +12,8 @@ class GameMatch extends Model
 
     protected $fillable = [
         'bracket_id', 'round', 'group_number', 'bracket_type', 'bracket_position', 'participant_a_id', 'participant_b_id',
-        'score_a', 'score_b', 'sets', 'status', 'court_id', 'scheduled_at', 'winner_id',
+        'participant_a_team_id', 'participant_b_team_id', 'score_a', 'score_b', 'sets', 'status', 'court_id',
+        'scheduled_at', 'winner_id', 'winner_team_id',
     ];
 
     protected function casts(): array
@@ -41,6 +42,21 @@ class GameMatch extends Model
     public function winner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'winner_id');
+    }
+
+    public function participantATeam(): BelongsTo
+    {
+        return $this->belongsTo(Team::class, 'participant_a_team_id');
+    }
+
+    public function participantBTeam(): BelongsTo
+    {
+        return $this->belongsTo(Team::class, 'participant_b_team_id');
+    }
+
+    public function winnerTeam(): BelongsTo
+    {
+        return $this->belongsTo(Team::class, 'winner_team_id');
     }
 
     public function court(): BelongsTo

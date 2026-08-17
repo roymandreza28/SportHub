@@ -1,23 +1,33 @@
 import { useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchTournaments, registerPlayerForTournament, type PlayerSearchResult } from '../../lib/coachApi'
 import { PlayerSearchPicker } from './PlayerSearchPicker'
 import { useAuth } from '../../lib/AuthContext'
 import { buttonPrimary, fieldGroup, label, select } from '../../lib/formStyles'
 
-export function TournamentRegistrationForm() {
+export function TournamentRegistrationForm({
+  tournamentId: fixedTournamentId,
+  onRegistered,
+}: { tournamentId?: number; onRegistered?: () => void } = {}) {
   const { user } = useAuth()
   const isVerified = user?.verification_status === 'verified'
-  const { data: tournaments } = useQuery({ queryKey: ['tournaments', 'open'], queryFn: () => fetchTournaments('open') })
-  const [tournamentId, setTournamentId] = useState<number | ''>('')
+  const { data: tournaments } = useQuery({
+    queryKey: ['tournaments', 'open'],
+    queryFn: () => fetchTournaments('open'),
+    enabled: !fixedTournamentId,
+  })
+  const [tournamentId, setTournamentId] = useState<number | ''>(fixedTournamentId ?? '')
   const [player, setPlayer] = useState<PlayerSearchResult | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const queryClient = useQueryClient()
 
   const mutation = useMutation({
     mutationFn: () => registerPlayerForTournament(Number(tournamentId), player!.id),
     onSuccess: () => {
       setMessage({ type: 'success', text: `Registered ${player?.name}.` })
       setPlayer(null)
+      queryClient.invalidateQueries({ queryKey: ['coach', 'tournament-registrations', 'mine'] })
+      onRegistered?.()
     },
     onError: (err: unknown) => {
       const text =
@@ -29,21 +39,23 @@ export function TournamentRegistrationForm() {
 
   return (
     <div className="flex max-w-md flex-col gap-4">
-      <div className={fieldGroup}>
-        <label className={label}>Tournament</label>
-        <select
-          value={tournamentId}
-          onChange={(e) => setTournamentId(e.target.value ? Number(e.target.value) : '')}
-          className={select}
-        >
-          <option value="">Choose a tournament...</option>
-          {tournaments?.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name} ({t.sport.name})
-            </option>
-          ))}
-        </select>
-      </div>
+      {!fixedTournamentId && (
+        <div className={fieldGroup}>
+          <label className={label}>Tournament</label>
+          <select
+            value={tournamentId}
+            onChange={(e) => setTournamentId(e.target.value ? Number(e.target.value) : '')}
+            className={select}
+          >
+            <option value="">Choose a tournament...</option>
+            {tournaments?.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} ({t.sport.name})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className={fieldGroup}>
         <label className={label}>Player</label>

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\User;
 use App\Services\NotificationService;
+use App\Support\Broadcasting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -161,7 +162,7 @@ class AdminUserController extends Controller
         AuditLog::record($request->user(), 'facilitator.created', $facilitator);
 
         $facilitatorCount = User::role('venue_facilitator')->count();
-        SystemMetricUpdated::dispatch('facilitator_count', $facilitatorCount);
+        Broadcasting::safely(fn () => SystemMetricUpdated::dispatch('facilitator_count', $facilitatorCount));
 
         return response()->json($this->withRoles($facilitator), 201);
     }

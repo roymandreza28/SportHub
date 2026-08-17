@@ -162,6 +162,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/player-profile', [PlayerProfileController::class, 'update']);
 
         Route::get('/skill-levels/mine', [SkillLevelController::class, 'mine']);
+        Route::get('/tournament-registrations/mine-as-player', [TournamentRegistrationController::class, 'minePlayer']);
     });
 
     // Matchmaking and the teams it depends on for multi-player formats are
@@ -174,6 +175,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/teams/mine', [TeamController::class, 'mine']);
         Route::post('/teams', [TeamController::class, 'store']);
         Route::post('/teams/{team}/invite', [TeamController::class, 'invite']);
+        Route::post('/teams/{team}/members', [TeamController::class, 'addMember']);
         Route::delete('/teams/{team}', [TeamController::class, 'destroy']);
         Route::delete('/teams/{team}/members/{teamMember}', [TeamController::class, 'removeMember']);
         Route::post('/team-members/{teamMember}/accept', [TeamController::class, 'accept']);
@@ -193,6 +195,8 @@ Route::middleware('auth:sanctum')->group(function () {
         });
 
         Route::post('/tournaments/{tournament}/registrations', [TournamentRegistrationController::class, 'store']);
+        Route::post('/tournaments/{tournament}/team-registrations', [TournamentRegistrationController::class, 'storeTeam']);
+        Route::get('/tournament-registrations/mine', [TournamentRegistrationController::class, 'mine']);
 
         Route::get('/evaluations', [EvaluationController::class, 'index']);
         Route::post('/evaluations', [EvaluationController::class, 'store']);
@@ -216,6 +220,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // by MatchPolicy::updateScore() to that specific tournament assignment.
     Route::middleware('role:organizer|venue_organizer|admin')->group(function () {
         Route::patch('/matches/{match}/score', [MatchController::class, 'updateScore']);
+        Route::get('/matches/{match}/roster', [MatchController::class, 'roster']);
     });
 
     // Livestream organizers feed camera footage into whichever tournament's

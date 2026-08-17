@@ -41,6 +41,13 @@ export async function inviteToTeam(teamId: number, userId: number) {
   return data
 }
 
+// Coach-only: adds a player straight to the roster, skipping the
+// friend-gated invite/accept flow inviteToTeam() uses.
+export async function addTeamMemberDirect(teamId: number, userId: number) {
+  const { data } = await api.post<TeamMemberRef>(`/api/teams/${teamId}/members`, { user_id: userId })
+  return data
+}
+
 export async function acceptTeamInvite(teamMemberId: number) {
   const { data } = await api.post(`/api/team-members/${teamMemberId}/accept`)
   return data

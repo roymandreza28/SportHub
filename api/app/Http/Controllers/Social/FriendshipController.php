@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Friendship;
 use App\Models\User;
 use App\Services\NotificationService;
+use App\Support\Broadcasting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -82,7 +83,7 @@ class FriendshipController extends Controller
 
             $friendship = $friendship->fresh(['requester']);
 
-            FriendRequestSent::dispatch($friendship);
+            Broadcasting::safely(fn () => FriendRequestSent::dispatch($friendship));
 
             NotificationService::send($addressee, 'friend_request', [
                 'friendship_id' => $friendship->id,
@@ -102,7 +103,7 @@ class FriendshipController extends Controller
 
         $friendship = $friendship->fresh(['addressee', 'requester']);
 
-        FriendRequestAccepted::dispatch($friendship);
+        Broadcasting::safely(fn () => FriendRequestAccepted::dispatch($friendship));
 
         NotificationService::send($friendship->requester, 'friend_request_accepted', [
             'friendship_id' => $friendship->id,

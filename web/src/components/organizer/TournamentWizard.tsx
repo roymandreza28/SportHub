@@ -7,7 +7,7 @@ import {
   type ScoringType,
   type TournamentFormat,
 } from '../../lib/organizerApi'
-import { fetchSports } from '../../lib/venueApi'
+import { fetchSports, fetchSportFormats } from '../../lib/venueApi'
 import { buttonPrimary, buttonSuccess, fieldGroup, input, label, select } from '../../lib/formStyles'
 
 const ALL_FORMATS: TournamentFormat[] = ['single_elimination', 'double_elimination', 'round_robin', 'group_stage', 'swiss']
@@ -87,7 +87,13 @@ export function TournamentWizard() {
   const { data: sports } = useQuery({ queryKey: ['sports'], queryFn: fetchSports })
   const { data: organizers } = useQuery({ queryKey: ['organizer', 'available-organizers'], queryFn: fetchAvailableOrganizers })
 
+  // Collapsed by default — the full form is a dozen-plus fields, which used
+  // to sit permanently expanded above the tournament list every time this
+  // tab was opened, even just to check on existing tournaments.
+  const [open, setOpen] = useState(false)
+
   const [sportId, setSportId] = useState<number | ''>('')
+  const [sportFormatId, setSportFormatId] = useState<number | ''>('')
   const [name, setName] = useState('')
   const [format, setFormat] = useState<TournamentFormat>('single_elimination')
   const [scoringChoice, setScoringChoice] = useState(SCORING_OPTIONS[0].value)
@@ -100,6 +106,14 @@ export function TournamentWizard() {
   const selectedSportName = sports?.find((s) => s.id === sportId)?.name
   const availableFormats = (selectedSportName && SPORT_FORMATS[selectedSportName]) || ALL_FORMATS
 
+  const { data: sportFormats } = useQuery({
+    queryKey: ['sport-formats', sportId],
+    queryFn: () => fetchSportFormats(sportId ? Number(sportId) : undefined),
+    enabled: !!sportId,
+  })
+  const teamFormats = (sportFormats ?? []).filter((f) => f.players_per_side > 1)
+  const isTeamTournament = sportFormatId !== ''
+
   // Keep the selected bracket type valid whenever the sport changes to one
   // that doesn't offer it (e.g. switching from Badminton's Swiss option to
   // Pickleball, which doesn't have Swiss).
@@ -110,11 +124,20 @@ export function TournamentWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSportName])
 
+  // Team tournaments only support single elimination for now — force it the
+  // moment a team format is chosen, matching what the backend enforces.
+  useEffect(() => {
+    if (isTeamTournament) {
+      setFormat('single_elimination')
+    }
+  }, [isTeamTournament])
+
   const scoring = SCORING_OPTIONS.find((s) => s.value === scoringChoice) ?? SCORING_OPTIONS[0]
 
   const createMutation = useMutation({
     mutationFn: () => createTournament({
       sport_id: Number(sportId),
+      sport_format_id: sportFormatId ? Number(sportFormatId) : undefined,
       name,
       format,
       starts_at: new Date(startsAt).toISOString(),
@@ -140,16 +163,32 @@ export function TournamentWizard() {
     onError: () => setMessage('Could not generate bracket (does it already have one, or no players registered?).'),
   })
 
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className={buttonPrimary}>
+        + Create tournament
+      </button>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="text-sm font-semibold text-slate-800">Create a tournament</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-800">Create a tournament</h3>
+        <button onClick={() => setOpen(false)} className="text-xs font-medium text-slate-500 hover:text-slate-700">
+          Minimize
+        </button>
+      </div>
 
       <div className="grid max-w-xl gap-4 sm:grid-cols-2">
         <div className={fieldGroup}>
           <label className={label}>Sport</label>
           <select
             value={sportId}
-            onChange={(e) => setSportId(e.target.value ? Number(e.target.value) : '')}
+            onChange={(e) => {
+              setSportId(e.target.value ? Number(e.target.value) : '')
+              setSportFormatId('')
+            }}
             className={select}
           >
             <option value="">Sport...</option>
@@ -161,16 +200,45 @@ export function TournamentWizard() {
           </select>
         </div>
         <div className={fieldGroup}>
+          <label className={label}>Team format</label>
+          <select
+            value={sportFormatId}
+            onChange={(e) => setSportFormatId(e.target.value ? Number(e.target.value) : '')}
+            disabled={!sportId}
+            className={select}
+          >
+            <option value="">Individual (no team)</option>
+            {teamFormats.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name} ({f.players_per_side} per side)
+              </option>
+            ))}
+          </select>
+          {sportId && teamFormats.length === 0 && (
+            <p className="text-xs text-slate-400">This sport has no multi-player formats.</p>
+          )}
+        </div>
+        <div className={fieldGroup}>
           <label className={label}>Bracket type</label>
-          <select value={format} onChange={(e) => setFormat(e.target.value as TournamentFormat)} className={select}>
-            {availableFormats.map((f) => (
+          <select
+            value={format}
+            onChange={(e) => setFormat(e.target.value as TournamentFormat)}
+            disabled={isTeamTournament}
+            className={select}
+          >
+            {(isTeamTournament ? (['single_elimination'] as TournamentFormat[]) : availableFormats).map((f) => (
               <option key={f} value={f}>
                 {FORMAT_LABELS[f]}
               </option>
             ))}
           </select>
-          {selectedSportName && FORMAT_NOTES[selectedSportName]?.[format] && (
-            <p className="text-xs text-slate-500">{FORMAT_NOTES[selectedSportName][format]}</p>
+          {isTeamTournament ? (
+            <p className="text-xs text-slate-500">Team tournaments only support single elimination for now.</p>
+          ) : (
+            selectedSportName &&
+            FORMAT_NOTES[selectedSportName]?.[format] && (
+              <p className="text-xs text-slate-500">{FORMAT_NOTES[selectedSportName][format]}</p>
+            )
           )}
         </div>
         <div className={`${fieldGroup} sm:col-span-2`}>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Social;
 use App\Events\ConversationMessageSent;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
+use App\Support\Broadcasting;
 use Illuminate\Http\Request;
 
 class ConversationMessageController extends Controller
@@ -31,7 +32,7 @@ class ConversationMessageController extends Controller
 
         $message->load('user:id,name');
 
-        ConversationMessageSent::dispatch($message);
+        Broadcasting::safely(fn () => ConversationMessageSent::dispatch($message));
 
         return response()->json($message, 201);
     }

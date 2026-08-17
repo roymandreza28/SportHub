@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Tournament extends Model
 {
     protected $fillable = [
-        'organizer_id', 'sport_id', 'name', 'format', 'starts_at', 'ends_at', 'venue_id', 'status',
+        'organizer_id', 'sport_id', 'sport_format_id', 'name', 'format', 'starts_at', 'ends_at', 'venue_id', 'status',
         'venue_organizer_id', 'livestream_organizer_id', 'scoring_type', 'sets_to_win',
     ];
 
@@ -30,6 +30,14 @@ class Tournament extends Model
     public function sport(): BelongsTo
     {
         return $this->belongsTo(Sport::class);
+    }
+
+    // Set only for a team tournament — the format (e.g. Basketball 5v5) that
+    // registrations/matches must use. Null means every registration/match
+    // slot is an individual player, unchanged from before teams existed.
+    public function sportFormat(): BelongsTo
+    {
+        return $this->belongsTo(SportFormat::class);
     }
 
     public function venue(): BelongsTo

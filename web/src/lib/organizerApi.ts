@@ -1,5 +1,5 @@
 import { api } from './api'
-import type { Sport } from './venueApi'
+import type { Sport, SportFormat } from './venueApi'
 
 export type TournamentFormat = 'single_elimination' | 'double_elimination' | 'round_robin' | 'group_stage' | 'swiss'
 export type TournamentStatus = 'draft' | 'open' | 'in_progress' | 'completed' | 'cancelled'
@@ -22,6 +22,11 @@ export type Tournament = {
   livestream_organizer?: { id: number; name: string } | null
   scoring_type: ScoringType
   sets_to_win: number | null
+  // Set only for a team tournament — every registration/match participant is
+  // a Team instead of an individual player. Null preserves today's
+  // individual-registration behavior unchanged.
+  sport_format_id: number | null
+  sport_format?: SportFormat | null
 }
 
 export type SetScore = { score_a: number; score_b: number }
@@ -91,6 +96,7 @@ export async function fetchOrganizerTournaments() {
 
 export async function createTournament(input: {
   sport_id: number
+  sport_format_id?: number
   name: string
   format: TournamentFormat
   starts_at: string
@@ -139,6 +145,15 @@ export async function updateMatchScore(
 
 export async function updateMatchSets(matchId: number, sets: SetScore[]) {
   const { data } = await api.patch<BracketMatch>(`/api/matches/${matchId}/score`, { sets })
+  return data
+}
+
+export type MatchRosterTeam = { id: number; name: string; members: { id: number; name: string }[] }
+
+export async function fetchMatchRoster(matchId: number) {
+  const { data } = await api.get<{ team_a: MatchRosterTeam | null; team_b: MatchRosterTeam | null }>(
+    `/api/matches/${matchId}/roster`
+  )
   return data
 }
 

@@ -9,6 +9,7 @@ use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
 use App\Services\NotificationService;
+use App\Support\Broadcasting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -55,16 +56,55 @@ class TeamController extends Controller
                 'status' => 'forming',
             ]);
 
-            $team->members()->create([
-                'user_id' => $user->id,
-                'status' => 'accepted',
-                'responded_at' => now(),
-            ]);
+            // A coach isn't one of the playing athletes — they manage the
+            // roster but never occupy one of its player_per_side slots, so
+            // unlike a player forming their own squad, the creator doesn't
+            // auto-join as a member here.
+            if (! $user->hasRole('coach')) {
+                $team->members()->create([
+                    'user_id' => $user->id,
+                    'status' => 'accepted',
+                    'responded_at' => now(),
+                ]);
+            }
 
             $team->refreshReadyStatus();
 
             return response()->json($team->fresh(['sport', 'sportFormat', 'members.user:id,name,email']), 201);
         });
+    }
+
+    // Coach-only direct roster add: unlike invite() (friend-gated, requires
+    // the invitee to accept), a coach can already register any player for a
+    // tournament without their prior consent — this mirrors that same
+    // authority for building a team roster.
+    public function addMember(Request $request, Team $team)
+    {
+        $this->authorize('manage', $team);
+        abort_unless($request->user()->hasRole('coach'), 403);
+
+        $data = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+        ]);
+
+        $player = User::findOrFail($data['user_id']);
+
+        abort_unless($request->user()->isFriendsWith($player), 422, 'You can only add friends to the team.');
+        abort_if($team->status === 'disbanded', 422, 'This team has been disbanded.');
+        // No max here, unlike invite()'s matchmaking-team cap — a tournament
+        // roster only needs to meet the format's minimum (players_per_side);
+        // the coach can keep adding bench/substitute players past it.
+        abort_if($team->members()->where('user_id', $data['user_id'])->exists(), 422, 'That player is already on the team.');
+
+        $member = $team->members()->create([
+            'user_id' => $data['user_id'],
+            'status' => 'accepted',
+            'responded_at' => now(),
+        ]);
+
+        $team->refreshReadyStatus();
+
+        return response()->json($member->fresh(['user:id,name,email', 'team.sportFormat']), 201);
     }
 
     public function invite(Request $request, Team $team)
@@ -98,7 +138,7 @@ class TeamController extends Controller
 
             $member = $member->fresh(['team.sport', 'team.sportFormat', 'team.captain']);
 
-            TeamInviteSent::dispatch($member);
+            Broadcasting::safely(fn () => TeamInviteSent::dispatch($member));
 
             NotificationService::send($invitee, 'team_invite', [
                 'team_member_id' => $member->id,
@@ -119,7 +159,7 @@ class TeamController extends Controller
         $teamMember->update(['status' => 'accepted', 'responded_at' => now()]);
         $teamMember->team->refreshReadyStatus();
 
-        TeamInviteResponded::dispatch($teamMember->fresh(['team', 'user']));
+        Broadcasting::safely(fn () => TeamInviteResponded::dispatch($teamMember->fresh(['team', 'user'])));
 
         return $teamMember->fresh(['team.sport', 'team.sportFormat']);
     }
@@ -130,7 +170,7 @@ class TeamController extends Controller
 
         $teamMember->update(['status' => 'declined', 'responded_at' => now()]);
 
-        TeamInviteResponded::dispatch($teamMember->fresh(['team', 'user']));
+        Broadcasting::safely(fn () => TeamInviteResponded::dispatch($teamMember->fresh(['team', 'user'])));
 
         return response()->noContent();
     }

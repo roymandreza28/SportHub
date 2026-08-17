@@ -6,12 +6,20 @@ use App\Events\MatchEventCreated;
 use App\Events\MatchStatusChanged;
 use App\Models\GameMatch;
 use App\Models\MatchEvent;
+use App\Models\Team;
 use App\Models\Tournament;
 use App\Services\BracketService;
+use App\Support\Broadcasting;
+use App\Support\MatchParticipants;
 use Illuminate\Http\Request;
 
 class MatchController extends Controller
 {
+    private const PARTICIPANT_RELATIONS = [
+        'participantA:id,name', 'participantB:id,name', 'winner:id,name',
+        'participantATeam:id,name', 'participantBTeam:id,name', 'winnerTeam:id,name',
+    ];
+
     public function updateScore(Request $request, GameMatch $match, BracketService $bracketService)
     {
         $this->authorize('updateScore', $match);
@@ -36,16 +44,26 @@ class MatchController extends Controller
             'payload' => ['score_a' => $match->score_a, 'score_b' => $match->score_b],
         ]);
 
-        MatchEventCreated::dispatch($matchEvent);
+        Broadcasting::safely(fn () => MatchEventCreated::dispatch($matchEvent));
 
         if (($data['status'] ?? null) === 'completed') {
-            $winnerId = match (true) {
-                $match->score_a > $match->score_b => $match->participant_a_id,
-                $match->score_b > $match->score_a => $match->participant_b_id,
-                default => null,
-            };
+            $isTeamMatch = $match->participant_a_team_id !== null;
 
-            $match->update(['winner_id' => $winnerId]);
+            if ($isTeamMatch) {
+                $winnerTeamId = match (true) {
+                    $match->score_a > $match->score_b => $match->participant_a_team_id,
+                    $match->score_b > $match->score_a => $match->participant_b_team_id,
+                    default => null,
+                };
+                $match->update(['winner_team_id' => $winnerTeamId]);
+            } else {
+                $winnerId = match (true) {
+                    $match->score_a > $match->score_b => $match->participant_a_id,
+                    $match->score_b > $match->score_a => $match->participant_b_id,
+                    default => null,
+                };
+                $match->update(['winner_id' => $winnerId]);
+            }
 
             // Always run, even on a tie (no winner): group_stage needs this
             // to know a group's matches are all done and start the knockout
@@ -53,9 +71,42 @@ class MatchController extends Controller
             $bracketService->advanceWinner($match->fresh());
         }
 
-        MatchStatusChanged::dispatch($match->fresh());
+        Broadcasting::safely(fn () => MatchStatusChanged::dispatch($match->fresh()));
 
-        return $match->fresh(['participantA:id,name', 'participantB:id,name', 'winner:id,name']);
+        return $this->respond($match->fresh(self::PARTICIPANT_RELATIONS));
+    }
+
+    // Powers the scoreboard's player-attribution UI (jersey numbers, "who
+    // scored"/"who fouled" pickers) — only meaningful for team matches, so
+    // an individual-tournament match just returns both sides null.
+    public function roster(GameMatch $match)
+    {
+        $this->authorize('updateScore', $match);
+
+        $match->load([
+            'participantATeam.members' => fn ($q) => $q->where('status', 'accepted')->with('user:id,name'),
+            'participantBTeam.members' => fn ($q) => $q->where('status', 'accepted')->with('user:id,name'),
+        ]);
+
+        $shape = fn (?Team $team) => $team ? [
+            'id' => $team->id,
+            'name' => $team->name,
+            'members' => $team->members->map(fn ($m) => ['id' => $m->user->id, 'name' => $m->user->name])->values(),
+        ] : null;
+
+        return [
+            'team_a' => $shape($match->participantATeam),
+            'team_b' => $shape($match->participantBTeam),
+        ];
+    }
+
+    private function respond(GameMatch $match)
+    {
+        return array_merge($match->toArray(), [
+            'participant_a' => MatchParticipants::shape($match->participant_a_team_id, $match->participantATeam, $match->participantA),
+            'participant_b' => MatchParticipants::shape($match->participant_b_team_id, $match->participantBTeam, $match->participantB),
+            'winner' => MatchParticipants::shape($match->winner_team_id, $match->winnerTeam, $match->winner),
+        ]);
     }
 
     // Table tennis's "Best of 5/7 Sets" and volleyball's "Best of Series" —
@@ -76,13 +127,17 @@ class MatchController extends Controller
         $setsWonA = collect($data['sets'])->filter(fn ($s) => $s['score_a'] > $s['score_b'])->count();
         $setsWonB = collect($data['sets'])->filter(fn ($s) => $s['score_b'] > $s['score_a'])->count();
         $isDecided = $setsWonA >= $tournament->sets_to_win || $setsWonB >= $tournament->sets_to_win;
+        $isTeamMatch = $match->participant_a_team_id !== null;
 
         $match->update([
             'sets' => $data['sets'],
             'score_a' => $setsWonA,
             'score_b' => $setsWonB,
             'status' => $isDecided ? 'completed' : 'live',
-            'winner_id' => $isDecided ? ($setsWonA > $setsWonB ? $match->participant_a_id : $match->participant_b_id) : null,
+            'winner_id' => (! $isTeamMatch && $isDecided)
+                ? ($setsWonA > $setsWonB ? $match->participant_a_id : $match->participant_b_id) : null,
+            'winner_team_id' => ($isTeamMatch && $isDecided)
+                ? ($setsWonA > $setsWonB ? $match->participant_a_team_id : $match->participant_b_team_id) : null,
         ]);
 
         $matchEvent = MatchEvent::create([
@@ -91,14 +146,14 @@ class MatchController extends Controller
             'payload' => ['score_a' => $setsWonA, 'score_b' => $setsWonB, 'sets' => $data['sets']],
         ]);
 
-        MatchEventCreated::dispatch($matchEvent);
+        Broadcasting::safely(fn () => MatchEventCreated::dispatch($matchEvent));
 
         if ($isDecided) {
             $bracketService->advanceWinner($match->fresh());
         }
 
-        MatchStatusChanged::dispatch($match->fresh());
+        Broadcasting::safely(fn () => MatchStatusChanged::dispatch($match->fresh()));
 
-        return $match->fresh(['participantA:id,name', 'participantB:id,name', 'winner:id,name']);
+        return $this->respond($match->fresh(self::PARTICIPANT_RELATIONS));
     }
 }

@@ -16,7 +16,8 @@ import {
 import { IconClipboard, IconHome, IconNewspaper, IconTarget, IconTrophy, IconUsers } from '../components/layout/icons'
 import { Newsfeed } from '../components/newsfeed/Newsfeed'
 import { MatchmakingPanel } from '../components/player/MatchmakingPanel'
-import { TournamentRegistrationForm } from '../components/coach/TournamentRegistrationForm'
+import { MyTournamentRegistrations } from '../components/coach/MyTournamentRegistrations'
+import { RegisterPlayerModal } from '../components/coach/RegisterPlayerModal'
 import { EvaluationForm } from '../components/coach/EvaluationForm'
 import { MyPosts } from '../components/social/MyPosts'
 import { FriendsList } from '../components/social/FriendsList'
@@ -25,14 +26,14 @@ import { useAuth } from '../lib/AuthContext'
 import { useChatUI } from '../lib/ChatUIContext'
 import { useProfileMediaMutations } from '../lib/useProfileMedia'
 import { extractErrorMessage } from '../lib/errors'
-import { buttonSecondary } from '../lib/formStyles'
+import { buttonPrimary, buttonSecondary } from '../lib/formStyles'
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'overview', label: 'Dashboard', icon: IconHome },
   { id: 'profile', label: 'Profile', icon: IconUsers },
   { id: 'newsfeed', label: 'Newsfeed', icon: IconNewspaper },
   { id: 'matchmaking', label: 'Matchmaking', icon: IconTarget },
-  { id: 'registrations', label: 'Tournament Registration', icon: IconTrophy },
+  { id: 'registrations', label: 'Tournament', icon: IconTrophy },
   { id: 'evaluations', label: 'Evaluations', icon: IconClipboard },
 ]
 
@@ -42,6 +43,8 @@ export function CoachPage() {
   const [active, setActive] = useState(searchParams.get('tab') ?? NAV_ITEMS[0].id)
   const { openChatWindow } = useChatUI()
   const { user } = useAuth()
+  const [showRegisterModal, setShowRegisterModal] = useState(false)
+  const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
 
   const { data: myProfile } = useQuery({
     queryKey: ['social', 'profile', user?.id],
@@ -77,7 +80,10 @@ export function CoachPage() {
             ))}
             action={
               <button
-                onClick={() => setActive('registrations')}
+                onClick={() => {
+                  setActive('registrations')
+                  setShowRegisterModal(true)
+                }}
                 className="text-sm font-medium text-teal-600 hover:text-teal-700"
               >
                 Register a player &rarr;
@@ -139,8 +145,19 @@ export function CoachPage() {
       )}
 
       {active === 'registrations' && (
-        <Section title="Tournament Registration" description="Enter a player into an open tournament.">
-          <TournamentRegistrationForm />
+        <Section
+          title="Tournament"
+          description="Tournaments your players are registered in, and their results."
+          action={
+            <button onClick={() => setShowRegisterModal(true)} className={buttonPrimary}>
+              Register for tournament
+            </button>
+          }
+        >
+          <MyTournamentRegistrations
+            selectedTournamentId={selectedTournamentId}
+            onSelectTournament={setSelectedTournamentId}
+          />
         </Section>
       )}
 
@@ -149,6 +166,8 @@ export function CoachPage() {
           <EvaluationForm />
         </Section>
       )}
+
+      {showRegisterModal && <RegisterPlayerModal onClose={() => setShowRegisterModal(false)} />}
     </DashboardShell>
   )
 }

@@ -2,7 +2,12 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import type { Venue } from '../lib/venueApi'
-import { fetchMySkillLevels, fetchMyMatchmakingRequests, fetchMyVenueRegistrations } from '../lib/playerApi'
+import {
+  fetchMySkillLevels,
+  fetchMyMatchmakingRequests,
+  fetchMyVenueRegistrations,
+  fetchMyTournamentRegistrationsAsPlayer,
+} from '../lib/playerApi'
 import { fetchProfile } from '../lib/socialApi'
 import {
   DashboardShell,
@@ -14,13 +19,14 @@ import {
   StatusBadge,
   type NavItem,
 } from '../components/layout/DashboardShell'
-import { IconCalendar, IconHome, IconMapPin, IconNewspaper, IconTarget, IconUsers } from '../components/layout/icons'
+import { IconCalendar, IconHome, IconMapPin, IconNewspaper, IconTarget, IconTrophy, IconUsers } from '../components/layout/icons'
 import { Newsfeed } from '../components/newsfeed/Newsfeed'
 import { VenueDirectory } from '../components/player/VenueDirectory'
 import { VenueRegistrationForm } from '../components/player/VenueRegistrationForm'
 import { PlayerProfileEditor } from '../components/player/PlayerProfileEditor'
 import { MatchmakingPanel } from '../components/player/MatchmakingPanel'
 import { MyBookings } from '../components/player/MyBookings'
+import { MyTournamentRegistrations } from '../components/player/MyTournamentRegistrations'
 import { MyPosts } from '../components/social/MyPosts'
 import { FriendsList } from '../components/social/FriendsList'
 import { ProfileHeaderCard } from '../components/social/ProfileHeaderCard'
@@ -35,12 +41,14 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'profile', label: 'Profile', icon: IconUsers },
   { id: 'newsfeed', label: 'Newsfeed', icon: IconNewspaper },
   { id: 'matchmaking', label: 'Matchmaking', icon: IconTarget },
+  { id: 'tournaments', label: 'Tournament', icon: IconTrophy },
   { id: 'bookings', label: 'Bookings', icon: IconCalendar },
   { id: 'venues', label: 'Venues', icon: IconMapPin },
 ]
 
 export function PlayerPage() {
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
+  const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
   const [searchParams] = useSearchParams()
   const [active, setActive] = useState(searchParams.get('tab') ?? NAV_ITEMS[0].id)
   const { openChatWindow } = useChatUI()
@@ -49,6 +57,10 @@ export function PlayerPage() {
   const { data: skillLevels } = useQuery({ queryKey: ['skill-levels', 'mine'], queryFn: fetchMySkillLevels })
   const { data: matchmaking } = useQuery({ queryKey: ['player', 'matchmaking'], queryFn: fetchMyMatchmakingRequests })
   const { data: bookings } = useQuery({ queryKey: ['player', 'venue-registrations'], queryFn: fetchMyVenueRegistrations })
+  const { data: tournamentRegistrations } = useQuery({
+    queryKey: ['player', 'tournament-registrations', 'mine'],
+    queryFn: fetchMyTournamentRegistrationsAsPlayer,
+  })
   const { data: myProfile } = useQuery({
     queryKey: ['social', 'profile', user?.id],
     queryFn: () => fetchProfile(user!.id),
@@ -57,9 +69,32 @@ export function PlayerPage() {
   const { avatarMutation, coverMutation } = useProfileMediaMutations(user?.id ?? 0)
 
   const openRequests = (matchmaking ?? []).filter((r) => r.status === 'open').length
-  const upcomingBookings = (bookings ?? [])
-    .filter((b) => b.status === 'pending' || b.status === 'approved')
-    .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
+
+  const now = Date.now()
+  type UpcomingEvent = { key: string; date: string; primary: string; secondary: string; status: string }
+
+  const upcomingBookingEvents: UpcomingEvent[] = (bookings ?? [])
+    .filter((b) => b.status === 'approved' && new Date(b.ends_at).getTime() > now)
+    .map((b) => ({
+      key: `booking-${b.id}`,
+      date: b.starts_at,
+      primary: b.court ? `${b.venue.name} — ${b.court.name}` : b.venue.name,
+      secondary: `${new Date(b.starts_at).toLocaleString()} — ${new Date(b.ends_at).toLocaleTimeString()}`,
+      status: b.status,
+    }))
+
+  const upcomingTournamentEvents: UpcomingEvent[] = (tournamentRegistrations ?? [])
+    .filter((r) => r.tournament.status !== 'completed' && r.tournament.status !== 'cancelled')
+    .map((r) => ({
+      key: `tournament-${r.tournament.id}`,
+      date: r.tournament.starts_at,
+      primary: r.tournament.name,
+      secondary: `${r.tournament.sport.name}${r.tournament.venue ? ` — ${r.tournament.venue.name}` : ''} — ${new Date(r.tournament.starts_at).toLocaleDateString()}`,
+      status: r.tournament.status,
+    }))
+
+  const upcomingEvents = [...upcomingBookingEvents, ...upcomingTournamentEvents]
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(0, 5)
 
   return (
@@ -78,16 +113,11 @@ export function PlayerPage() {
           </StatCardGrid>
 
           <ListPreview
-            title="My Upcoming Bookings"
-            description="Venue slots you've requested that haven't happened yet."
-            emptyText="No upcoming bookings — visit Venues to request one."
-            rows={upcomingBookings.map((b) => (
-              <ListRow
-                key={b.id}
-                primary={b.court ? `${b.venue.name} — ${b.court.name}` : b.venue.name}
-                secondary={`${new Date(b.starts_at).toLocaleString()} — ${new Date(b.ends_at).toLocaleTimeString()}`}
-                badge={<StatusBadge status={b.status} />}
-              />
+            title="My Upcoming Events"
+            description="Approved bookings and ongoing tournaments you're part of, soonest first."
+            emptyText="No upcoming events — visit Venues to request a booking."
+            rows={upcomingEvents.map((e) => (
+              <ListRow key={e.key} primary={e.primary} secondary={e.secondary} badge={<StatusBadge status={e.status} />} />
             ))}
             action={
               <button
@@ -155,6 +185,15 @@ export function PlayerPage() {
       {active === 'matchmaking' && (
         <Section title="Matchmaking" description="Find an opponent for a sport, live.">
           <MatchmakingPanel />
+        </Section>
+      )}
+
+      {active === 'tournaments' && (
+        <Section title="Tournament" description="Tournaments you're registered in, and their results.">
+          <MyTournamentRegistrations
+            selectedTournamentId={selectedTournamentId}
+            onSelectTournament={setSelectedTournamentId}
+          />
         </Section>
       )}
 

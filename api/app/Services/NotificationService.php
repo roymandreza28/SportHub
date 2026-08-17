@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Events\NotificationCreated;
 use App\Models\Notification;
 use App\Models\User;
+use App\Support\Broadcasting;
 
 class NotificationService
 {
@@ -22,7 +23,13 @@ class NotificationService
             'data' => $data,
         ]);
 
-        NotificationCreated::dispatch($notification);
+        // ShouldBroadcastNow pushes to Reverb synchronously, inline with the
+        // request. If Reverb is unreachable (asleep on Render's free tier,
+        // or just not running locally), that would otherwise take down the
+        // whole request — even though the notification row (and whatever
+        // action triggered it, e.g. a tournament registration) already
+        // committed successfully. A missed live push isn't worth failing on.
+        Broadcasting::safely(fn () => NotificationCreated::dispatch($notification));
 
         return $notification;
     }

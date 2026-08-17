@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchOrganizerTournaments, fetchLivestreams, updateTournament, type BracketMatch } from '../lib/organizerApi'
+import { fetchOrganizerTournaments, fetchLivestreams, fetchBracket, updateTournament, type Tournament } from '../lib/organizerApi'
 import { useAuth } from '../lib/AuthContext'
 import {
   DashboardShell,
@@ -12,7 +12,7 @@ import {
   StatusBadge,
   type NavItem,
 } from '../components/layout/DashboardShell'
-import { IconFileText, IconHome, IconRadio, IconTrophy } from '../components/layout/icons'
+import { IconChevronDown, IconFileText, IconHome, IconRadio, IconTrophy } from '../components/layout/icons'
 import { buttonPrimary } from '../lib/formStyles'
 import { TournamentWizard } from '../components/organizer/TournamentWizard'
 import { BracketView } from '../components/organizer/BracketView'
@@ -23,6 +23,55 @@ import { LivestreamCreateForm } from '../components/organizer/LivestreamCreateFo
 import { LivestreamEmbed } from '../components/organizer/LivestreamEmbed'
 import { LivestreamChat } from '../components/organizer/LivestreamChat'
 
+function TournamentPickerDropdown({
+  label,
+  tournaments,
+  selectedId,
+  onSelect,
+  emptyText,
+}: {
+  label: string
+  tournaments: Tournament[]
+  selectedId: number | null
+  onSelect: (id: number) => void
+  emptyText: string
+}) {
+  const [open, setOpen] = useState(false)
+  const selected = tournaments.find((t) => t.id === selectedId)
+
+  return (
+    <div className="mb-3">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+      >
+        <span className="truncate">{selected ? `${selected.name} (${selected.status})` : label}</span>
+        <IconChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="mt-1 max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+          {tournaments.length === 0 && <p className="px-3 py-3 text-sm text-slate-400">{emptyText}</p>}
+          {tournaments.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => {
+                onSelect(t.id)
+                setOpen(false)
+              }}
+              className={`flex w-full items-center justify-between gap-4 px-3 py-2.5 text-left text-sm transition ${
+                selectedId === t.id ? 'bg-teal-50 text-teal-700' : 'text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <span className="truncate font-medium">{t.name}</span>
+              <StatusBadge status={t.status} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function OrganizerPage() {
   const { user, hasRole } = useAuth()
   const isMainOrganizer = hasRole('organizer')
@@ -32,7 +81,7 @@ export function OrganizerPage() {
   const NAV_ITEMS: NavItem[] = [
     { id: 'overview', label: 'Dashboard', icon: IconHome },
     ...(canScoreMatches
-      ? [{ id: 'tournaments', label: isMainOrganizer ? 'Tournaments' : 'Scoreboard', icon: IconTrophy }]
+      ? [{ id: 'tournaments', label: isMainOrganizer ? 'Tournaments' : 'Tournament to Facilitate', icon: IconTrophy }]
       : []),
     ...(isMainOrganizer ? [{ id: 'news', label: 'News', icon: IconFileText }] : []),
     ...(canManageLivestreams ? [{ id: 'livestreams', label: 'Livestreams', icon: IconRadio }] : []),
@@ -61,8 +110,29 @@ export function OrganizerPage() {
       return false
     })
     .slice(0, 20)
+  const activeTournaments = myTournaments.filter((t) => t.status !== 'completed' && t.status !== 'cancelled')
+  const inactiveTournaments = myTournaments.filter((t) => t.status === 'completed' || t.status === 'cancelled')
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
-  const [activeMatch, setActiveMatch] = useState<BracketMatch | null>(null)
+  const [activeMatchId, setActiveMatchId] = useState<number | null>(null)
+
+  // Shares its query key with BracketView's own bracket query, so once a
+  // score/finish mutation invalidates ['organizer', 'bracket', id] (already
+  // done inside the scoreboard components), this refetches too — keeping
+  // the open scoreboard's `match` prop live instead of the stale snapshot
+  // captured at the moment the match card was first clicked. Without this,
+  // finishing a match updated the bracket underneath but the scoreboard
+  // modal on top never reflected the win or unlocked its "completed" state.
+  const { data: activeBracket } = useQuery({
+    queryKey: ['organizer', 'bracket', selectedTournamentId],
+    queryFn: () => fetchBracket(selectedTournamentId!),
+    enabled: selectedTournamentId != null && activeMatchId != null,
+    retry: false,
+  })
+  // `structure` (not the flat `matches` relation) is what carries the
+  // normalized participant_a/participant_b/winner shape — the raw `matches`
+  // relation's participant_a is the individual-player relation, which is
+  // null for every team match regardless of who's actually seeded in it.
+  const activeMatch = activeBracket?.structure.flat().find((m) => m.id === activeMatchId) ?? null
 
   const myLivestreams = livestreams ?? []
   const [selectedLivestreamId, setSelectedLivestreamId] = useState<number | null>(null)
@@ -131,7 +201,7 @@ export function OrganizerPage() {
 
       {active === 'tournaments' && (
         <Section
-          title={isMainOrganizer ? 'Tournaments' : 'Scoreboard'}
+          title={isMainOrganizer ? 'Tournaments' : 'Tournament to Facilitate'}
           description={
             isMainOrganizer
               ? 'Create a tournament and manage its bracket.'
@@ -144,19 +214,20 @@ export function OrganizerPage() {
             <h3 className="mb-2 text-sm font-medium text-slate-700">
               {isMainOrganizer ? 'Your tournaments' : 'Tournaments'}
             </h3>
-            <div className="mb-3 flex flex-wrap gap-2">
-              {myTournaments.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setSelectedTournamentId(t.id)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    selectedTournamentId === t.id ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600'
-                  }`}
-                >
-                  {t.name} ({t.status})
-                </button>
-              ))}
-            </div>
+            <TournamentPickerDropdown
+              label="Active tournaments"
+              tournaments={activeTournaments}
+              selectedId={selectedTournamentId}
+              onSelect={setSelectedTournamentId}
+              emptyText="No active tournaments."
+            />
+            <TournamentPickerDropdown
+              label="Inactive tournaments"
+              tournaments={inactiveTournaments}
+              selectedId={selectedTournamentId}
+              onSelect={setSelectedTournamentId}
+              emptyText="No completed or cancelled tournaments."
+            />
             {selectedTournamentId && (
               <>
                 {isMainOrganizer && myTournaments.find((t) => t.id === selectedTournamentId)?.status === 'draft' && (
@@ -174,7 +245,7 @@ export function OrganizerPage() {
                     </button>
                   </div>
                 )}
-                <BracketView tournamentId={selectedTournamentId} onSelectMatch={setActiveMatch} />
+                <BracketView tournamentId={selectedTournamentId} onSelectMatch={(match) => setActiveMatchId(match.id)} />
               </>
             )}
           </div>
@@ -185,7 +256,7 @@ export function OrganizerPage() {
                 match={activeMatch}
                 tournamentId={selectedTournamentId}
                 tournament={myTournaments.find((t) => t.id === selectedTournamentId)}
-                onClose={() => setActiveMatch(null)}
+                onClose={() => setActiveMatchId(null)}
               />
             </div>
           )}
