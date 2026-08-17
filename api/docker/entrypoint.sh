@@ -25,7 +25,15 @@ php artisan config:cache
 # argument of whatever CMD/dockerCommand actually runs) so the reverb
 # service — sharing this same image and entrypoint — never races it.
 if [ "$1" = "supervisord" ]; then
-    php artisan migrate --force
+    # TEMPORARY, one-deploy-only: an earlier crash-loop (see git history)
+    # left roles/permissions partially seeded, which made every subsequent
+    # `db:seed --force` fail immediately on the first duplicate row before
+    # reaching the seeders after it. No real user data exists on this
+    # deployment yet, so migrate:fresh (drops and recreates every table) is
+    # safe here and guarantees a clean slate for --seed to actually
+    # complete. Reverted to plain `migrate --force` in the very next commit
+    # once this has run once — this is not meant to stay.
+    php artisan migrate:fresh --force --seed
 
     # Opt-in, one-shot seeding hook — the free plan also can't run
     # `render jobs create` ("new paid services not allowed"), so this is the
