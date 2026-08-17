@@ -22,7 +22,6 @@ RUN apk add --no-cache \
         supervisor \
         gettext \
         postgresql-dev \
-        libzip-dev \
         oniguruma-dev \
     && docker-php-ext-install -j$(nproc) \
         pdo_pgsql \
@@ -30,9 +29,8 @@ RUN apk add --no-cache \
         bcmath \
         pcntl \
         opcache \
-        zip \
         mbstring \
-    && apk del libzip-dev oniguruma-dev
+    && apk del oniguruma-dev
 
 WORKDIR /var/www/html
 COPY --from=vendor /app ./

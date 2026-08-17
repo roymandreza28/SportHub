@@ -25,7 +25,15 @@ http {
         }
 
         location = /up {
-            try_files /index.php /index.php?$query_string;
+            # Must check $uri (which never exists as a real file) first, not
+            # a literal /index.php — try_files serves its first *existing*
+            # candidate via the current location's config as-is, and this
+            # location has no fastcgi_pass, so a literal /index.php first
+            # candidate was served as raw, unexecuted PHP source instead of
+            # being run. Falling through to the last argument instead
+            # triggers an internal redirect that correctly re-matches into
+            # the `location ~ \.php$` block below.
+            try_files $uri /index.php?$query_string;
         }
 
         location ~ \.php$ {
