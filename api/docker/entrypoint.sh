@@ -26,6 +26,17 @@ php artisan config:cache
 # service — sharing this same image and entrypoint — never races it.
 if [ "$1" = "supervisord" ]; then
     php artisan migrate --force
+
+    # Opt-in, one-shot seeding hook — the free plan also can't run
+    # `render jobs create` ("new paid services not allowed"), so this is the
+    # only way to run a one-off artisan command at all on it. Every seeder
+    # in this codebase is firstOrCreate/findOrCreate-based, so leaving this
+    # flag set across multiple boots is harmless, not just a one-time
+    # allowance. Unset SEED_ON_BOOT (or leave it unset) once seeding is done
+    # so ordinary restarts don't pay the extra query cost.
+    if [ "$SEED_ON_BOOT" = "true" ]; then
+        php artisan db:seed --force
+    fi
 fi
 
 exec "$@"
