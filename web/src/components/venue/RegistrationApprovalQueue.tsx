@@ -52,7 +52,14 @@ export function RegistrationApprovalQueue({ venue }: { venue: Venue }) {
           className="flex items-center justify-between rounded-lg border border-slate-100 bg-white p-3 shadow-sm"
         >
           <div>
-            <p className="text-sm font-medium text-slate-800">{event.title}</p>
+            <p className="flex items-center gap-2 text-sm font-medium text-slate-800">
+              {event.title}
+              {event.is_walk_in && (
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Walk-in
+                </span>
+              )}
+            </p>
             <p className="text-xs text-slate-500">
               {new Date(event.start).toLocaleString()} - {new Date(event.end).toLocaleTimeString()}
             </p>

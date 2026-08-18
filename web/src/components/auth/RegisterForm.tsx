@@ -98,6 +98,7 @@ export function RegisterForm({
   const [email, setEmail] = useState('')
   const [birthday, setBirthday] = useState('')
   const [address, setAddress] = useState('')
+  const [phone, setPhone] = useState('')
   const [proofOfAddress, setProofOfAddress] = useState<File | null>(null)
   const [password, setPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
@@ -133,6 +134,7 @@ export function RegisterForm({
       form.append('email', email)
       form.append('birthday', birthday)
       form.append('address', address)
+      form.append('phone', phone)
       if (proofOfAddress) form.append('proof_of_address', proofOfAddress)
       form.append('role', role)
       if (role === 'coach' && coachProof) form.append('coach_eligibility_proof', coachProof)
@@ -195,6 +197,19 @@ export function RegisterForm({
             <p className="mt-1 text-xs text-slate-400">This is also your username for signing in.</p>
             <FieldError message={fieldErrors.email} />
           </div>
+        </div>
+        <div className={fieldGroup}>
+          <label className={label} htmlFor="phone">Mobile number</label>
+          <input
+            id="phone"
+            type="tel"
+            placeholder="09XX XXX XXXX"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className={input}
+            required
+          />
+          <FieldError message={fieldErrors.phone} />
         </div>
         <div className={fieldGroup}>
           <label className={label} htmlFor="address">Address</label>

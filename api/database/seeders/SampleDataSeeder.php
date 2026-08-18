@@ -163,15 +163,26 @@ class SampleDataSeeder extends Seeder
         // Live team tournaments for the demo venue organizer to score —
         // without these, venue_organizer@sporthub.test logs in to an empty
         // scoreboard tab with nothing assigned to them. Eleven player
-        // accounts (player1..player11) plus the existing "Pat Player" demo
+        // accounts (player1..player11) plus the existing "Josef Reyes" demo
         // account are shared across every tournament's rosters — a player
         // can realistically belong to more than one team/sport at once.
         if ($organizer && $venueOrganizer && $coach && $basketball) {
-            $extraPlayers = collect(range(1, 11))->map(function (int $n) {
+            $extraPlayerNames = [
+                1 => 'Marco Villareal', 2 => 'Angelica Bautista', 3 => 'Nathaniel Ramos',
+                4 => 'Kristine Aquino', 5 => 'Paolo Domingo', 6 => 'Samantha Garcia',
+                7 => 'Enzo Manalo', 8 => 'Julienne Castro', 9 => 'Rafael Navarro',
+                10 => 'Diana Salazar', 11 => 'Christian Ocampo',
+            ];
+
+            $extraPlayers = collect(range(1, 11))->map(function (int $n) use ($extraPlayerNames) {
+                $name = $extraPlayerNames[$n];
                 $user = User::firstOrCreate(
                     ['email' => "player{$n}@sporthub.test"],
-                    ['name' => "Player {$n}", 'password' => bcrypt('password')]
+                    ['name' => $name, 'password' => bcrypt('password')]
                 );
+                if ($user->name !== $name) {
+                    $user->update(['name' => $name]);
+                }
                 if (! $user->hasRole('player')) {
                     $user->assignRole('player');
                 }

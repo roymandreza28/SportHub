@@ -18,13 +18,13 @@ class DatabaseSeeder extends Seeder
         $this->call(RolesAndPermissionsSeeder::class);
 
         $demoUsers = [
-            'admin' => 'Ada Admin',
-            'organizer' => 'Olu Organizer',
-            'venue_organizer' => 'Val Venue Organizer',
-            'livestream_organizer' => 'Livvy Livestream Organizer',
-            'venue_facilitator' => 'Fay Facilitator',
-            'player' => 'Pat Player',
-            'coach' => 'Cody Coach',
+            'admin' => 'Marites Villanueva',
+            'organizer' => 'Ramon Cruz',
+            'venue_organizer' => 'Grace Santos',
+            'livestream_organizer' => 'Miguel Torres',
+            'venue_facilitator' => 'Ligaya Mendoza',
+            'player' => 'Josef Reyes',
+            'coach' => 'Bea Fernandez',
         ];
 
         foreach ($demoUsers as $role => $name) {
@@ -32,6 +32,14 @@ class DatabaseSeeder extends Seeder
                 ['email' => "{$role}@sporthub.test"],
                 ['name' => $name, 'password' => bcrypt('password')]
             );
+
+            // firstOrCreate only applies the attributes on the *first* run —
+            // re-running this seeder against a database that already has
+            // these rows (e.g. re-seeding production) wouldn't otherwise
+            // pick up a renamed demo user.
+            if ($user->name !== $name) {
+                $user->update(['name' => $name]);
+            }
 
             if (! $user->hasRole($role)) {
                 $user->assignRole($role);

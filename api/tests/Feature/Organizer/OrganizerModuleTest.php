@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Livestream;
 use App\Models\Sport;
 use App\Models\Tournament;
 use App\Models\TournamentRegistration;
@@ -230,14 +231,116 @@ it('publishes news and creates a livestream tied to a tournament the organizer o
     $livestream = $this->actingAs($organizer)->postJson('/api/livestreams', [
         'tournament_id' => $tournament->id,
         'title' => 'Finals',
-        'platform' => 'youtube',
-        'embed_url' => 'https://youtube.com/embed/abc',
     ])->assertCreated();
 
     $this->actingAs($organizer)->postJson("/api/livestreams/{$livestream->json('id')}/messages", ['body' => 'hello'])
         ->assertCreated();
 
     $this->getJson("/api/livestreams/{$livestream->json('id')}/messages")->assertOk()->assertJsonCount(1);
+});
+
+it('relays a WebRTC signal to its target and flips livestream status only when the broadcaster sends start/end', function () {
+    $owner = userWithRole('organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
+    $viewer = userWithRole('player');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id,
+        'sport_id' => $sport->id,
+        'name' => 'Signal Cup',
+        'format' => 'round_robin',
+        'starts_at' => now()->addWeek(),
+        'status' => 'open',
+        'livestream_organizer_id' => $livestreamOrganizer->id,
+    ]);
+
+    $livestream = $this->actingAs($owner)->postJson('/api/livestreams', [
+        'tournament_id' => $tournament->id,
+        'title' => 'Finals feed',
+    ])->assertCreated();
+    $livestreamId = $livestream->json('id');
+    expect($livestream->json('broadcaster_id'))->toBe($livestreamOrganizer->id);
+
+    // A non-broadcaster sending "broadcast-started" relays fine but has no
+    // status side-effect.
+    $this->actingAs($viewer)->postJson("/api/livestreams/{$livestreamId}/signal", [
+        'target_user_id' => $livestreamOrganizer->id,
+        'type' => 'broadcast-started',
+        'data' => ['sdp' => 'irrelevant'],
+    ])->assertNoContent();
+    expect(Livestream::find($livestreamId)->status)->toBe('scheduled');
+
+    // The assigned broadcaster starting really does flip status to live.
+    $this->actingAs($livestreamOrganizer)->postJson("/api/livestreams/{$livestreamId}/signal", [
+        'target_user_id' => $livestreamOrganizer->id,
+        'type' => 'broadcast-started',
+        'data' => [],
+    ])->assertNoContent();
+    expect(Livestream::find($livestreamId)->status)->toBe('live');
+
+    // An offer/answer/ice-candidate signal is just relayed, no status change.
+    $this->actingAs($livestreamOrganizer)->postJson("/api/livestreams/{$livestreamId}/signal", [
+        'target_user_id' => $viewer->id,
+        'type' => 'offer',
+        'data' => ['sdp' => 'v=0...'],
+    ])->assertNoContent();
+    expect(Livestream::find($livestreamId)->status)->toBe('live');
+
+    // Ending, from the broadcaster, flips it to ended.
+    $this->actingAs($livestreamOrganizer)->postJson("/api/livestreams/{$livestreamId}/signal", [
+        'target_user_id' => $livestreamOrganizer->id,
+        'type' => 'broadcast-ended',
+        'data' => [],
+    ])->assertNoContent();
+    expect(Livestream::find($livestreamId)->status)->toBe('ended');
+});
+
+it('validates the WebRTC signal payload', function () {
+    $owner = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id, 'sport_id' => $sport->id,
+        'name' => 'Bad Signal Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'open',
+    ]);
+    $livestream = $this->actingAs($owner)->postJson('/api/livestreams', [
+        'tournament_id' => $tournament->id, 'title' => 'Feed',
+    ])->assertCreated();
+
+    $this->actingAs($owner)->postJson("/api/livestreams/{$livestream->json('id')}/signal", [
+        'target_user_id' => $owner->id,
+        'type' => 'not-a-real-type',
+        'data' => [],
+    ])->assertStatus(422);
+
+    $this->actingAs($owner)->postJson("/api/livestreams/{$livestream->json('id')}/signal", [
+        'type' => 'offer',
+        'data' => [],
+    ])->assertStatus(422);
+});
+
+it('denies signaling to a guest', function () {
+    $owner = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id, 'sport_id' => $sport->id,
+        'name' => 'Guest Signal Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'open',
+    ]);
+    // Created directly via Eloquent, not through an authenticated HTTP
+    // call — actingAs() would otherwise leave this test's guard
+    // authenticated for the rest of the test, defeating the point.
+    $livestream = Livestream::create([
+        'tournament_id' => $tournament->id, 'title' => 'Feed',
+        'broadcaster_id' => $owner->id, 'status' => 'scheduled',
+    ]);
+
+    $this->postJson("/api/livestreams/{$livestream->id}/signal", [
+        'target_user_id' => $owner->id,
+        'type' => 'offer',
+        'data' => [],
+    ])->assertStatus(401);
 });
 
 it('lets a venue organizer score a match belonging to the tournament they were assigned to', function () {
@@ -324,9 +427,7 @@ it('lets a livestream organizer create a livestream for the tournament they were
     $this->actingAs($livestreamOrganizer)->postJson('/api/livestreams', [
         'tournament_id' => $tournament->id,
         'title' => 'Courtside feed',
-        'platform' => 'youtube',
-        'embed_url' => 'https://youtube.com/embed/xyz',
-    ])->assertCreated();
+    ])->assertCreated()->assertJsonPath('broadcaster_id', $livestreamOrganizer->id);
 });
 
 it('denies a livestream organizer from creating a livestream for a tournament they were not assigned to', function () {
@@ -346,8 +447,6 @@ it('denies a livestream organizer from creating a livestream for a tournament th
     $this->actingAs($livestreamOrganizer)->postJson('/api/livestreams', [
         'tournament_id' => $tournament->id,
         'title' => 'Hijack feed',
-        'platform' => 'youtube',
-        'embed_url' => 'https://youtube.com/embed/xyz',
     ])->assertForbidden();
 });
 
@@ -448,8 +547,6 @@ it('denies creating a livestream tied to a tournament the organizer does not own
     $this->actingAs($other)->postJson('/api/livestreams', [
         'tournament_id' => $tournament->id,
         'title' => 'Hijack Stream',
-        'platform' => 'youtube',
-        'embed_url' => 'https://youtube.com/embed/abc',
     ])->assertForbidden();
 });
 

@@ -367,3 +367,144 @@ it('rejects a booking that overlaps an existing pending or approved booking on t
 
     $nonOverlapping->assertCreated();
 });
+
+it('rejects a venue-wide booking that overlaps an existing court booking, and vice versa', function () {
+    $facilitator = userWithRole('venue_facilitator');
+    $player = userWithRole('player');
+    $venue = makeVenue($facilitator);
+    $court = Court::create(['venue_id' => $venue->id, 'name' => 'Court 1', 'type' => 'court']);
+
+    // An existing court-specific booking blocks a new venue-wide booking
+    // that overlaps its time range.
+    VenueRegistration::create([
+        'venue_id' => $venue->id,
+        'court_id' => $court->id,
+        'user_id' => $player->id,
+        'starts_at' => now()->addDay(),
+        'ends_at' => now()->addDay()->addHour(),
+        'status' => 'approved',
+    ]);
+
+    $this->actingAs($player)->postJson('/api/venue-registrations', [
+        'venue_id' => $venue->id,
+        'starts_at' => now()->addDay()->addMinutes(30)->toIso8601String(),
+        'ends_at' => now()->addDay()->addMinutes(90)->toIso8601String(),
+    ])->assertStatus(422);
+
+    // A venue-wide booking blocks every court, including a new booking on
+    // a *different* court in the same venue for an overlapping time.
+    $otherCourt = Court::create(['venue_id' => $venue->id, 'name' => 'Court 2', 'type' => 'court']);
+    VenueRegistration::create([
+        'venue_id' => $venue->id,
+        'court_id' => null,
+        'user_id' => $player->id,
+        'starts_at' => now()->addDays(2),
+        'ends_at' => now()->addDays(2)->addHour(),
+        'status' => 'approved',
+    ]);
+
+    $this->actingAs($player)->postJson('/api/venue-registrations', [
+        'venue_id' => $venue->id,
+        'court_id' => $otherCourt->id,
+        'starts_at' => now()->addDays(2)->addMinutes(30)->toIso8601String(),
+        'ends_at' => now()->addDays(2)->addMinutes(90)->toIso8601String(),
+    ])->assertStatus(422);
+});
+
+it('persists price_per_hour when a facilitator creates or updates a venue', function () {
+    $facilitator = userWithRole('venue_facilitator');
+
+    $created = $this->actingAs($facilitator)->postJson('/api/venues', [
+        'name' => 'Priced Gym', 'address' => '1 St', 'latitude' => 1, 'longitude' => 1,
+        'price_per_hour' => 250.50,
+    ])->assertCreated();
+
+    expect((float) $created->json('price_per_hour'))->toBe(250.50);
+
+    $venueId = $created->json('id');
+
+    $updated = $this->actingAs($facilitator)->patchJson("/api/venues/{$venueId}", [
+        'price_per_hour' => 300,
+    ])->assertOk();
+
+    expect((float) $updated->json('price_per_hour'))->toBe(300.0);
+});
+
+it('lets a facilitator manually add an already-approved walk-in booking, blocking that slot for the app too', function () {
+    $facilitator = userWithRole('venue_facilitator');
+    $player = userWithRole('player');
+    $venue = makeVenue($facilitator);
+    $court = Court::create(['venue_id' => $venue->id, 'name' => 'Court 1', 'type' => 'court']);
+
+    $manual = $this->actingAs($facilitator)->postJson("/api/venues/{$venue->id}/registrations/manual", [
+        'court_id' => $court->id,
+        'starts_at' => now()->addHour()->toIso8601String(),
+        'ends_at' => now()->addHours(2)->toIso8601String(),
+        'walk_in_name' => 'Juan Dela Cruz',
+        'walk_in_contact' => '0917-000-0000',
+    ])->assertCreated();
+
+    expect($manual->json('status'))->toBe('approved');
+    $this->assertDatabaseHas('venue_registrations', [
+        'venue_id' => $venue->id,
+        'court_id' => $court->id,
+        'walk_in_name' => 'Juan Dela Cruz',
+        'status' => 'approved',
+        'user_id' => null,
+    ]);
+
+    // A player trying to book the same court/time is rejected.
+    $this->actingAs($player)->postJson('/api/venue-registrations', [
+        'venue_id' => $venue->id,
+        'court_id' => $court->id,
+        'starts_at' => now()->addHour()->addMinutes(15)->toIso8601String(),
+        'ends_at' => now()->addHour()->addMinutes(45)->toIso8601String(),
+    ])->assertStatus(422);
+});
+
+it('rejects a walk-in booking that overlaps an existing in-app booking', function () {
+    $facilitator = userWithRole('venue_facilitator');
+    $player = userWithRole('player');
+    $venue = makeVenue($facilitator);
+    $court = Court::create(['venue_id' => $venue->id, 'name' => 'Court 1', 'type' => 'court']);
+
+    VenueRegistration::create([
+        'venue_id' => $venue->id,
+        'court_id' => $court->id,
+        'user_id' => $player->id,
+        'starts_at' => now()->addDay(),
+        'ends_at' => now()->addDay()->addHour(),
+        'status' => 'approved',
+    ]);
+
+    $this->actingAs($facilitator)->postJson("/api/venues/{$venue->id}/registrations/manual", [
+        'court_id' => $court->id,
+        'starts_at' => now()->addDay()->addMinutes(30)->toIso8601String(),
+        'ends_at' => now()->addDay()->addMinutes(90)->toIso8601String(),
+        'walk_in_name' => 'Maria Santos',
+    ])->assertStatus(422);
+});
+
+it('denies a facilitator from manually booking a venue they do not own', function () {
+    $facilitator = userWithRole('venue_facilitator');
+    $otherFacilitator = userWithRole('venue_facilitator');
+    $venue = makeVenue($facilitator);
+
+    $this->actingAs($otherFacilitator)->postJson("/api/venues/{$venue->id}/registrations/manual", [
+        'starts_at' => now()->addHour()->toIso8601String(),
+        'ends_at' => now()->addHours(2)->toIso8601String(),
+        'walk_in_name' => 'Someone',
+    ])->assertForbidden();
+});
+
+it('rejects a manual booking outside the venues operating hours', function () {
+    $facilitator = userWithRole('venue_facilitator');
+    $venue = makeVenue($facilitator);
+    $venue->update(['opens_at' => '08:00:00', 'closes_at' => '20:00:00']);
+
+    $this->actingAs($facilitator)->postJson("/api/venues/{$venue->id}/registrations/manual", [
+        'starts_at' => Carbon::parse('tomorrow 21:00', 'Asia/Manila')->toIso8601String(),
+        'ends_at' => Carbon::parse('tomorrow 22:00', 'Asia/Manila')->toIso8601String(),
+        'walk_in_name' => 'Late Walk-in',
+    ])->assertStatus(422);
+});

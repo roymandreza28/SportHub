@@ -6,20 +6,15 @@ import { buttonPrimary, fieldGroup, input, label, select } from '../../lib/formS
 export function LivestreamCreateForm({ tournaments }: { tournaments: Tournament[] }) {
   const queryClient = useQueryClient()
   const [title, setTitle] = useState('')
-  const [platform, setPlatform] = useState<'youtube' | 'facebook'>('youtube')
-  const [embedUrl, setEmbedUrl] = useState('')
   const [tournamentId, setTournamentId] = useState<number | ''>('')
 
   const mutation = useMutation({
     mutationFn: () => createLivestream({
       title,
-      platform,
-      embed_url: embedUrl,
       tournament_id: tournamentId === '' ? undefined : tournamentId,
     }),
     onSuccess: () => {
       setTitle('')
-      setEmbedUrl('')
       queryClient.invalidateQueries({ queryKey: ['livestreams'] })
     },
   })
@@ -27,6 +22,10 @@ export function LivestreamCreateForm({ tournaments }: { tournaments: Tournament[
   return (
     <div className="flex max-w-xl flex-col gap-4">
       <h3 className="text-sm font-semibold text-slate-800">Start a livestream</h3>
+      <p className="text-xs text-slate-500">
+        The tournament's assigned livestream organizer broadcasts from their own device camera — no external link
+        needed.
+      </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className={`${fieldGroup} sm:col-span-2`}>
@@ -38,13 +37,6 @@ export function LivestreamCreateForm({ tournaments }: { tournaments: Tournament[
             onChange={(e) => setTitle(e.target.value)}
             className={input}
           />
-        </div>
-        <div className={fieldGroup}>
-          <label className={label}>Platform</label>
-          <select value={platform} onChange={(e) => setPlatform(e.target.value as 'youtube' | 'facebook')} className={select}>
-            <option value="youtube">YouTube</option>
-            <option value="facebook">Facebook</option>
-          </select>
         </div>
         <div className={fieldGroup}>
           <label className={label}>Linked tournament</label>
@@ -61,21 +53,11 @@ export function LivestreamCreateForm({ tournaments }: { tournaments: Tournament[
             ))}
           </select>
         </div>
-        <div className={`${fieldGroup} sm:col-span-2`}>
-          <label className={label}>Embed URL</label>
-          <input
-            type="text"
-            placeholder="https://..."
-            value={embedUrl}
-            onChange={(e) => setEmbedUrl(e.target.value)}
-            className={input}
-          />
-        </div>
       </div>
 
       <button
         onClick={() => mutation.mutate()}
-        disabled={!title || !embedUrl || mutation.isPending}
+        disabled={!title || mutation.isPending}
         className={`${buttonPrimary} self-start`}
       >
         {mutation.isPending ? 'Creating...' : 'Create livestream'}

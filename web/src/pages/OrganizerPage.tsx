@@ -20,7 +20,8 @@ import { ScoreboardLive } from '../components/organizer/ScoreboardLive'
 import { NewsEditor } from '../components/organizer/NewsEditor'
 import { NewsFeed } from '../components/organizer/NewsFeed'
 import { LivestreamCreateForm } from '../components/organizer/LivestreamCreateForm'
-import { LivestreamEmbed } from '../components/organizer/LivestreamEmbed'
+import { LivestreamBroadcast } from '../components/organizer/LivestreamBroadcast'
+import { LivestreamViewer } from '../components/organizer/LivestreamViewer'
 import { LivestreamChat } from '../components/organizer/LivestreamChat'
 
 function TournamentPickerDropdown({
@@ -303,7 +304,11 @@ export function OrganizerPage() {
             </div>
             {selectedLivestream && (
               <div className="flex flex-col gap-3">
-                <LivestreamEmbed livestream={selectedLivestream} />
+                {user?.id === selectedLivestream.broadcaster?.id ? (
+                  <LivestreamBroadcast livestream={selectedLivestream} />
+                ) : (
+                  <LivestreamViewer livestream={selectedLivestream} />
+                )}
                 {user && <LivestreamChat livestreamId={selectedLivestream.id} />}
               </div>
             )}

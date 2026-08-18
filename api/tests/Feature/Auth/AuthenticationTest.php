@@ -15,6 +15,7 @@ function baseRegistrationPayload(array $overrides = []): array
         'email' => 'newuser'.uniqid().'@example.com',
         'birthday' => '2000-05-15',
         'address' => '123 Rizal St, Morong, Rizal',
+        'phone' => '09171234567',
         'proof_of_address' => UploadedFile::fake()->create('id.jpg', 100, 'image/jpeg'),
         'role' => 'player',
         'password' => 'Password123',

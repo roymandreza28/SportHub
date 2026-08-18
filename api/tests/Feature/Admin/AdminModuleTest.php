@@ -50,6 +50,7 @@ it('lets an admin create a facilitator account, defaults it to the venue_facilit
     $response = $this->actingAs($admin)->postJson('/api/admin/facilitators', [
         'name' => 'New Facilitator',
         'email' => 'newfac@example.com',
+        'phone' => '09171234567',
         'password' => 'password123',
     ]);
 

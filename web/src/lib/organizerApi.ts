@@ -75,11 +75,10 @@ export type NewsItem = {
 export type LivestreamItem = {
   id: number
   title: string
-  platform: 'youtube' | 'facebook'
-  embed_url: string
   status: 'scheduled' | 'live' | 'ended'
   tournament_id: number | null
   news_id: number | null
+  broadcaster: { id: number; name: string } | null
 }
 
 export type ChatMessageItem = {
@@ -180,13 +179,22 @@ export async function fetchLivestreams() {
 
 export async function createLivestream(input: {
   title: string
-  platform: 'youtube' | 'facebook'
-  embed_url: string
   tournament_id?: number
   news_id?: number
 }) {
   const { data } = await api.post<LivestreamItem>('/api/livestreams', input)
   return data
+}
+
+export type WebRTCSignalType = 'offer' | 'answer' | 'ice-candidate' | 'broadcast-started' | 'broadcast-ended'
+
+export async function sendWebRTCSignal(
+  livestreamId: number,
+  targetUserId: number,
+  type: WebRTCSignalType,
+  data: object
+) {
+  await api.post(`/api/livestreams/${livestreamId}/signal`, { target_user_id: targetUserId, type, data })
 }
 
 export async function fetchChatMessages(livestreamId: number) {

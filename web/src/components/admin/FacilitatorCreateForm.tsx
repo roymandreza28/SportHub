@@ -7,6 +7,7 @@ export function FacilitatorCreateForm() {
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -15,6 +16,7 @@ export function FacilitatorCreateForm() {
     onSuccess: () => {
       setName('')
       setEmail('')
+      setPhone('')
       setPassword('')
       setError(null)
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
@@ -25,7 +27,7 @@ export function FacilitatorCreateForm() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    mutation.mutate({ name, email, password })
+    mutation.mutate({ name, email, phone, password })
   }
 
   return (
@@ -50,6 +52,18 @@ export function FacilitatorCreateForm() {
           placeholder="name@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          className={input}
+          required
+        />
+      </div>
+      <div className={fieldGroup}>
+        <label className={label} htmlFor="facilitator-phone">Mobile number</label>
+        <input
+          id="facilitator-phone"
+          type="tel"
+          placeholder="09XX XXX XXXX"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
           className={input}
           required
         />

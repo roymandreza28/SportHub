@@ -36,4 +36,9 @@ class VenuePolicy
     {
         return $venue->facilitator_id === $user->id;
     }
+
+    public function createManualBooking(User $user, Venue $venue): bool
+    {
+        return $user->can('manage venue registrations') && $venue->facilitator_id === $user->id;
+    }
 }

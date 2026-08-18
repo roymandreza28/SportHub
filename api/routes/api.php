@@ -128,6 +128,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/venues/{venue}', [VenueController::class, 'update']);
         Route::delete('/venues/{venue}', [VenueController::class, 'destroy']);
         Route::get('/venues/{venue}/schedule', [VenueController::class, 'schedule']);
+        Route::post('/venues/{venue}/registrations/manual', [VenueRegistrationController::class, 'storeManual']);
 
         Route::post('/venues/{venue}/courts', [CourtController::class, 'store']);
         Route::patch('/courts/{court}', [CourtController::class, 'update']);
@@ -234,4 +235,5 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::post('/livestreams/{livestream}/messages', [ChatMessageController::class, 'store']);
+    Route::post('/livestreams/{livestream}/signal', [LivestreamController::class, 'signal']);
 });

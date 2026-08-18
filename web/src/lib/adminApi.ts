@@ -82,7 +82,7 @@ export async function deleteUser(userId: number) {
   await api.delete(`/api/admin/users/${userId}`)
 }
 
-export async function createFacilitator(input: { name: string; email: string; password: string }) {
+export async function createFacilitator(input: { name: string; email: string; phone: string; password: string }) {
   const { data } = await api.post<AdminUser>('/api/admin/facilitators', input)
   return data
 }

@@ -35,6 +35,7 @@ class User extends Authenticatable
         'email',
         'birthday',
         'address',
+        'phone',
         'password',
         'is_active',
         'verification_status',

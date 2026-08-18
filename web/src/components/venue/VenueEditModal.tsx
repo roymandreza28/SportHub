@@ -15,6 +15,7 @@ export function VenueEditModal({ venue, onClose }: { venue: Venue; onClose: () =
   const [lng, setLng] = useState(Number(venue.longitude))
   const [opensAt, setOpensAt] = useState(venue.opens_at?.slice(0, 5) ?? '')
   const [closesAt, setClosesAt] = useState(venue.closes_at?.slice(0, 5) ?? '')
+  const [pricePerHour, setPricePerHour] = useState(venue.price_per_hour ?? '')
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -26,6 +27,7 @@ export function VenueEditModal({ venue, onClose }: { venue: Venue; onClose: () =
         description: description || undefined,
         opens_at: opensAt || undefined,
         closes_at: closesAt || undefined,
+        price_per_hour: pricePerHour ? Number(pricePerHour) : undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['facilitator', 'venues'] })
@@ -115,6 +117,19 @@ export function VenueEditModal({ venue, onClose }: { venue: Venue; onClose: () =
               {hoursMismatched && (
                 <p className="text-xs text-amber-600 sm:col-span-2">Set both times, or leave both blank for no fixed hours.</p>
               )}
+            </div>
+
+            <div className={fieldGroup}>
+              <label className={label} htmlFor="edit-venue-price-per-hour">Price per hour (optional)</label>
+              <input
+                id="edit-venue-price-per-hour"
+                type="number"
+                min={0}
+                step="0.01"
+                value={pricePerHour}
+                onChange={(e) => setPricePerHour(e.target.value)}
+                className={`${input} max-w-xs`}
+              />
             </div>
 
             <div className={fieldGroup}>

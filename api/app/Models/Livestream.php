@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Livestream extends Model
 {
     protected $fillable = [
-        'news_id', 'tournament_id', 'title', 'platform', 'embed_url', 'chat_channel_name', 'status',
+        'news_id', 'tournament_id', 'title', 'broadcaster_id', 'chat_channel_name', 'status',
     ];
 
     public function news(): BelongsTo
@@ -20,6 +20,11 @@ class Livestream extends Model
     public function tournament(): BelongsTo
     {
         return $this->belongsTo(Tournament::class);
+    }
+
+    public function broadcaster(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'broadcaster_id');
     }
 
     public function chatMessages(): HasMany

@@ -13,7 +13,7 @@ class Venue extends Model
 
     protected $fillable = [
         'facilitator_id', 'name', 'address', 'latitude', 'longitude', 'description', 'amenities',
-        'opens_at', 'closes_at', 'status',
+        'opens_at', 'closes_at', 'status', 'price_per_hour',
     ];
 
     protected function casts(): array
@@ -22,6 +22,7 @@ class Venue extends Model
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
             'amenities' => 'array',
+            'price_per_hour' => 'decimal:2',
         ];
     }
 

@@ -33,6 +33,7 @@ export type Venue = {
   amenities: string[] | null
   opens_at: string | null
   closes_at: string | null
+  price_per_hour: string | null
   status: 'active' | 'inactive'
   courts: Court[]
   equipment: Equipment[]
@@ -50,7 +51,10 @@ export type ScheduleEvent = {
   resourceId: number | null
   status: 'pending' | 'approved' | 'rejected' | 'cancelled'
   purpose: string | null
-  user: { id: number; name: string; email: string }
+  // Null for a facilitator-entered walk-in booking — see walk_in_name/is_walk_in below.
+  user: { id: number; name: string; email: string } | null
+  walk_in_name: string | null
+  is_walk_in: boolean
   // Only present once approved — see MyVenueRegistration in playerApi.ts.
   conversation_id: number | null
 }
@@ -80,6 +84,7 @@ export async function createVenue(input: {
   equipment?: { name: string; quantity: number }[]
   opens_at?: string
   closes_at?: string
+  price_per_hour?: number
 }) {
   const { data } = await api.post<Venue>('/api/venues', input)
   return data
@@ -95,6 +100,7 @@ export async function updateVenue(
     description: string
     opens_at: string
     closes_at: string
+    price_per_hour: number
     status: 'active' | 'inactive'
   }>
 ) {
@@ -150,6 +156,21 @@ export async function fetchVenueSchedule(venueId: number) {
 
 export async function updateVenueRegistration(id: number, status: 'approved' | 'rejected') {
   const { data } = await api.patch(`/api/venue-registrations/${id}`, { status })
+  return data
+}
+
+export async function createManualBooking(
+  venueId: number,
+  input: {
+    court_id?: number
+    starts_at: string
+    ends_at: string
+    walk_in_name: string
+    walk_in_contact?: string
+    purpose?: string
+  }
+) {
+  const { data } = await api.post(`/api/venues/${venueId}/registrations/manual`, input)
   return data
 }
 

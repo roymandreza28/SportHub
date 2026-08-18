@@ -27,6 +27,7 @@ class AuthController extends Controller
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'birthday' => ['required', 'date', 'before:today'],
             'address' => ['required', 'string', 'max:500'],
+            'phone' => ['required', 'string', 'max:20'],
             // Proof of address: a valid ID or a billing statement, either as
             // an image or a scanned/exported PDF.
             'proof_of_address' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
@@ -61,6 +62,7 @@ class AuthController extends Controller
                 'email' => $data['email'],
                 'birthday' => $data['birthday'],
                 'address' => $data['address'],
+                'phone' => $data['phone'],
                 'password' => Hash::make($data['password']),
                 // Every self-registered player/coach starts pending — an
                 // admin has to verify their submitted proof before they get

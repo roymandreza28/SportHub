@@ -49,6 +49,7 @@ export function VenueForm({ onCreated }: { onCreated?: () => void }) {
   const [lng, setLng] = useState(DEFAULT_LNG)
   const [opensAt, setOpensAt] = useState('')
   const [closesAt, setClosesAt] = useState('')
+  const [pricePerHour, setPricePerHour] = useState('')
   const [equipment, setEquipment] = useState<EquipmentDraft[]>([])
   const [equipmentName, setEquipmentName] = useState('')
   const [equipmentQty, setEquipmentQty] = useState(1)
@@ -76,6 +77,7 @@ export function VenueForm({ onCreated }: { onCreated?: () => void }) {
       setLng(DEFAULT_LNG)
       setOpensAt('')
       setClosesAt('')
+      setPricePerHour('')
       setEquipment([])
       setCourts([])
       queryClient.invalidateQueries({ queryKey: ['facilitator', 'venues'] })
@@ -128,6 +130,7 @@ export function VenueForm({ onCreated }: { onCreated?: () => void }) {
       equipment: equipment.length ? equipment : undefined,
       opens_at: opensAt || undefined,
       closes_at: closesAt || undefined,
+      price_per_hour: pricePerHour ? Number(pricePerHour) : undefined,
     })
   }
 
@@ -274,6 +277,20 @@ export function VenueForm({ onCreated }: { onCreated?: () => void }) {
         {(opensAt || closesAt) && !(opensAt && closesAt) && (
           <p className="text-xs text-amber-600 sm:col-span-2">Set both times, or leave both blank for no fixed hours.</p>
         )}
+      </div>
+
+      <div className={fieldGroup}>
+        <label className={label} htmlFor="venue-price-per-hour">Price per hour (optional)</label>
+        <input
+          id="venue-price-per-hour"
+          type="number"
+          min={0}
+          step="0.01"
+          placeholder="e.g. 300"
+          value={pricePerHour}
+          onChange={(e) => setPricePerHour(e.target.value)}
+          className={`${input} max-w-xs`}
+        />
       </div>
 
       <div className={fieldGroup}>

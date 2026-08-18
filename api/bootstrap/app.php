@@ -28,6 +28,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->statefulApi();
         $middleware->redirectGuestsTo(fn () => null);
 
+        // WebRTC signal payloads (LivestreamController::signal) carry a raw
+        // SDP string whose trailing CRLF is meaningful content, not
+        // incidental whitespace — the default global TrimStrings middleware
+        // was silently stripping it, corrupting the SDP by exactly the
+        // trailing "\r\n" and breaking RTCPeerConnection.setRemoteDescription
+        // on the receiving end ("Invalid SDP line").
+        $middleware->trimStrings(except: ['data.*']);
+
         $middleware->alias([
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,

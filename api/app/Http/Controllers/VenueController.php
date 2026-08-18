@@ -56,6 +56,7 @@ class VenueController extends Controller
             'amenities' => ['nullable', 'array'],
             'opens_at' => ['nullable', 'date_format:H:i', 'required_with:closes_at'],
             'closes_at' => ['nullable', 'date_format:H:i', 'after:opens_at', 'required_with:opens_at'],
+            'price_per_hour' => ['nullable', 'numeric', 'min:0'],
             'courts' => ['nullable', 'array'],
             'courts.*.name' => ['nullable', 'string', 'max:255'],
             // Each entry is one physical court and the sport(s) it supports —
@@ -117,6 +118,7 @@ class VenueController extends Controller
             'amenities' => ['nullable', 'array'],
             'opens_at' => ['nullable', 'date_format:H:i', 'required_with:closes_at'],
             'closes_at' => ['nullable', 'date_format:H:i', 'after:opens_at', 'required_with:opens_at'],
+            'price_per_hour' => ['nullable', 'numeric', 'min:0'],
             'status' => ['sometimes', 'in:active,inactive'],
         ]);
 
@@ -144,13 +146,15 @@ class VenueController extends Controller
             ->get()
             ->map(fn ($registration) => [
                 'id' => $registration->id,
-                'title' => $registration->user->name.' - '.($registration->court->name ?? 'Venue'),
+                'title' => ($registration->user->name ?? $registration->walk_in_name ?? 'Walk-in').' - '.($registration->court->name ?? 'Venue'),
                 'start' => $registration->starts_at,
                 'end' => $registration->ends_at,
                 'resourceId' => $registration->court_id,
                 'status' => $registration->status,
                 'purpose' => $registration->purpose,
                 'user' => $registration->user,
+                'walk_in_name' => $registration->walk_in_name,
+                'is_walk_in' => is_null($registration->user_id),
                 'conversation_id' => $registration->conversation?->id,
             ]);
     }

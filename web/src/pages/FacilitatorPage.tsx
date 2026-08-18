@@ -19,6 +19,7 @@ import { VenueEditModal } from '../components/venue/VenueEditModal'
 import { VenueScheduleCalendar } from '../components/venue/VenueScheduleCalendar'
 import { RegistrationApprovalQueue } from '../components/venue/RegistrationApprovalQueue'
 import { VenueBookingsList } from '../components/venue/VenueBookingsList'
+import { ManualBookingForm } from '../components/venue/ManualBookingForm'
 import { buttonGhost, buttonPrimary, select } from '../lib/formStyles'
 
 const NAV_ITEMS: NavItem[] = [
@@ -53,6 +54,7 @@ export function FacilitatorPage() {
   // rather than jumping straight into whatever was last picked.
   const [bookingsVenueId, setBookingsVenueId] = useState<number | null>(null)
   const [scheduleVenueId, setScheduleVenueId] = useState<number | null>(null)
+  const [showManualBookingForm, setShowManualBookingForm] = useState(false)
 
   const myVenues = venues ?? []
   const selected = myVenues.find((v) => v.id === selectedId) ?? myVenues[0] ?? null
@@ -159,9 +161,14 @@ export function FacilitatorPage() {
           }
           action={
             bookingsVenue ? (
-              <button onClick={() => setBookingsVenueId(null)} className={buttonGhost}>
-                &larr; Back to venues
-              </button>
+              <div className="flex items-center gap-4">
+                <button onClick={() => setShowManualBookingForm(true)} className={buttonPrimary}>
+                  + Add walk-in booking
+                </button>
+                <button onClick={() => setBookingsVenueId(null)} className={buttonGhost}>
+                  &larr; Back to venues
+                </button>
+              </div>
             ) : undefined
           }
         >
@@ -169,6 +176,10 @@ export function FacilitatorPage() {
             <RegistrationApprovalQueue venue={bookingsVenue} />
           ) : (
             <VenueBookingsList venues={myVenues} onSelect={(v) => setBookingsVenueId(v.id)} />
+          )}
+
+          {bookingsVenue && showManualBookingForm && (
+            <ManualBookingForm venue={bookingsVenue} onClose={() => setShowManualBookingForm(false)} />
           )}
         </Section>
       )}

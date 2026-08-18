@@ -70,16 +70,10 @@ class VenueRegistrationController extends Controller
             if ($court->venue_id !== (int) $data['venue_id']) {
                 throw ValidationException::withMessages(['court_id' => ['This court does not belong to the selected venue.']]);
             }
+        }
 
-            $overlaps = VenueRegistration::where('court_id', $data['court_id'])
-                ->whereIn('status', ['pending', 'approved'])
-                ->where('starts_at', '<', $data['ends_at'])
-                ->where('ends_at', '>', $data['starts_at'])
-                ->exists();
-
-            if ($overlaps) {
-                throw ValidationException::withMessages(['starts_at' => ['This court is already booked or pending for that time range.']]);
-            }
+        if (VenueRegistration::hasOverlap((int) $data['venue_id'], $data['court_id'] ?? null, $data['starts_at'], $data['ends_at'])) {
+            throw ValidationException::withMessages(['starts_at' => ['This slot is already booked or pending for that time range.']]);
         }
 
         $registration = $request->user()->venueRegistrations()->create([
@@ -92,6 +86,64 @@ class VenueRegistrationController extends Controller
         return response()->json($registration->load('venue:id,name', 'court:id,name'), 201);
     }
 
+    // A facilitator logging a walk-in customer who isn't using the app —
+    // created already `approved` (the facilitator creating it *is* the
+    // approval) so it blocks the slot immediately against both future
+    // walk-ins and in-app bookings via the same hasOverlap() check store()
+    // uses.
+    public function storeManual(Request $request, Venue $venue)
+    {
+        $this->authorize('createManualBooking', $venue);
+
+        $data = $request->validate([
+            'court_id' => ['nullable', 'exists:courts,id'],
+            'starts_at' => ['required', 'date'],
+            'ends_at' => ['required', 'date', 'after:starts_at'],
+            'walk_in_name' => ['required', 'string', 'max:255'],
+            'walk_in_contact' => ['nullable', 'string', 'max:255'],
+            'purpose' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        abort_if($venue->status !== 'active', 422, 'This venue is currently closed and not accepting bookings.');
+
+        if (! empty($data['court_id'])) {
+            $court = Court::findOrFail($data['court_id']);
+            if ($court->venue_id !== $venue->id) {
+                throw ValidationException::withMessages(['court_id' => ['This court does not belong to this venue.']]);
+            }
+        }
+
+        if ($venue->opens_at && $venue->closes_at) {
+            $startTime = Carbon::parse($data['starts_at'])->timezone('Asia/Manila')->format('H:i:s');
+            $endTime = Carbon::parse($data['ends_at'])->timezone('Asia/Manila')->format('H:i:s');
+
+            if ($startTime < $venue->opens_at || $endTime > $venue->closes_at) {
+                throw ValidationException::withMessages([
+                    'starts_at' => ["This venue is only open from {$venue->opens_at} to {$venue->closes_at}."],
+                ]);
+            }
+        }
+
+        if (VenueRegistration::hasOverlap($venue->id, $data['court_id'] ?? null, $data['starts_at'], $data['ends_at'])) {
+            throw ValidationException::withMessages(['starts_at' => ['This slot is already booked or pending for that time range.']]);
+        }
+
+        $registration = $venue->venueRegistrations()->create([
+            'court_id' => $data['court_id'] ?? null,
+            'starts_at' => $data['starts_at'],
+            'ends_at' => $data['ends_at'],
+            'walk_in_name' => $data['walk_in_name'],
+            'walk_in_contact' => $data['walk_in_contact'] ?? null,
+            'purpose' => $data['purpose'] ?? null,
+            'status' => 'approved',
+            'user_id' => null,
+        ]);
+
+        Broadcasting::safely(fn () => VenueRegistrationUpdated::dispatch($registration));
+
+        return response()->json($registration->load('court:id,name'), 201);
+    }
+
     public function update(Request $request, VenueRegistration $venueRegistration)
     {
         $this->authorize('update', $venueRegistration);
@@ -102,7 +154,9 @@ class VenueRegistrationController extends Controller
 
         $venueRegistration->update($data);
 
-        if ($data['status'] === 'approved') {
+        // A manual/walk-in booking is created already-approved and has no
+        // linked user — nothing to message or notify.
+        if ($data['status'] === 'approved' && $venueRegistration->user_id !== null) {
             $this->ensureBookingConversation($venueRegistration);
 
             NotificationService::send($venueRegistration->user_id, 'booking_approved', [
