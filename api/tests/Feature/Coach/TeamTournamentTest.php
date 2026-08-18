@@ -29,6 +29,8 @@ function befriend(User $a, User $b): void
 it('lets an organizer create a team tournament with single elimination', function () {
     [$sport, $format] = doublesSetup();
     $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
 
     $response = $this->actingAs($organizer)->postJson('/api/tournaments', [
         'sport_id' => $sport->id,
@@ -36,6 +38,8 @@ it('lets an organizer create a team tournament with single elimination', functio
         'name' => 'Doubles Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek(),
+        'venue_organizer_id' => $venueOrganizer->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
     ]);
 
     $response->assertCreated();
@@ -45,6 +49,8 @@ it('lets an organizer create a team tournament with single elimination', functio
 it('rejects a team tournament that is not single elimination', function () {
     [$sport, $format] = doublesSetup();
     $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
 
     $this->actingAs($organizer)->postJson('/api/tournaments', [
         'sport_id' => $sport->id,
@@ -52,6 +58,8 @@ it('rejects a team tournament that is not single elimination', function () {
         'name' => 'Doubles Cup',
         'format' => 'round_robin',
         'starts_at' => now()->addWeek(),
+        'venue_organizer_id' => $venueOrganizer->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
     ])->assertStatus(422);
 });
 
@@ -229,6 +237,7 @@ it('registers a ready team for a tournament and rejects double registration', fu
 it('generates a bracket seeded with team participants and advances the winning team on score completion', function () {
     [$sport, $format] = doublesSetup();
     $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
     $coach = userWithRole('coach');
 
     $tournament = Tournament::create([
@@ -239,6 +248,7 @@ it('generates a bracket seeded with team participants and advances the winning t
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek(),
         'status' => 'open',
+        'venue_organizer_id' => $venueOrganizer->id,
     ]);
 
     $teamIds = [];
@@ -277,7 +287,7 @@ it('generates a bracket seeded with team participants and advances the winning t
     $winningTeamId = $match->participant_a_team_id;
     $winningTeamName = Team::find($winningTeamId)->name;
 
-    $scoreResponse = $this->actingAs($organizer)->patchJson("/api/matches/{$match->id}/score", [
+    $scoreResponse = $this->actingAs($venueOrganizer)->patchJson("/api/matches/{$match->id}/score", [
         'score_a' => 21,
         'score_b' => 15,
         'status' => 'completed',

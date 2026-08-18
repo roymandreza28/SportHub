@@ -76,6 +76,8 @@ it('does not auto-start an open tournament past its start time with fewer than t
 
 it('creates a tournament, generates a bracket, and plays it through to completion via HTTP', function () {
     $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
     $sport = Sport::create(['name' => 'Basketball']);
 
     $create = $this->actingAs($organizer)->postJson('/api/tournaments', [
@@ -83,6 +85,8 @@ it('creates a tournament, generates a bracket, and plays it through to completio
         'name' => 'HTTP Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek()->toIso8601String(),
+        'venue_organizer_id' => $venueOrganizer->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
     ])->assertCreated();
 
     $tournamentId = $create->json('id');
@@ -107,7 +111,7 @@ it('creates a tournament, generates a bracket, and plays it through to completio
     expect($round1)->toHaveCount(2);
 
     foreach ($round1 as $match) {
-        $this->actingAs($organizer)->patchJson("/api/matches/{$match['id']}/score", [
+        $this->actingAs($venueOrganizer)->patchJson("/api/matches/{$match['id']}/score", [
             'score_a' => 21, 'score_b' => 10, 'status' => 'completed',
         ])->assertOk();
     }
@@ -117,7 +121,7 @@ it('creates a tournament, generates a bracket, and plays it through to completio
     expect($final['participant_a_id'])->not->toBeNull();
     expect($final['participant_b_id'])->not->toBeNull();
 
-    $this->actingAs($organizer)->patchJson("/api/matches/{$final['id']}/score", [
+    $this->actingAs($venueOrganizer)->patchJson("/api/matches/{$final['id']}/score", [
         'score_a' => 15, 'score_b' => 20, 'status' => 'completed',
     ])->assertOk();
 
@@ -148,6 +152,61 @@ it('denies scoring a match belonging to another organizers tournament', function
 
     $this->actingAs($other)->patchJson("/api/matches/{$matchId}/score", ['score_a' => 1, 'score_b' => 0, 'status' => 'completed'])
         ->assertForbidden();
+});
+
+it('denies the main organizer from scoring a match in their own tournament — that is the assigned venue organizers job', function () {
+    $owner = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id,
+        'sport_id' => $sport->id,
+        'name' => 'Delegated Cup',
+        'format' => 'round_robin',
+        'starts_at' => now()->addWeek(),
+        'status' => 'open',
+        'venue_organizer_id' => $venueOrganizer->id,
+    ]);
+
+    foreach (range(1, 2) as $i) {
+        $player = userWithRole('player');
+        TournamentRegistration::create(['tournament_id' => $tournament->id, 'user_id' => $player->id, 'status' => 'pending']);
+    }
+
+    $this->actingAs($owner)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
+    $matchId = $tournament->fresh()->bracket->matches->first()->id;
+
+    $this->actingAs($owner)->patchJson("/api/matches/{$matchId}/score", ['score_a' => 1, 'score_b' => 0, 'status' => 'completed'])
+        ->assertForbidden();
+
+    // The bracket itself (read-only) is still visible to the main organizer.
+    $this->actingAs($owner)->getJson("/api/tournaments/{$tournament->id}/bracket")->assertOk();
+});
+
+it('requires a venue organizer and livestream organizer to be assigned when creating a tournament', function () {
+    $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $this->actingAs($organizer)->postJson('/api/tournaments', [
+        'sport_id' => $sport->id,
+        'name' => 'Missing Staff Cup',
+        'format' => 'round_robin',
+        'starts_at' => now()->addWeek()->toIso8601String(),
+        'livestream_organizer_id' => $livestreamOrganizer->id,
+        // venue_organizer_id omitted on purpose
+    ])->assertStatus(422);
+
+    $this->actingAs($organizer)->postJson('/api/tournaments', [
+        'sport_id' => $sport->id,
+        'name' => 'Missing Staff Cup',
+        'format' => 'round_robin',
+        'starts_at' => now()->addWeek()->toIso8601String(),
+        'venue_organizer_id' => $venueOrganizer->id,
+        // livestream_organizer_id omitted on purpose
+    ])->assertStatus(422);
 });
 
 it('publishes news and creates a livestream tied to a tournament the organizer owns', function () {
@@ -347,6 +406,7 @@ it('lets a main organizer assign a venue organizer and livestream organizer when
 it('rejects assigning a user who does not hold the matching organizer role', function () {
     $organizer = userWithRole('organizer');
     $player = userWithRole('player');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
     $sport = Sport::create(['name' => 'Cricket']);
 
     $this->actingAs($organizer)->postJson('/api/tournaments', [
@@ -355,6 +415,7 @@ it('rejects assigning a user who does not hold the matching organizer role', fun
         'format' => 'round_robin',
         'starts_at' => now()->addWeek()->toIso8601String(),
         'venue_organizer_id' => $player->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
     ])->assertStatus(422);
 });
 
@@ -409,6 +470,8 @@ it('requires sets_to_win when scoring_type is best_of_sets', function () {
 
 it('creates a tournament with best_of_sets scoring via HTTP', function () {
     $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
     $sport = Sport::create(['name' => 'Table Tennis']);
 
     $response = $this->actingAs($organizer)->postJson('/api/tournaments', [
@@ -418,6 +481,8 @@ it('creates a tournament with best_of_sets scoring via HTTP', function () {
         'starts_at' => now()->addWeek(),
         'scoring_type' => 'best_of_sets',
         'sets_to_win' => 3,
+        'venue_organizer_id' => $venueOrganizer->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
     ]);
 
     $response->assertCreated();
@@ -428,6 +493,7 @@ it('creates a tournament with best_of_sets scoring via HTTP', function () {
 
 it('completes a best_of_sets match once a side reaches sets_to_win and advances the bracket', function () {
     $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
     $sport = Sport::create(['name' => 'Table Tennis']);
 
     $tournament = Tournament::create([
@@ -439,6 +505,7 @@ it('completes a best_of_sets match once a side reaches sets_to_win and advances 
         'sets_to_win' => 2, // best of 3
         'starts_at' => now()->addWeek(),
         'status' => 'open',
+        'venue_organizer_id' => $venueOrganizer->id,
     ]);
 
     foreach (range(1, 2) as $i) {
@@ -450,7 +517,7 @@ it('completes a best_of_sets match once a side reaches sets_to_win and advances 
     $match = $tournament->fresh()->bracket->matches->first();
 
     // First set: not decided yet (1-0 in sets, needs 2).
-    $this->actingAs($organizer)->patchJson("/api/matches/{$match->id}/score", [
+    $this->actingAs($venueOrganizer)->patchJson("/api/matches/{$match->id}/score", [
         'sets' => [['score_a' => 11, 'score_b' => 8]],
     ])->assertOk()
         ->assertJsonPath('status', 'live')
@@ -460,7 +527,7 @@ it('completes a best_of_sets match once a side reaches sets_to_win and advances 
     expect($tournament->fresh()->status)->toBe('in_progress');
 
     // Second set clinches it 2-0.
-    $response = $this->actingAs($organizer)->patchJson("/api/matches/{$match->id}/score", [
+    $response = $this->actingAs($venueOrganizer)->patchJson("/api/matches/{$match->id}/score", [
         'sets' => [['score_a' => 11, 'score_b' => 8], ['score_a' => 11, 'score_b' => 9]],
     ]);
 
@@ -476,6 +543,7 @@ it('completes a best_of_sets match once a side reaches sets_to_win and advances 
 
 it('does not complete a best_of_sets match before the deciding set is reached', function () {
     $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
     $sport = Sport::create(['name' => 'Volleyball']);
 
     $tournament = Tournament::create([
@@ -487,6 +555,7 @@ it('does not complete a best_of_sets match before the deciding set is reached', 
         'sets_to_win' => 3, // best of 5
         'starts_at' => now()->addWeek(),
         'status' => 'open',
+        'venue_organizer_id' => $venueOrganizer->id,
     ]);
 
     foreach (range(1, 2) as $i) {
@@ -497,7 +566,7 @@ it('does not complete a best_of_sets match before the deciding set is reached', 
     $this->actingAs($organizer)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
     $match = $tournament->fresh()->bracket->matches->first();
 
-    $response = $this->actingAs($organizer)->patchJson("/api/matches/{$match->id}/score", [
+    $response = $this->actingAs($venueOrganizer)->patchJson("/api/matches/{$match->id}/score", [
         'sets' => [
             ['score_a' => 25, 'score_b' => 20],
             ['score_a' => 25, 'score_b' => 18],

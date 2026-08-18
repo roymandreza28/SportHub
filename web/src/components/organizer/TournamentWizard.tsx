@@ -271,41 +271,55 @@ export function TournamentWizard() {
           </select>
         </div>
         <div className={fieldGroup}>
-          <label className={label}>Venue organizer (scoreboard)</label>
+          <label className={label}>Venue organizer (scoreboard) *</label>
           <select
             value={venueOrganizerId}
             onChange={(e) => setVenueOrganizerId(e.target.value ? Number(e.target.value) : '')}
             className={select}
           >
-            <option value="">None assigned</option>
+            <option value="">Choose a venue organizer...</option>
             {organizers?.venue_organizers.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.name}
               </option>
             ))}
           </select>
+          {organizers && organizers.venue_organizers.length === 0 && (
+            <p className="text-xs text-red-600">
+              No venue organizer accounts exist yet — ask an admin to create one before you can create a tournament.
+            </p>
+          )}
+          <p className="text-xs text-slate-500">
+            Required — scoring is always run by the venue organizer you assign here, not by you.
+          </p>
         </div>
         <div className={fieldGroup}>
-          <label className={label}>Livestream organizer</label>
+          <label className={label}>Livestream organizer *</label>
           <select
             value={livestreamOrganizerId}
             onChange={(e) => setLivestreamOrganizerId(e.target.value ? Number(e.target.value) : '')}
             className={select}
           >
-            <option value="">None assigned</option>
+            <option value="">Choose a livestream organizer...</option>
             {organizers?.livestream_organizers.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.name}
               </option>
             ))}
           </select>
+          {organizers && organizers.livestream_organizers.length === 0 && (
+            <p className="text-xs text-red-600">
+              No livestream organizer accounts exist yet — ask an admin to create one before you can create a
+              tournament.
+            </p>
+          )}
         </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
         <button
           onClick={() => createMutation.mutate()}
-          disabled={!sportId || !name || !startsAt || createMutation.isPending}
+          disabled={!sportId || !name || !startsAt || !venueOrganizerId || !livestreamOrganizerId || createMutation.isPending}
           className={buttonPrimary}
         >
           {createMutation.isPending ? 'Creating...' : 'Create tournament'}

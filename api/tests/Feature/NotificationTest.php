@@ -94,10 +94,12 @@ it('notifies a player when a coach registers them for a tournament', function ()
 
 it('notifies every registrant when a bracket is generated and when a round advances', function () {
     $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
     $sport = Sport::create(['name' => 'Badminton']);
     $tournament = Tournament::create([
         'organizer_id' => $organizer->id, 'sport_id' => $sport->id,
         'name' => 'Round Cup', 'format' => 'single_elimination', 'starts_at' => now()->addWeek(), 'status' => 'open',
+        'venue_organizer_id' => $venueOrganizer->id,
     ]);
 
     $players = collect(range(1, 4))->map(function () use ($tournament) {
@@ -117,7 +119,7 @@ it('notifies every registrant when a bracket is generated and when a round advan
 
     $round1 = $this->actingAs($organizer)->getJson("/api/tournaments/{$tournament->id}/bracket")->json('structure.0');
     foreach ($round1 as $match) {
-        $this->actingAs($organizer)->patchJson("/api/matches/{$match['id']}/score", [
+        $this->actingAs($venueOrganizer)->patchJson("/api/matches/{$match['id']}/score", [
             'score_a' => 21, 'score_b' => 10, 'status' => 'completed',
         ])->assertOk();
     }

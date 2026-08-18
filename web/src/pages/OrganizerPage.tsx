@@ -245,12 +245,23 @@ export function OrganizerPage() {
                     </button>
                   </div>
                 )}
-                <BracketView tournamentId={selectedTournamentId} onSelectMatch={(match) => setActiveMatchId(match.id)} />
+                {/* The main organizer gets a read-only bracket — results are
+                    the outcome of matches facilitated by whichever venue
+                    organizer they designated, not something the main
+                    organizer scores themselves. Omitting onSelectMatch here
+                    makes every match card non-clickable (see MatchCard's
+                    disabled={!onClick}), while a venue organizer viewing
+                    their own "Tournament to Facilitate" tab keeps full
+                    click-to-score access. */}
+                <BracketView
+                  tournamentId={selectedTournamentId}
+                  onSelectMatch={isMainOrganizer ? undefined : (match) => setActiveMatchId(match.id)}
+                />
               </>
             )}
           </div>
 
-          {activeMatch && selectedTournamentId && (
+          {!isMainOrganizer && activeMatch && selectedTournamentId && (
             <div className="mt-4 border-t border-slate-100 pt-4">
               <ScoreboardLive
                 match={activeMatch}

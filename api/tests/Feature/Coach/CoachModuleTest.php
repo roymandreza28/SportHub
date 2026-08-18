@@ -30,6 +30,8 @@ it('makes a freshly-created tournament visible to coaches only after the organiz
     $coach = userWithRole('coach');
     $player = userWithRole('player');
     $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
     $sport = Sport::create(['name' => 'Basketball']);
 
     // Mirrors the real flow: POST /api/tournaments never accepts a status
@@ -39,6 +41,8 @@ it('makes a freshly-created tournament visible to coaches only after the organiz
         'name' => 'Freshly Created Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek()->toIso8601String(),
+        'venue_organizer_id' => $venueOrganizer->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
     ]);
     $create->assertCreated();
     expect($create->json('status'))->toBe('draft');

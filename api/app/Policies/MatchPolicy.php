@@ -13,9 +13,11 @@ class MatchPolicy
             return false;
         }
 
-        // A venue organizer runs the scoreboard for whichever tournament
-        // the main organizer assigned them to — not any tournament.
-        return $gameMatch->bracket->tournament->organizer_id === $user->id
-            || $gameMatch->bracket->tournament->venue_organizer_id === $user->id;
+        // Scoring is the assigned venue organizer's job alone — not the main
+        // organizer's, even for a tournament they created themselves. Every
+        // tournament requires a venue organizer at creation (see
+        // TournamentController::store()), so there's no "nobody can score
+        // it" gap this would otherwise open up.
+        return $gameMatch->bracket->tournament->venue_organizer_id === $user->id;
     }
 }

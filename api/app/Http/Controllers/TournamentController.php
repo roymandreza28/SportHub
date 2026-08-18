@@ -54,8 +54,12 @@ class TournamentController extends Controller
             'starts_at' => ['required', 'date'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
             'venue_id' => ['nullable', 'exists:venues,id'],
-            'venue_organizer_id' => ['nullable', 'exists:users,id', $this->hasRoleRule('venue_organizer')],
-            'livestream_organizer_id' => ['nullable', 'exists:users,id', $this->hasRoleRule('livestream_organizer')],
+            // Required at creation — every tournament must have a venue
+            // organizer designated up front, since match scoring is their
+            // exclusive responsibility (the main organizer who creates the
+            // tournament never scores it themselves; see MatchPolicy).
+            'venue_organizer_id' => ['required', 'exists:users,id', $this->hasRoleRule('venue_organizer')],
+            'livestream_organizer_id' => ['required', 'exists:users,id', $this->hasRoleRule('livestream_organizer')],
             'scoring_type' => ['sometimes', 'in:single_score,best_of_sets'],
             'sets_to_win' => ['required_if:scoring_type,best_of_sets', 'nullable', 'integer', 'min:2', 'max:4'],
         ]);
