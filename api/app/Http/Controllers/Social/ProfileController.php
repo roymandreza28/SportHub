@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Social;
 
 use App\Http\Controllers\Controller;
+use App\Models\MatchPlayerStat;
 use App\Models\User;
+use App\Support\PlayerStatFieldSets;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -66,5 +68,42 @@ class ProfileController extends Controller
             'friendship_status' => $status,
             'friendship_id' => $friendshipId,
         ];
+    }
+
+    // Career totals for the venue-organizer scoreboard's per-player stats
+    // (see MatchController::upsertPlayerStats()), grouped by sport, powering
+    // ProfilePage.tsx's stats pentagon. Only completed matches count, so a
+    // career total never fluctuates mid-game.
+    public function statSummary(User $user)
+    {
+        abort_unless($user->hasAnyRole(['player', 'coach']), 404);
+
+        return MatchPlayerStat::where('user_id', $user->id)
+            ->whereHas('match', fn ($q) => $q->where('status', 'completed'))
+            ->with('sport:id,name')
+            ->get()
+            ->groupBy('sport_id')
+            ->map(function ($rows) {
+                $sportName = $rows->first()->sport->name;
+                $fields = PlayerStatFieldSets::for($sportName) ?? [];
+                $totals = array_fill_keys(array_column($fields, 'key'), 0);
+
+                foreach ($rows as $row) {
+                    foreach ($row->stats ?? [] as $key => $value) {
+                        if (array_key_exists($key, $totals)) {
+                            $totals[$key] += (int) $value;
+                        }
+                    }
+                }
+
+                return [
+                    'sport_id' => $rows->first()->sport_id,
+                    'sport_name' => $sportName,
+                    'matches_played' => $rows->count(),
+                    'totals' => $totals,
+                    'pentagon_fields' => PlayerStatFieldSets::pentagonAxesFor($sportName),
+                ];
+            })
+            ->values();
     }
 }

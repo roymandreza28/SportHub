@@ -171,16 +171,36 @@ export async function fetchBracket(tournamentId: number) {
   return data
 }
 
+// Folded into the same score-save round-trip every scoreboard already fires
+// on each tap, rather than a second network call per click — see
+// MatchController::upsertPlayerStats(). Keyed by user_id; team_id is always
+// derived server-side from real team-membership rows, never sent here.
+export type PlayerStatEntry = { user_id: number; stats: Record<string, number> }
+
+export function toPlayerStatsPayload<T extends Record<string, number>>(
+  stats: Record<number, T>
+): PlayerStatEntry[] {
+  return Object.entries(stats).map(([userId, s]) => ({ user_id: Number(userId), stats: s }))
+}
+
 export async function updateMatchScore(
   matchId: number,
-  input: { score_a: number; score_b: number; status?: 'scheduled' | 'live' | 'completed' }
+  input: {
+    score_a: number
+    score_b: number
+    status?: 'scheduled' | 'live' | 'completed'
+    player_stats?: PlayerStatEntry[]
+  }
 ) {
   const { data } = await api.patch<BracketMatch>(`/api/matches/${matchId}/score`, input)
   return data
 }
 
-export async function updateMatchSets(matchId: number, sets: SetScore[]) {
-  const { data } = await api.patch<BracketMatch>(`/api/matches/${matchId}/score`, { sets })
+export async function updateMatchSets(
+  matchId: number,
+  input: { sets: SetScore[]; player_stats?: PlayerStatEntry[] }
+) {
+  const { data } = await api.patch<BracketMatch>(`/api/matches/${matchId}/score`, input)
   return data
 }
 

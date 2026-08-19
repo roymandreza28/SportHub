@@ -40,7 +40,7 @@ function SetsScoreboard({
   const isDecided = match.status === 'completed'
 
   const save = useMutation({
-    mutationFn: (nextSets: SetScore[]) => updateMatchSets(match.id, nextSets),
+    mutationFn: (nextSets: SetScore[]) => updateMatchSets(match.id, { sets: nextSets }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizer', 'bracket', tournamentId] })
     },

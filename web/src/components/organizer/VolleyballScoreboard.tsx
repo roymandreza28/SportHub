@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchMatchRoster, updateMatchSets, type BracketMatch, type MatchRosterTeam, type SetScore, type Tournament } from '../../lib/organizerApi'
+import {
+  fetchMatchRoster,
+  toPlayerStatsPayload,
+  updateMatchSets,
+  type BracketMatch,
+  type MatchRosterTeam,
+  type PlayerStatEntry,
+  type SetScore,
+  type Tournament,
+} from '../../lib/organizerApi'
 import { buttonSecondary } from '../../lib/formStyles'
 
 // Volleyball Scoreboard Rules (rally scoring, no point cap, best-of-5,
@@ -11,9 +20,21 @@ const SWITCH_SIDES_THRESHOLD = 8
 
 type PointCategory = 'spike' | 'block' | 'ace' | 'error'
 type RosterPlayer = { id: number; name: string }
-type PlayerVolleyballStat = { spikes: number; blocks: number; aces: number; errors: number }
+// kills/blocks/aces/digs/assists feed the career stats pentagon (see
+// api/app/Support/PlayerStatFieldSets.php) — errors stays tracked here too
+// but isn't one of the 5 pentagon axes. "spike" stays the internal
+// PointCategory value (matches the existing point-request/picker wiring)
+// even though the tracked field itself is renamed to the standard "kills".
+type PlayerVolleyballStat = { kills: number; blocks: number; aces: number; digs: number; assists: number; errors: number }
 type PlayerStats = Record<number, PlayerVolleyballStat>
 type PointRequest = { scoringSide: 'a' | 'b'; category: PointCategory }
+type QuickStatKey = 'digs' | 'assists'
+
+const QUICK_STAT_LABEL: Record<QuickStatKey, string> = { digs: 'Dig', assists: 'Ast' }
+
+function emptyStat(): PlayerVolleyballStat {
+  return { kills: 0, blocks: 0, aces: 0, digs: 0, assists: 0, errors: 0 }
+}
 
 type RallySnapshot = { a: number; b: number; server: 'a' | 'b'; playerStats: PlayerStats }
 type LogEntry = { id: number; text: string; at: number }
@@ -197,7 +218,7 @@ export function VolleyballScoreboard({
   const pickerTeam = pickerSide === 'a' ? roster?.team_a : pickerSide === 'b' ? roster?.team_b : null
 
   const save = useMutation({
-    mutationFn: (nextSets: SetScore[]) => updateMatchSets(match.id, nextSets),
+    mutationFn: (input: { sets: SetScore[]; player_stats?: PlayerStatEntry[] }) => updateMatchSets(match.id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizer', 'bracket', tournamentId] })
     },
@@ -243,18 +264,18 @@ export function VolleyballScoreboard({
     setCurrentB(nextB)
     if (server !== scoringSide) setServer(scoringSide)
 
-    setPlayerStats((s) => {
-      const prev = s[player.id] ?? { spikes: 0, blocks: 0, aces: 0, errors: 0 }
-      return {
-        ...s,
-        [player.id]: {
-          spikes: prev.spikes + (category === 'spike' ? 1 : 0),
-          blocks: prev.blocks + (category === 'block' ? 1 : 0),
-          aces: prev.aces + (category === 'ace' ? 1 : 0),
-          errors: prev.errors + (category === 'error' ? 1 : 0),
-        },
-      }
-    })
+    const nextStats = {
+      ...playerStats,
+      [player.id]: {
+        ...emptyStat(),
+        ...playerStats[player.id],
+        kills: (playerStats[player.id]?.kills ?? 0) + (category === 'spike' ? 1 : 0),
+        blocks: (playerStats[player.id]?.blocks ?? 0) + (category === 'block' ? 1 : 0),
+        aces: (playerStats[player.id]?.aces ?? 0) + (category === 'ace' ? 1 : 0),
+        errors: (playerStats[player.id]?.errors ?? 0) + (category === 'error' ? 1 : 0),
+      },
+    }
+    setPlayerStats(nextStats)
 
     const scoringTeamName = scoringSide === 'a' ? homeName : awayName
     const logLine =
@@ -279,8 +300,20 @@ export function VolleyballScoreboard({
       setRallyHistoryLength(0)
       ttoAcknowledgedRef.current.clear()
       log(`Set ${nextSets.length} won by ${nextA > nextB ? homeName : awayName} (${nextA}-${nextB})`)
-      save.mutate(nextSets)
+      save.mutate({ sets: nextSets, player_stats: toPlayerStatsPayload(nextStats) })
     }
+  }
+
+  // Digs/assists don't score a point on their own, so unlike Spike/Block/
+  // Ace/Opp. error above they're tapped directly on the roster row rather
+  // than through the point-request picker — still round-trips to the
+  // backend immediately (current, not-yet-finished set score included)
+  // rather than waiting for the set to conclude.
+  function bumpStat(playerId: number, key: QuickStatKey) {
+    if (isDecided) return
+    const nextStats = { ...playerStats, [playerId]: { ...emptyStat(), ...playerStats[playerId], [key]: (playerStats[playerId]?.[key] ?? 0) + 1 } }
+    setPlayerStats(nextStats)
+    save.mutate({ sets, player_stats: toPlayerStatsPayload(nextStats) })
   }
 
   function requestPoint(scoringSide: 'a' | 'b', category: PointCategory) {
@@ -297,7 +330,7 @@ export function VolleyballScoreboard({
   function removeLastSet() {
     const nextSets = sets.slice(0, -1)
     setSets(nextSets)
-    save.mutate(nextSets)
+    save.mutate({ sets: nextSets, player_stats: toPlayerStatsPayload(playerStats) })
     log('Undo last set')
   }
 
@@ -312,7 +345,7 @@ export function VolleyballScoreboard({
     ttoAcknowledgedRef.current.clear()
     logIdRef.current += 1
     setMatchLog([{ id: logIdRef.current, text: 'Game reset — all sets, points, and stats cleared.', at: Date.now() }])
-    save.mutate([])
+    save.mutate({ sets: [], player_stats: [] })
   }
 
   async function copyShareLink() {
@@ -546,9 +579,19 @@ export function VolleyballScoreboard({
                             className={`w-10 shrink-0 rounded-md border px-1 py-1 text-center ${isDark ? 'border-slate-600 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white'}`}
                           />
                           <span className="flex-1 truncate font-medium">{m.name}</span>
-                          <span className={subtleText}>{stat?.spikes ?? 0} Sp</span>
+                          <span className={subtleText}>{stat?.kills ?? 0} K</span>
                           <span className={subtleText}>{stat?.blocks ?? 0} Bl</span>
                           <span className={subtleText}>{stat?.aces ?? 0} Ace</span>
+                          {(['digs', 'assists'] as const).map((key) => (
+                            <button
+                              key={key}
+                              onClick={() => bumpStat(m.id, key)}
+                              disabled={isDecided}
+                              className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                            >
+                              {QUICK_STAT_LABEL[key]} {stat?.[key] ?? 0}
+                            </button>
+                          ))}
                           <span className={subtleText}>{stat?.errors ?? 0} Err</span>
                         </div>
                       )

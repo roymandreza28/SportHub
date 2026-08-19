@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchMatchRoster, updateMatchSets, type BracketMatch, type MatchRosterTeam, type SetScore, type Tournament } from '../../lib/organizerApi'
+import {
+  fetchMatchRoster,
+  toPlayerStatsPayload,
+  updateMatchSets,
+  type BracketMatch,
+  type MatchRosterTeam,
+  type PlayerStatEntry,
+  type SetScore,
+  type Tournament,
+} from '../../lib/organizerApi'
 import { buttonSecondary } from '../../lib/formStyles'
 
 // 🎾 Tennis Scoring System — the deepest hierarchy of any board here: points
@@ -15,10 +24,18 @@ const POINT_LABELS = ['0', '15', '30', '40']
 
 type PointCategory = 'point' | 'error'
 type RosterPlayer = { id: number; name: string }
-type PlayerStat = { points: number; errors: number }
+// Feeds the career stats pentagon (see api/app/Support/PlayerStatFieldSets.php).
+type PlayerStat = { points_won: number; aces: number; winners: number; unforced_errors: number; double_faults: number }
 type PlayerStats = Record<number, PlayerStat>
 type PointRequest = { scoringSide: 'a' | 'b'; category: PointCategory }
 type Phase = 'game' | 'tiebreak'
+type QuickStatKey = 'aces' | 'winners' | 'double_faults'
+
+const QUICK_STAT_LABEL: Record<QuickStatKey, string> = { aces: 'Ace', winners: 'Winner', double_faults: 'DF' }
+
+function emptyStat(): PlayerStat {
+  return { points_won: 0, aces: 0, winners: 0, unforced_errors: 0, double_faults: 0 }
+}
 
 type PointSnapshot = {
   pointA: number
@@ -231,7 +248,7 @@ export function TennisScoreboard({
   const pickerTeam = pickerSide === 'a' ? roster?.team_a : pickerSide === 'b' ? roster?.team_b : null
 
   const save = useMutation({
-    mutationFn: (nextSets: SetScore[]) => updateMatchSets(match.id, nextSets),
+    mutationFn: (input: { sets: SetScore[]; player_stats?: PlayerStatEntry[] }) => updateMatchSets(match.id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizer', 'bracket', tournamentId] })
     },
@@ -266,15 +283,15 @@ export function TennisScoreboard({
     setPhase(nextIsDeciding && superTiebreakFinalSet ? 'tiebreak' : 'game')
   }
 
-  function finishSet(finalGameA: number, finalGameB: number) {
+  function finishSet(finalGameA: number, finalGameB: number, statsForSave: PlayerStats) {
     const nextSets = [...sets, { score_a: finalGameA, score_b: finalGameB }]
     setSets(nextSets)
     log(`Set ${nextSets.length} won by ${finalGameA > finalGameB ? homeName : awayName} (${finalGameA}-${finalGameB})`)
-    save.mutate(nextSets)
+    save.mutate({ sets: nextSets, player_stats: toPlayerStatsPayload(statsForSave) })
     startNewSet()
   }
 
-  function finishGame(winner: 'a' | 'b') {
+  function finishGame(winner: 'a' | 'b', statsForSave: PlayerStats) {
     const nextGameA = winner === 'a' ? gameA + 1 : gameA
     const nextGameB = winner === 'b' ? gameB + 1 : gameB
     setPointA(0)
@@ -284,7 +301,7 @@ export function TennisScoreboard({
     const trailer = Math.min(nextGameA, nextGameB)
 
     if (leader >= 6 && leader - trailer >= 2) {
-      finishSet(nextGameA, nextGameB)
+      finishSet(nextGameA, nextGameB, statsForSave)
       return
     }
     if (nextGameA === 6 && nextGameB === 6) {
@@ -298,14 +315,14 @@ export function TennisScoreboard({
     setGameB(nextGameB)
   }
 
-  function finishTiebreak(winner: 'a' | 'b') {
+  function finishTiebreak(winner: 'a' | 'b', statsForSave: PlayerStats) {
     // A tiebreak win closes out the set: 7-6 (or, for a super tiebreak
     // standing in for the whole deciding set, the raw tiebreak score).
     if (isSuperTiebreakSet) {
-      finishSet(winner === 'a' ? pointA + 1 : pointA, winner === 'b' ? pointB + 1 : pointB)
+      finishSet(winner === 'a' ? pointA + 1 : pointA, winner === 'b' ? pointB + 1 : pointB, statsForSave)
       return
     }
-    finishSet(winner === 'a' ? 7 : 6, winner === 'b' ? 7 : 6)
+    finishSet(winner === 'a' ? 7 : 6, winner === 'b' ? 7 : 6, statsForSave)
   }
 
   function applyPoint(scoringSide: 'a' | 'b', category: PointCategory, player: RosterPlayer) {
@@ -315,16 +332,16 @@ export function TennisScoreboard({
     const nextA = scoringSide === 'a' ? pointA + 1 : pointA
     const nextB = scoringSide === 'b' ? pointB + 1 : pointB
 
-    setPlayerStats((s) => {
-      const prev = s[player.id] ?? { points: 0, errors: 0 }
-      return {
-        ...s,
-        [player.id]: {
-          points: prev.points + (category === 'point' ? 1 : 0),
-          errors: prev.errors + (category === 'error' ? 1 : 0),
-        },
-      }
-    })
+    const nextStats = {
+      ...playerStats,
+      [player.id]: {
+        ...emptyStat(),
+        ...playerStats[player.id],
+        points_won: (playerStats[player.id]?.points_won ?? 0) + (category === 'point' ? 1 : 0),
+        unforced_errors: (playerStats[player.id]?.unforced_errors ?? 0) + (category === 'error' ? 1 : 0),
+      },
+    }
+    setPlayerStats(nextStats)
 
     const scoringTeamName = scoringSide === 'a' ? homeName : awayName
     const logLine =
@@ -337,7 +354,7 @@ export function TennisScoreboard({
       const leader = Math.max(nextA, nextB)
       const trailer = Math.min(nextA, nextB)
       if (leader >= tiebreakTarget && leader - trailer >= 2) {
-        finishTiebreak(nextA > nextB ? 'a' : 'b')
+        finishTiebreak(nextA > nextB ? 'a' : 'b', nextStats)
         return
       }
       setPointA(nextA)
@@ -350,11 +367,22 @@ export function TennisScoreboard({
     const wonByNoAd = noAdScoring && nextA >= 3 && nextB >= 3 && Math.abs(nextA - nextB) === 1
     const wonNormally = Math.max(nextA, nextB) >= 4 && Math.abs(nextA - nextB) >= 2
     if (wonByNoAd || wonNormally) {
-      finishGame(nextA > nextB ? 'a' : 'b')
+      finishGame(nextA > nextB ? 'a' : 'b', nextStats)
       return
     }
     setPointA(nextA)
     setPointB(nextB)
+  }
+
+  // Aces / winners / double faults are supplementary box-score taps — the
+  // Point/Opp. error buttons above don't distinguish how a point was won or
+  // lost, so these are tapped directly on the roster row and round-trip
+  // immediately with the current (not-yet-finished) set/game score.
+  function bumpStat(playerId: number, key: QuickStatKey) {
+    if (isDecided) return
+    const nextStats = { ...playerStats, [playerId]: { ...emptyStat(), ...playerStats[playerId], [key]: (playerStats[playerId]?.[key] ?? 0) + 1 } }
+    setPlayerStats(nextStats)
+    save.mutate({ sets, player_stats: toPlayerStatsPayload(nextStats) })
   }
 
   function requestPoint(scoringSide: 'a' | 'b', category: PointCategory) {
@@ -385,7 +413,7 @@ export function TennisScoreboard({
   function removeLastSet() {
     const nextSets = sets.slice(0, -1)
     setSets(nextSets)
-    save.mutate(nextSets)
+    save.mutate({ sets: nextSets, player_stats: toPlayerStatsPayload(playerStats) })
     log('Undo last set')
   }
 
@@ -402,7 +430,7 @@ export function TennisScoreboard({
     setHistoryLength(0)
     logIdRef.current += 1
     setMatchLog([{ id: logIdRef.current, text: 'Game reset — all sets, games, and points cleared.', at: Date.now() }])
-    save.mutate([])
+    save.mutate({ sets: [], player_stats: [] })
   }
 
   async function copyShareLink() {
@@ -648,8 +676,18 @@ export function TennisScoreboard({
                             className={`w-10 shrink-0 rounded-md border px-1 py-1 text-center ${isDark ? 'border-slate-600 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white'}`}
                           />
                           <span className="flex-1 truncate font-medium">{m.name}</span>
-                          <span className={subtleText}>{stat?.points ?? 0} pts</span>
-                          <span className={subtleText}>{stat?.errors ?? 0} err</span>
+                          <span className={subtleText}>{stat?.points_won ?? 0} pts</span>
+                          {(['aces', 'winners', 'double_faults'] as const).map((key) => (
+                            <button
+                              key={key}
+                              onClick={() => bumpStat(m.id, key)}
+                              disabled={isDecided}
+                              className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                            >
+                              {QUICK_STAT_LABEL[key]} {stat?.[key] ?? 0}
+                            </button>
+                          ))}
+                          <span className={subtleText}>{stat?.unforced_errors ?? 0} err</span>
                         </div>
                       )
                     })}

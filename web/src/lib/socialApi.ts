@@ -49,3 +49,20 @@ export async function updateOwnCover(file: File) {
   const { data } = await api.post<{ cover_url: string }>('/api/social/profile/cover', form)
   return data
 }
+
+// Career totals from the venue organizer's live scoreboard stats (see
+// MatchController::upsertPlayerStats()), summed per sport across every
+// completed tournament match — powers the profile's stats pentagon. Only
+// sports with at least one recorded match are returned.
+export type PlayerStatSummaryEntry = {
+  sport_id: number
+  sport_name: string
+  matches_played: number
+  totals: Record<string, number>
+  pentagon_fields: { key: string; label: string; scale_max: number }[]
+}
+
+export async function fetchPlayerStatSummary(userId: number) {
+  const { data } = await api.get<PlayerStatSummaryEntry[]>(`/api/social/users/${userId}/stat-summary`)
+  return data
+}

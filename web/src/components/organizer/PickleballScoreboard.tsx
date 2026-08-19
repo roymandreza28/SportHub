@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchMatchRoster, updateMatchSets, type BracketMatch, type MatchRosterTeam, type SetScore, type Tournament } from '../../lib/organizerApi'
+import {
+  fetchMatchRoster,
+  toPlayerStatsPayload,
+  updateMatchSets,
+  type BracketMatch,
+  type MatchRosterTeam,
+  type PlayerStatEntry,
+  type SetScore,
+  type Tournament,
+} from '../../lib/organizerApi'
 import { buttonSecondary } from '../../lib/formStyles'
 
 // 🏓 Pickleball Scoring System — side-out scoring, not rally scoring like
@@ -13,9 +22,17 @@ const TARGET_OPTIONS = [11, 15, 21]
 
 type ActionKind = 'point' | 'sideout'
 type RosterPlayer = { id: number; name: string }
-type PlayerStat = { points: number; faults: number }
+// Feeds the career stats pentagon (see api/app/Support/PlayerStatFieldSets.php).
+type PlayerStat = { points_won: number; winners: number; net_points_won: number; unforced_errors: number; faults: number }
 type PlayerStats = Record<number, PlayerStat>
 type PendingAction = { kind: ActionKind }
+type QuickStatKey = 'winners' | 'net_points_won' | 'unforced_errors'
+
+const QUICK_STAT_LABEL: Record<QuickStatKey, string> = { winners: 'Winner', net_points_won: 'Net Pt', unforced_errors: 'UE' }
+
+function emptyStat(): PlayerStat {
+  return { points_won: 0, winners: 0, net_points_won: 0, unforced_errors: 0, faults: 0 }
+}
 
 type RallySnapshot = { a: number; b: number; servingSide: 'a' | 'b'; serverNumber: 1 | 2; playerStats: PlayerStats }
 type LogEntry = { id: number; text: string; at: number }
@@ -174,7 +191,7 @@ export function PickleballScoreboard({
   const servingTeamName = servingSide === 'a' ? homeName : awayName
 
   const save = useMutation({
-    mutationFn: (nextGames: SetScore[]) => updateMatchSets(match.id, nextGames),
+    mutationFn: (input: { sets: SetScore[]; player_stats?: PlayerStatEntry[] }) => updateMatchSets(match.id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizer', 'bracket', tournamentId] })
     },
@@ -211,7 +228,7 @@ export function PickleballScoreboard({
     log(`Side out — serve to ${nextSide === 'a' ? homeName : awayName}`)
   }
 
-  function checkGameWon(nextA: number, nextB: number) {
+  function checkGameWon(nextA: number, nextB: number, statsForSave: PlayerStats) {
     const leader = Math.max(nextA, nextB)
     const trailer = Math.min(nextA, nextB)
     if (!(leader >= targetPoints && leader - trailer >= 2)) return
@@ -226,7 +243,7 @@ export function PickleballScoreboard({
     rallyHistoryRef.current = []
     setRallyHistoryLength(0)
     log(`Game ${nextGames.length} won by ${nextA > nextB ? homeName : awayName} (${nextA}-${nextB})`)
-    save.mutate(nextGames)
+    save.mutate({ sets: nextGames, player_stats: toPlayerStatsPayload(statsForSave) })
   }
 
   // Only the serving side can act each rally — 'point' means they won the
@@ -241,20 +258,27 @@ export function PickleballScoreboard({
       const nextB = servingSide === 'b' ? currentB + 1 : currentB
       setCurrentA(nextA)
       setCurrentB(nextB)
-      setPlayerStats((s) => {
-        const prev = s[player.id] ?? { points: 0, faults: 0 }
-        return { ...s, [player.id]: { points: prev.points + 1, faults: prev.faults } }
-      })
+      const nextStats = { ...playerStats, [player.id]: { ...emptyStat(), ...playerStats[player.id], points_won: (playerStats[player.id]?.points_won ?? 0) + 1 } }
+      setPlayerStats(nextStats)
       log(`${player.name} (${servingTeamName}) point (${nextA}-${nextB})`)
-      checkGameWon(nextA, nextB)
+      checkGameWon(nextA, nextB, nextStats)
     } else {
-      setPlayerStats((s) => {
-        const prev = s[player.id] ?? { points: 0, faults: 0 }
-        return { ...s, [player.id]: { points: prev.points, faults: prev.faults + 1 } }
-      })
+      const nextStats = { ...playerStats, [player.id]: { ...emptyStat(), ...playerStats[player.id], faults: (playerStats[player.id]?.faults ?? 0) + 1 } }
+      setPlayerStats(nextStats)
       log(`${player.name} (${servingTeamName}) fault`)
       rotateServer()
     }
+  }
+
+  // Winners / net points won / unforced errors are supplementary box-score
+  // taps — the Point/Fault buttons above don't distinguish how a rally was
+  // won or lost, so these are tapped directly on the roster row and
+  // round-trip immediately with the current (not-yet-finished) game score.
+  function bumpStat(playerId: number, key: QuickStatKey) {
+    if (isDecided) return
+    const nextStats = { ...playerStats, [playerId]: { ...emptyStat(), ...playerStats[playerId], [key]: (playerStats[playerId]?.[key] ?? 0) + 1 } }
+    setPlayerStats(nextStats)
+    save.mutate({ sets: games, player_stats: toPlayerStatsPayload(nextStats) })
   }
 
   function requestAction(side: 'a' | 'b', kind: ActionKind) {
@@ -285,7 +309,7 @@ export function PickleballScoreboard({
   function removeLastGame() {
     const nextGames = games.slice(0, -1)
     setGames(nextGames)
-    save.mutate(nextGames)
+    save.mutate({ sets: nextGames, player_stats: toPlayerStatsPayload(playerStats) })
     log('Undo last game')
   }
 
@@ -311,7 +335,7 @@ export function PickleballScoreboard({
     setRallyHistoryLength(0)
     logIdRef.current += 1
     setMatchLog([{ id: logIdRef.current, text: 'Game reset — all games, points, and stats cleared.', at: Date.now() }])
-    save.mutate([])
+    save.mutate({ sets: [], player_stats: [] })
   }
 
   async function copyShareLink() {
@@ -548,7 +572,17 @@ export function PickleballScoreboard({
                             className={`w-10 shrink-0 rounded-md border px-1 py-1 text-center ${isDark ? 'border-slate-600 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white'}`}
                           />
                           <span className="flex-1 truncate font-medium">{m.name}</span>
-                          <span className={subtleText}>{stat?.points ?? 0} pts</span>
+                          <span className={subtleText}>{stat?.points_won ?? 0} pts</span>
+                          {(['winners', 'net_points_won', 'unforced_errors'] as const).map((key) => (
+                            <button
+                              key={key}
+                              onClick={() => bumpStat(m.id, key)}
+                              disabled={isDecided}
+                              className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                            >
+                              {QUICK_STAT_LABEL[key]} {stat?.[key] ?? 0}
+                            </button>
+                          ))}
                           <span className={subtleText}>{stat?.faults ?? 0} faults</span>
                         </div>
                       )

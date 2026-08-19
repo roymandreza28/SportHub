@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchProfile } from '../lib/socialApi'
+import { fetchPlayerStatSummary, fetchProfile } from '../lib/socialApi'
 import { fetchPosts } from '../lib/postsApi'
 import { acceptFriendRequest, declineFriendRequest, removeFriendship, sendFriendRequest } from '../lib/friendsApi'
 import { startDirectConversation } from '../lib/chatApi'
@@ -13,6 +13,7 @@ import { SocialShell } from '../components/layout/SocialShell'
 import { PostGrid } from '../components/social/PostGrid'
 import { PostComposer } from '../components/social/PostComposer'
 import { ProfileHeaderCard } from '../components/social/ProfileHeaderCard'
+import { PlayerStatsPentagon } from '../components/social/PlayerStatsPentagon'
 import { buttonDanger, buttonPrimary, buttonSecondary } from '../lib/formStyles'
 
 export function ProfilePage() {
@@ -31,6 +32,11 @@ export function ProfilePage() {
   const { data: posts } = useQuery({
     queryKey: ['social', 'posts', id],
     queryFn: () => fetchPosts(id),
+  })
+
+  const { data: statSummary, isLoading: statsLoading } = useQuery({
+    queryKey: ['social', 'stat-summary', id],
+    queryFn: () => fetchPlayerStatSummary(id),
   })
 
   function invalidate() {
@@ -164,6 +170,25 @@ export function ProfilePage() {
                 {user.primary_sport}
               </p>
             )}
+          </div>
+
+          <div className="mt-6 rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
+            <h2 className="text-base font-bold text-slate-900">Career Stats</h2>
+            {statsLoading && <p className="mt-3 text-sm text-slate-500">Loading...</p>}
+            {!statsLoading && !statSummary?.length && (
+              <p className="mt-3 text-sm text-slate-400">
+                {isSelf ? 'No stats recorded yet — play a scored tournament match to see your career pentagon.' : 'No stats recorded yet.'}
+              </p>
+            )}
+            {statSummary?.map((entry) => (
+              <PlayerStatsPentagon
+                key={entry.sport_id}
+                sportName={entry.sport_name}
+                axes={entry.pentagon_fields}
+                totals={entry.totals}
+                matchesPlayed={entry.matches_played}
+              />
+            ))}
           </div>
         </div>
 

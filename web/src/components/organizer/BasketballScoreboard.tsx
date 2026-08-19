@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchMatchRoster, updateMatchScore, type BracketMatch, type MatchRosterTeam } from '../../lib/organizerApi'
+import {
+  fetchMatchRoster,
+  toPlayerStatsPayload,
+  updateMatchScore,
+  type BracketMatch,
+  type MatchRosterTeam,
+  type PlayerStatEntry,
+} from '../../lib/organizerApi'
 import { buttonSecondary, buttonSuccess } from '../../lib/formStyles'
 
 type RulePresetKey = 'NBA' | 'FIBA' | 'NCAA' | 'HS'
@@ -56,8 +63,18 @@ function FoulSegmentedName({ name, fouls, isDark }: { name: string; fouls: numbe
 }
 
 type RosterPlayer = { id: number; name: string }
-type PlayerStat = { points: number; fouls: number }
+// Rebounds/assists/steals/blocks feed the player's career stats pentagon
+// (see api/app/Support/PlayerStatFieldSets.php) — fouls stays tracked here
+// too for the foul-trouble gauge, but isn't one of the 5 pentagon axes.
+type PlayerStat = { points: number; rebounds: number; assists: number; steals: number; blocks: number; fouls: number }
 type PlayerStats = Record<number, PlayerStat>
+type QuickStatKey = 'rebounds' | 'assists' | 'steals' | 'blocks'
+
+const QUICK_STAT_LABEL: Record<QuickStatKey, string> = { rebounds: 'REB', assists: 'AST', steals: 'STL', blocks: 'BLK' }
+
+function emptyStat(): PlayerStat {
+  return { points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, fouls: 0 }
+}
 
 type Snapshot = {
   scoreA: number
@@ -293,7 +310,7 @@ export function BasketballScoreboard({
   }, [shotClock, clockRunning, shotClockEnabled, preset.shotClock])
 
   const save = useMutation({
-    mutationFn: (input: { score_a: number; score_b: number; status?: 'live' | 'completed' }) =>
+    mutationFn: (input: { score_a: number; score_b: number; status?: 'live' | 'completed'; player_stats?: PlayerStatEntry[] }) =>
       updateMatchScore(match.id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizer', 'bracket', tournamentId] })
@@ -326,7 +343,7 @@ export function BasketballScoreboard({
     setPeriod(last.period)
     setPeriodClock(last.periodClock)
     setPlayerStats(last.playerStats)
-    save.mutate({ score_a: last.scoreA, score_b: last.scoreB, status: 'live' })
+    save.mutate({ score_a: last.scoreA, score_b: last.scoreB, status: 'live', player_stats: toPlayerStatsPayload(last.playerStats) })
     log('Undo')
   }
 
@@ -334,20 +351,24 @@ export function BasketballScoreboard({
     if (!canPlay || isDecided) return
     pushHistory()
     const teamName = side === 'a' ? homeName : awayName
+
+    // Computed explicitly (not read back from state after setState) so the
+    // save.mutate() call below always sends the up-to-date value — React
+    // state updates are async, so playerStats itself would still be one
+    // update behind at this point in the same function.
+    const nextStats = player
+      ? { ...playerStats, [player.id]: { ...emptyStat(), ...playerStats[player.id], points: (playerStats[player.id]?.points ?? 0) + delta } }
+      : playerStats
+    if (player) setPlayerStats(nextStats)
+
     if (side === 'a') {
       const next = Math.max(0, scoreA + delta)
       setScoreA(next)
-      save.mutate({ score_a: next, score_b: scoreB, status: 'live' })
+      save.mutate({ score_a: next, score_b: scoreB, status: 'live', player_stats: toPlayerStatsPayload(nextStats) })
     } else {
       const next = Math.max(0, scoreB + delta)
       setScoreB(next)
-      save.mutate({ score_a: scoreA, score_b: next, status: 'live' })
-    }
-    if (player) {
-      setPlayerStats((s) => ({
-        ...s,
-        [player.id]: { points: (s[player.id]?.points ?? 0) + delta, fouls: s[player.id]?.fouls ?? 0 },
-      }))
+      save.mutate({ score_a: scoreA, score_b: next, status: 'live', player_stats: toPlayerStatsPayload(nextStats) })
     }
     const pointLabel = `${delta > 0 ? '+' : ''}${delta} point${Math.abs(delta) === 1 ? '' : 's'}`
     log(player ? `${player.name} (${teamName}) ${pointLabel}` : `${teamName} ${pointLabel}`)
@@ -379,14 +400,25 @@ export function BasketballScoreboard({
   function choosePlayerForFoul(player: RosterPlayer) {
     if (!foulPicker) return
     pushHistory()
-    setPlayerStats((s) => ({
-      ...s,
-      [player.id]: { points: s[player.id]?.points ?? 0, fouls: (s[player.id]?.fouls ?? 0) + 1 },
-    }))
     const newCount = (playerStats[player.id]?.fouls ?? 0) + 1
+    const nextStats = { ...playerStats, [player.id]: { ...emptyStat(), ...playerStats[player.id], fouls: newCount } }
+    setPlayerStats(nextStats)
     const teamName = foulPicker === 'a' ? homeName : awayName
     log(`Foul — ${player.name} (${teamName}), ${newCount}${newCount >= PERSONAL_FOUL_LIMIT ? ' — fouled out' : ''}`)
+    save.mutate({ score_a: scoreA, score_b: scoreB, status: 'live', player_stats: toPlayerStatsPayload(nextStats) })
     setFoulPicker(null)
+  }
+
+  // Rebounds/assists/steals/blocks — supplementary box-score taps in the
+  // roster panel (not the main scoring buttons, which stay fast/uncluttered
+  // for live play). No picker modal needed since these are tapped directly
+  // on the already-visible roster row.
+  function bumpStat(playerId: number, key: QuickStatKey) {
+    if (isDecided) return
+    pushHistory()
+    const nextStats = { ...playerStats, [playerId]: { ...emptyStat(), ...playerStats[playerId], [key]: (playerStats[playerId]?.[key] ?? 0) + 1 } }
+    setPlayerStats(nextStats)
+    save.mutate({ score_a: scoreA, score_b: scoreB, status: 'live', player_stats: toPlayerStatsPayload(nextStats) })
   }
 
   function useTimeout(side: 'a' | 'b') {
@@ -443,11 +475,11 @@ export function BasketballScoreboard({
     setHistoryLength(0)
     logIdRef.current += 1
     setMatchLog([{ id: logIdRef.current, text: 'Game reset — scores, fouls, and periods cleared.', at: Date.now() }])
-    save.mutate({ score_a: 0, score_b: 0, status: 'live' })
+    save.mutate({ score_a: 0, score_b: 0, status: 'live', player_stats: [] })
   }
 
   function finishMatch() {
-    save.mutate({ score_a: scoreA, score_b: scoreB, status: 'completed' })
+    save.mutate({ score_a: scoreA, score_b: scoreB, status: 'completed', player_stats: toPlayerStatsPayload(playerStats) })
     log('Match finished')
   }
 
@@ -823,6 +855,16 @@ export function BasketballScoreboard({
                           />
                           <FoulSegmentedName name={m.name} fouls={fouls} isDark={isDark} />
                           <span className={subtleText}>{stat?.points ?? 0} pts</span>
+                          {(['rebounds', 'assists', 'steals', 'blocks'] as const).map((key) => (
+                            <button
+                              key={key}
+                              onClick={() => bumpStat(m.id, key)}
+                              disabled={isDecided}
+                              className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                            >
+                              {QUICK_STAT_LABEL[key]} {stat?.[key] ?? 0}
+                            </button>
+                          ))}
                           <span className={fouledOut ? 'font-semibold text-red-600' : subtleText}>
                             {fouls} F{fouledOut ? ' (out)' : ''}
                           </span>

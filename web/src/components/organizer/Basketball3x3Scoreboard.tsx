@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchMatchRoster, updateMatchScore, type BracketMatch, type MatchRosterTeam } from '../../lib/organizerApi'
+import {
+  fetchMatchRoster,
+  toPlayerStatsPayload,
+  updateMatchScore,
+  type BracketMatch,
+  type MatchRosterTeam,
+  type PlayerStatEntry,
+} from '../../lib/organizerApi'
 import { buttonSecondary, buttonSuccess } from '../../lib/formStyles'
 
 // FIBA Official 3x3 Basketball Rules — a separate discipline from 5v5, not
@@ -23,8 +30,17 @@ function formatClock(totalSeconds: number) {
 }
 
 type RosterPlayer = { id: number; name: string }
-type PlayerStat = { points: number; fouls: number }
+// Same 5 pentagon axes as BasketballScoreboard.tsx (both share one Sport
+// row — 3x3 is only a SportFormat, per SportsSeeder).
+type PlayerStat = { points: number; rebounds: number; assists: number; steals: number; blocks: number; fouls: number }
 type PlayerStats = Record<number, PlayerStat>
+type QuickStatKey = 'rebounds' | 'assists' | 'steals' | 'blocks'
+
+const QUICK_STAT_LABEL: Record<QuickStatKey, string> = { rebounds: 'REB', assists: 'AST', steals: 'STL', blocks: 'BLK' }
+
+function emptyStat(): PlayerStat {
+  return { points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, fouls: 0 }
+}
 
 type Snapshot = {
   scoreA: number
@@ -232,7 +248,7 @@ export function Basketball3x3Scoreboard({
   }, [shotClock, clockRunning, inOvertime, shotClockEnabled])
 
   const save = useMutation({
-    mutationFn: (input: { score_a: number; score_b: number; status?: 'live' | 'completed' }) =>
+    mutationFn: (input: { score_a: number; score_b: number; status?: 'live' | 'completed'; player_stats?: PlayerStatEntry[] }) =>
       updateMatchScore(match.id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizer', 'bracket', tournamentId] })
@@ -269,7 +285,7 @@ export function Basketball3x3Scoreboard({
     setOtBaselineA(last.otBaselineA)
     setOtBaselineB(last.otBaselineB)
     setPlayerStats(last.playerStats)
-    save.mutate({ score_a: last.scoreA, score_b: last.scoreB, status: 'live' })
+    save.mutate({ score_a: last.scoreA, score_b: last.scoreB, status: 'live', player_stats: toPlayerStatsPayload(last.playerStats) })
     log('Undo')
   }
 
@@ -277,6 +293,10 @@ export function Basketball3x3Scoreboard({
     if (!canPlay || isDecided) return
     pushHistory()
     const teamName = side === 'a' ? homeName : awayName
+    const nextStats = player
+      ? { ...playerStats, [player.id]: { ...emptyStat(), ...playerStats[player.id], points: (playerStats[player.id]?.points ?? 0) + delta } }
+      : playerStats
+    if (player) setPlayerStats(nextStats)
     let nextA = scoreA
     let nextB = scoreB
     if (side === 'a') {
@@ -286,13 +306,7 @@ export function Basketball3x3Scoreboard({
       nextB = Math.max(0, scoreB + delta)
       setScoreB(nextB)
     }
-    save.mutate({ score_a: nextA, score_b: nextB, status: 'live' })
-    if (player) {
-      setPlayerStats((s) => ({
-        ...s,
-        [player.id]: { points: (s[player.id]?.points ?? 0) + delta, fouls: s[player.id]?.fouls ?? 0 },
-      }))
-    }
+    save.mutate({ score_a: nextA, score_b: nextB, status: 'live', player_stats: toPlayerStatsPayload(nextStats) })
     const pointLabel = `${delta > 0 ? '+' : ''}${delta} point${Math.abs(delta) === 1 ? '' : 's'}`
     log(player ? `${player.name} (${teamName}) ${pointLabel}` : `${teamName} ${pointLabel}`)
 
@@ -326,14 +340,21 @@ export function Basketball3x3Scoreboard({
   function choosePlayerForFoul(player: RosterPlayer) {
     if (!foulPicker) return
     pushHistory()
-    setPlayerStats((s) => ({
-      ...s,
-      [player.id]: { points: s[player.id]?.points ?? 0, fouls: (s[player.id]?.fouls ?? 0) + 1 },
-    }))
     const newCount = (playerStats[player.id]?.fouls ?? 0) + 1
+    const nextStats = { ...playerStats, [player.id]: { ...emptyStat(), ...playerStats[player.id], fouls: newCount } }
+    setPlayerStats(nextStats)
     const teamName = foulPicker === 'a' ? homeName : awayName
     log(`Foul — ${player.name} (${teamName}), personal foul ${newCount}`)
+    save.mutate({ score_a: scoreA, score_b: scoreB, status: 'live', player_stats: toPlayerStatsPayload(nextStats) })
     setFoulPicker(null)
+  }
+
+  function bumpStat(playerId: number, key: QuickStatKey) {
+    if (isDecided) return
+    pushHistory()
+    const nextStats = { ...playerStats, [playerId]: { ...emptyStat(), ...playerStats[playerId], [key]: (playerStats[playerId]?.[key] ?? 0) + 1 } }
+    setPlayerStats(nextStats)
+    save.mutate({ score_a: scoreA, score_b: scoreB, status: 'live', player_stats: toPlayerStatsPayload(nextStats) })
   }
 
   function teamFouls(side: 'a' | 'b'): number {
@@ -377,11 +398,11 @@ export function Basketball3x3Scoreboard({
     setHistoryLength(0)
     logIdRef.current += 1
     setMatchLog([{ id: logIdRef.current, text: 'Game reset — scores, fouls, and the clock cleared.', at: Date.now() }])
-    save.mutate({ score_a: 0, score_b: 0, status: 'live' })
+    save.mutate({ score_a: 0, score_b: 0, status: 'live', player_stats: [] })
   }
 
   function finishMatch() {
-    save.mutate({ score_a: scoreA, score_b: scoreB, status: 'completed' })
+    save.mutate({ score_a: scoreA, score_b: scoreB, status: 'completed', player_stats: toPlayerStatsPayload(playerStats) })
     log('Match finished')
   }
 
@@ -687,6 +708,16 @@ export function Basketball3x3Scoreboard({
                           />
                           <span className="flex-1 truncate font-medium">{m.name}</span>
                           <span className={subtleText}>{stat?.points ?? 0} pts</span>
+                          {(['rebounds', 'assists', 'steals', 'blocks'] as const).map((key) => (
+                            <button
+                              key={key}
+                              onClick={() => bumpStat(m.id, key)}
+                              disabled={isDecided}
+                              className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                            >
+                              {QUICK_STAT_LABEL[key]} {stat?.[key] ?? 0}
+                            </button>
+                          ))}
                           <span className={subtleText}>{stat?.fouls ?? 0} F</span>
                         </div>
                       )

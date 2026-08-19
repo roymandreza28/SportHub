@@ -10,15 +10,22 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 
 // Turns every tournament SampleDataSeeder/ExtendedTournamentsSeeder created
 // into a newsfeed post (status-appropriate wording — a draft tournament gets
 // an unpublished teaser, a completed one gets a champion congrats post too),
 // plus a couple of standalone posts, then sprinkles reactions/comments from
 // the seeded player/coach pool so the feed reads as a lived-in community
-// rather than a fresh, empty table. News is organizer-authored only (see
-// RolesAndPermissionsSeeder's 'manage news' permission), so every post here
-// uses the one demo organizer account.
+// rather than a fresh, empty table. Every post also gets a real cover photo —
+// fetched from LoremFlickr (tagged per sport, "locked" to a seed-derived id
+// so re-seeding is stable) and stored through the same NewsMedia/public-disk
+// pipeline NewsController::store() uses for a real uploaded photo — so
+// Newsfeed.tsx's NewsMediaGrid renders it exactly like an organizer's own
+// upload, not a dead cover_image_url field the UI never actually reads.
+// News is organizer-authored only (see RolesAndPermissionsSeeder's 'manage
+// news' permission), so every post here uses the one demo organizer account.
 class NewsfeedSeeder extends Seeder
 {
     private const COMMENT_TEMPLATES = [
@@ -43,7 +50,11 @@ class NewsfeedSeeder extends Seeder
 
         // Regenerated fresh every seed run, same rationale as
         // SampleDataSeeder's Tournament::query()->delete() — avoids
-        // duplicate/stale posts piling up across repeated `db:seed` runs.
+        // duplicate/stale posts (and orphaned photo files) piling up across
+        // repeated `db:seed` runs.
+        foreach (News::all() as $stale) {
+            Storage::disk('public')->deleteDirectory("news/{$stale->id}");
+        }
         News::query()->delete();
 
         $engagementPool = User::role('player')->get()->merge(User::role('coach')->get())->shuffle();
@@ -53,7 +64,8 @@ class NewsfeedSeeder extends Seeder
             'Welcome to SportHub Morong! 🎉',
             "SportHub is now live for the whole municipality — browse open tournaments, book a court, or register your team in just a few taps. Say hello in the comments and let us know what sport you're most excited to see!",
             now()->subDays(10),
-            $engagementPool
+            $engagementPool,
+            'sports,philippines'
         );
 
         $this->post(
@@ -62,7 +74,7 @@ class NewsfeedSeeder extends Seeder
             'A fresh set of basketballs and volleyball equipment just arrived at Morong Gymnasium, courtesy of our venue facilitator. Ballers, expect better grip and bounce consistency starting this week!',
             now()->subDays(8),
             $engagementPool,
-            'https://picsum.photos/seed/sporthub-gym-equipment/800/450'
+            'gym,philippines'
         );
 
         foreach (Tournament::with(['sport', 'venue', 'championTeam', 'champion'])->get() as $tournament) {
@@ -73,6 +85,7 @@ class NewsfeedSeeder extends Seeder
     private function postForTournament(User $organizer, Tournament $tournament, Collection $engagementPool): void
     {
         $sportName = $tournament->sport?->name ?? 'sport';
+        $tag = $this->sportTag($sportName);
         $venueName = $tournament->venue?->name;
         $where = $venueName ? " at {$venueName}" : '';
 
@@ -82,49 +95,55 @@ class NewsfeedSeeder extends Seeder
                 "Coming soon: {$tournament->name}",
                 "We're finalizing the details for {$tournament->name} ({$sportName}). Registration hasn't opened yet — follow this space for the official announcement.",
                 null,
-                collect()
+                collect(),
+                $tag
             ),
             'registration' => $this->post(
                 $organizer, $tournament,
                 "Registration is open: {$tournament->name}",
                 "{$tournament->name} is now accepting registrations{$where}. Coaches, get your rosters ready — spots are filling up fast!",
                 now()->subDays(rand(1, 5)),
-                $engagementPool
+                $engagementPool,
+                $tag
             ),
             'preparation' => $this->post(
                 $organizer, $tournament,
                 "Bracket is set for {$tournament->name}",
                 "Registration has closed and the bracket for {$tournament->name} is locked in{$where}. Good luck to everyone who signed up — matches begin soon!",
                 now()->subDays(rand(1, 3)),
-                $engagementPool
+                $engagementPool,
+                $tag
             ),
             'ongoing' => $this->post(
                 $organizer, $tournament,
                 "{$tournament->name} is underway!",
                 "Matches are live for {$tournament->name}{$where}. Catch the bracket in the app to follow every score in real time and see who advances next.",
                 now()->subDays(rand(1, 4)),
-                $engagementPool
+                $engagementPool,
+                $tag
             ),
-            'completed' => $this->postCompletedTournament($organizer, $tournament, $where, $engagementPool),
+            'completed' => $this->postCompletedTournament($organizer, $tournament, $tag, $where, $engagementPool),
             'cancelled' => $this->post(
                 $organizer, $tournament,
                 "{$tournament->name} has been cancelled",
                 "Due to unforeseen circumstances, {$tournament->name} has been cancelled. Apologies for the inconvenience — we hope to see everyone at the next one!",
                 now()->subDays(1),
-                $engagementPool
+                $engagementPool,
+                $tag
             ),
             default => null,
         };
     }
 
-    private function postCompletedTournament(User $organizer, Tournament $tournament, string $where, Collection $engagementPool): void
+    private function postCompletedTournament(User $organizer, Tournament $tournament, string $tag, string $where, Collection $engagementPool): void
     {
         $this->post(
             $organizer, $tournament,
             "{$tournament->name} has wrapped up!",
             "Every match has been played for {$tournament->name}{$where}. Thanks to every team and player who joined — see the final results in the bracket.",
             ($tournament->ends_at ?? $tournament->starts_at)?->copy()->addHours(3) ?? now()->subDays(2),
-            $engagementPool
+            $engagementPool,
+            $tag
         );
 
         $championName = $tournament->championTeam?->name ?? $tournament->champion?->name;
@@ -135,9 +154,30 @@ class NewsfeedSeeder extends Seeder
                 "Congratulations, {$championName}! 🏆",
                 "{$championName} is your {$tournament->name} champion! A hard-fought run from every participant — thank you all for making this tournament one to remember.",
                 ($tournament->ends_at ?? $tournament->starts_at)?->copy()->addHours(4) ?? now()->subDays(1),
-                $engagementPool
+                $engagementPool,
+                "{$tag},trophy"
             );
         }
+    }
+
+    // "philippines" paired onto every sport tag so LoremFlickr's /all
+    // (match-every-tag) mode favors a locally-flavored photo over a generic
+    // stock one — confirmed against the live API that every one of these
+    // combinations actually resolves to a real photo (a couple of the
+    // narrower ones — Pickleball, Table Tennis — fall back to the same
+    // single closest match LoremFlickr has for that pairing, which is an
+    // acceptable tradeoff for staying Filipino-themed rather than generic).
+    private function sportTag(string $sportName): string
+    {
+        return match ($sportName) {
+            'Basketball' => 'basketball,philippines',
+            'Volleyball' => 'volleyball,philippines',
+            'Badminton' => 'badminton,philippines',
+            'Pickleball' => 'pickleball,philippines',
+            'Tennis' => 'tennis,philippines',
+            'Table Tennis' => 'pingpong,philippines',
+            default => 'sports,philippines',
+        };
     }
 
     /** @param  Collection<int, User>  $engagementPool */
@@ -148,16 +188,19 @@ class NewsfeedSeeder extends Seeder
         string $body,
         ?Carbon $publishedAt,
         Collection $engagementPool,
-        ?string $coverImageUrl = null,
+        ?string $photoTags = null,
     ): News {
         $news = News::create([
             'author_id' => $author->id,
             'tournament_id' => $tournament?->id,
             'title' => $title,
             'body' => $body,
-            'cover_image_url' => $coverImageUrl,
             'published_at' => $publishedAt,
         ]);
+
+        if ($photoTags !== null) {
+            $this->attachPhoto($news, $photoTags, $title);
+        }
 
         // Unpublished (draft-tournament teaser) posts don't get engagement —
         // nobody outside the organizer can see them yet.
@@ -166,6 +209,33 @@ class NewsfeedSeeder extends Seeder
         }
 
         return $news;
+    }
+
+    // Fetched once per post from LoremFlickr (a real, tag-searchable photo
+    // pool) rather than an abstract placeholder — "lock" pins to one matching
+    // photo per seed string instead of a random one on every request, so
+    // re-running db:seed gives the same picture each post. Any network
+    // hiccup (offline dev machine, LoremFlickr down) is swallowed — the
+    // post's text still seeds fine, it just ends up without a photo.
+    private function attachPhoto(News $news, string $tags, string $seed): void
+    {
+        try {
+            $lock = crc32($seed);
+            $response = Http::timeout(12)->get("https://loremflickr.com/800/450/{$tags}/all?lock={$lock}");
+            $contentType = $response->header('Content-Type') ?? '';
+
+            if (! $response->successful() || ! str_starts_with($contentType, 'image')) {
+                return;
+            }
+
+            $extension = str_contains($contentType, 'png') ? 'png' : 'jpg';
+            $path = "news/{$news->id}/cover.{$extension}";
+            Storage::disk('public')->put($path, $response->body());
+
+            $news->media()->create(['type' => 'image', 'path' => $path, 'position' => 0]);
+        } catch (\Throwable) {
+            // No internet / upstream unavailable — skip the photo.
+        }
     }
 
     /** @param  Collection<int, User>  $pool */

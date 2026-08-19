@@ -6,8 +6,10 @@ use App\Events\MatchEventCreated;
 use App\Events\MatchStatusChanged;
 use App\Models\GameMatch;
 use App\Models\MatchEvent;
+use App\Models\MatchPlayerStat;
 use App\Models\MatchStatSheet;
 use App\Models\Team;
+use App\Models\TeamMember;
 use App\Models\Tournament;
 use App\Services\BracketService;
 use App\Support\Broadcasting;
@@ -35,9 +37,13 @@ class MatchController extends Controller
             'score_a' => ['required', 'integer', 'min:0'],
             'score_b' => ['required', 'integer', 'min:0'],
             'status' => ['sometimes', 'in:scheduled,live,completed'],
+            'player_stats' => ['sometimes', 'array'],
+            'player_stats.*.user_id' => ['required_with:player_stats', 'integer'],
+            'player_stats.*.stats' => ['required_with:player_stats', 'array'],
         ]);
 
-        $match->update($data);
+        $match->update(collect($data)->except('player_stats')->all());
+        $this->upsertPlayerStats($match, $data['player_stats'] ?? []);
 
         $matchEvent = MatchEvent::create([
             'match_id' => $match->id,
@@ -86,6 +92,33 @@ class MatchController extends Controller
     private function lockStatSheets(GameMatch $match): void
     {
         MatchStatSheet::where('match_id', $match->id)->update(['is_locked' => true, 'locked_at' => now()]);
+    }
+
+    // Folded into the score-save round-trip every scoreboard already fires
+    // on each tap, rather than a second network call per click. team_id is
+    // always derived here from real TeamMember rows — the validation rules
+    // above deliberately don't accept a client-sent team_id at all, so a
+    // scoreboard can never misattribute a player to the wrong team.
+    private function upsertPlayerStats(GameMatch $match, array $rows): void
+    {
+        if ($rows === []) {
+            return;
+        }
+
+        $sportId = $match->bracket->tournament->sport_id;
+
+        foreach ($rows as $row) {
+            $teamId = match (true) {
+                $match->participant_a_team_id !== null && TeamMember::where('team_id', $match->participant_a_team_id)->where('user_id', $row['user_id'])->where('status', 'accepted')->exists() => $match->participant_a_team_id,
+                $match->participant_b_team_id !== null && TeamMember::where('team_id', $match->participant_b_team_id)->where('user_id', $row['user_id'])->where('status', 'accepted')->exists() => $match->participant_b_team_id,
+                default => null,
+            };
+
+            MatchPlayerStat::updateOrCreate(
+                ['match_id' => $match->id, 'user_id' => $row['user_id']],
+                ['team_id' => $teamId, 'sport_id' => $sportId, 'stats' => $row['stats']]
+            );
+        }
     }
 
     // Setting date/time/court is the main organizer's job (see
@@ -158,7 +191,12 @@ class MatchController extends Controller
             'sets' => ['required', 'array', 'min:1'],
             'sets.*.score_a' => ['required', 'integer', 'min:0'],
             'sets.*.score_b' => ['required', 'integer', 'min:0'],
+            'player_stats' => ['sometimes', 'array'],
+            'player_stats.*.user_id' => ['required_with:player_stats', 'integer'],
+            'player_stats.*.stats' => ['required_with:player_stats', 'array'],
         ]);
+
+        $this->upsertPlayerStats($match, $data['player_stats'] ?? []);
 
         $setsWonA = collect($data['sets'])->filter(fn ($s) => $s['score_a'] > $s['score_b'])->count();
         $setsWonB = collect($data['sets'])->filter(fn ($s) => $s['score_b'] > $s['score_a'])->count();

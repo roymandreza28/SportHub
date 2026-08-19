@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Court;
 use App\Models\GameMatch;
+use App\Models\MatchPlayerStat;
 use App\Models\Sport;
 use App\Models\SportFormat;
 use App\Models\Team;
@@ -151,6 +152,13 @@ class ExtendedTournamentsSeeder extends Seeder
         ]);
     }
 
+    // Completes a match with a plausible final score AND a full per-player
+    // box score for both rosters — via MatchPlayerStat, the same table the
+    // real venue-organizer scoreboards now write to live (see
+    // MatchController::upsertPlayerStats()) — so every finished match in the
+    // demo has "detailed scoreboard" data to show, and so player profiles'
+    // career stats pentagon (ProfileController::statSummary()) has
+    // something to sum.
     private function simulateTeamMatch(GameMatch $match, BracketService $bracketService, int $min = 55, int $max = 95): void
     {
         $scoreA = rand($min, $max);
@@ -167,7 +175,68 @@ class ExtendedTournamentsSeeder extends Seeder
             'scheduled_at' => now()->subHours(rand(6, 72)),
         ]);
 
+        $sportId = $match->bracket->tournament->sport_id;
+        $this->recordPlayerStats($match, $match->participant_a_team_id, $scoreA, $sportId);
+        $this->recordPlayerStats($match, $match->participant_b_team_id, $scoreB, $sportId);
+
         $bracketService->advanceWinner($match->fresh());
+    }
+
+    private function recordPlayerStats(GameMatch $match, ?int $teamId, int $teamScore, int $sportId): void
+    {
+        if (! $teamId) {
+            return;
+        }
+
+        $team = Team::with(['members' => fn ($q) => $q->where('status', 'accepted')])->find($teamId);
+        $memberIds = $team?->members->pluck('user_id')->values() ?? collect();
+        if ($memberIds->isEmpty()) {
+            return;
+        }
+
+        $points = $this->distributePoints($teamScore, $memberIds->count());
+
+        foreach ($memberIds as $i => $userId) {
+            MatchPlayerStat::updateOrCreate(
+                ['match_id' => $match->id, 'user_id' => $userId],
+                [
+                    'team_id' => $teamId,
+                    'sport_id' => $sportId,
+                    'stats' => [
+                        'points' => $points[$i],
+                        'rebounds' => rand(0, 12),
+                        'assists' => rand(0, 8),
+                        'steals' => rand(0, 5),
+                        'blocks' => rand(0, 4),
+                        'fouls' => rand(0, 4),
+                    ],
+                ]
+            );
+        }
+    }
+
+    // Splits a team's final score across its roster with a realistic
+    // "one or two lead scorers, everyone else contributes less" shape,
+    // rather than an even split — random per-player weights, floored, with
+    // any rounding remainder landing on the top-weighted (effectively
+    // top-scoring) player so the total always reconciles exactly to the
+    // team's real score.
+    private function distributePoints(int $total, int $count): array
+    {
+        if ($count <= 0) {
+            return [];
+        }
+        if ($total <= 0) {
+            return array_fill(0, $count, 0);
+        }
+
+        $weights = array_map(fn () => rand(2, 10), range(1, $count));
+        $weightSum = array_sum($weights);
+        $points = array_map(fn ($w) => (int) floor($total * $w / $weightSum), $weights);
+        $topIndex = array_search(max($weights), $weights, true);
+        $points[$topIndex] += $total - array_sum($points);
+
+        return $points;
     }
 
     /** @param  Collection<int, User>  $coaches
@@ -199,23 +268,26 @@ class ExtendedTournamentsSeeder extends Seeder
 
         $bracket = $bracketService->generate($tournament);
 
-        // Quarterfinals: all 4 played out.
+        // Quarterfinals: all 4 played out, each with a full per-player box
+        // score for both rosters.
         $round1 = GameMatch::where('bracket_id', $bracket->id)->where('round', 1)->orderBy('id')->get();
         foreach ($round1 as $match) {
             $this->simulateTeamMatch($match, $bracketService, 60, 95);
         }
 
-        // Semifinals: one already decided, the other about to tip off — set
-        // just inside the coach stat-sheet's 10-minute auto-popup window so
-        // logging in as that team's coach demonstrates the live trigger.
+        // Semifinals: both played out too — the tournament is now sitting
+        // right at the final, with every prior round fully detailed.
         $round2 = GameMatch::where('bracket_id', $bracket->id)->where('round', 2)->orderBy('id')->get();
-        $this->simulateTeamMatch($round2[0], $bracketService, 60, 95);
-        $round2[1]->update(['scheduled_at' => now()->addMinutes(8), 'court_id' => $court->id]);
+        foreach ($round2 as $match) {
+            $this->simulateTeamMatch($match, $bracketService, 60, 95);
+        }
 
-        // Final: not yet reachable until both semifinals are decided — just
-        // give it a placeholder future date/court.
+        // Final: both finalists are now decided by advanceWinner() above.
+        // Scheduled just inside the coach stat-sheet's 10-minute auto-popup
+        // window so logging in as either finalist's coach demonstrates the
+        // live trigger for the championship game itself.
         GameMatch::where('bracket_id', $bracket->id)->where('round', 3)->first()
-            ?->update(['scheduled_at' => now()->addDays(2), 'court_id' => $court->id]);
+            ?->update(['scheduled_at' => now()->addMinutes(8), 'court_id' => $court->id]);
     }
 
     private function seedCompletedThreeVThree(

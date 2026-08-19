@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchMatchRoster, updateMatchSets, type BracketMatch, type MatchRosterTeam, type SetScore, type Tournament } from '../../lib/organizerApi'
+import {
+  fetchMatchRoster,
+  toPlayerStatsPayload,
+  updateMatchSets,
+  type BracketMatch,
+  type MatchRosterTeam,
+  type PlayerStatEntry,
+  type SetScore,
+  type Tournament,
+} from '../../lib/organizerApi'
 import { buttonSecondary } from '../../lib/formStyles'
 
 // 🏸 Badminton Scoring System (BWF rally-point rules) — best of 3 games to
@@ -14,9 +23,17 @@ const INTERVAL_THRESHOLD = 11
 
 type PointCategory = 'point' | 'error'
 type RosterPlayer = { id: number; name: string }
-type PlayerStat = { points: number; errors: number }
+// Feeds the career stats pentagon (see api/app/Support/PlayerStatFieldSets.php).
+type PlayerStat = { points_won: number; smash_winners: number; net_kills: number; aces: number; unforced_errors: number }
 type PlayerStats = Record<number, PlayerStat>
 type PointRequest = { scoringSide: 'a' | 'b'; category: PointCategory }
+type QuickStatKey = 'smash_winners' | 'net_kills' | 'aces'
+
+const QUICK_STAT_LABEL: Record<QuickStatKey, string> = { smash_winners: 'Smash', net_kills: 'Net Kill', aces: 'Ace' }
+
+function emptyStat(): PlayerStat {
+  return { points_won: 0, smash_winners: 0, net_kills: 0, aces: 0, unforced_errors: 0 }
+}
 
 type RallySnapshot = { a: number; b: number; server: 'a' | 'b'; playerStats: PlayerStats }
 type LogEntry = { id: number; text: string; at: number }
@@ -191,7 +208,7 @@ export function BadmintonScoreboard({
   const pickerTeam = pickerSide === 'a' ? roster?.team_a : pickerSide === 'b' ? roster?.team_b : null
 
   const save = useMutation({
-    mutationFn: (nextGames: SetScore[]) => updateMatchSets(match.id, nextGames),
+    mutationFn: (input: { sets: SetScore[]; player_stats?: PlayerStatEntry[] }) => updateMatchSets(match.id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizer', 'bracket', tournamentId] })
     },
@@ -236,16 +253,16 @@ export function BadmintonScoreboard({
     setCurrentB(nextB)
     if (server !== scoringSide) setServer(scoringSide)
 
-    setPlayerStats((s) => {
-      const prev = s[player.id] ?? { points: 0, errors: 0 }
-      return {
-        ...s,
-        [player.id]: {
-          points: prev.points + (category === 'point' ? 1 : 0),
-          errors: prev.errors + (category === 'error' ? 1 : 0),
-        },
-      }
-    })
+    const nextStats = {
+      ...playerStats,
+      [player.id]: {
+        ...emptyStat(),
+        ...playerStats[player.id],
+        points_won: (playerStats[player.id]?.points_won ?? 0) + (category === 'point' ? 1 : 0),
+        unforced_errors: (playerStats[player.id]?.unforced_errors ?? 0) + (category === 'error' ? 1 : 0),
+      },
+    }
+    setPlayerStats(nextStats)
 
     const scoringTeamName = scoringSide === 'a' ? homeName : awayName
     const logLine =
@@ -270,8 +287,19 @@ export function BadmintonScoreboard({
       setRallyHistoryLength(0)
       intervalAcknowledgedRef.current.clear()
       log(`Game ${nextGames.length} won by ${nextA > nextB ? homeName : awayName} (${nextA}-${nextB})`)
-      save.mutate(nextGames)
+      save.mutate({ sets: nextGames, player_stats: toPlayerStatsPayload(nextStats) })
     }
+  }
+
+  // Smash winners / net kills / aces are supplementary box-score taps — how
+  // a point was won isn't distinguished by the Point/Opp. error buttons
+  // above, so these are tapped directly on the roster row instead and
+  // round-trip immediately with the current (not-yet-finished) game score.
+  function bumpStat(playerId: number, key: QuickStatKey) {
+    if (isDecided) return
+    const nextStats = { ...playerStats, [playerId]: { ...emptyStat(), ...playerStats[playerId], [key]: (playerStats[playerId]?.[key] ?? 0) + 1 } }
+    setPlayerStats(nextStats)
+    save.mutate({ sets: games, player_stats: toPlayerStatsPayload(nextStats) })
   }
 
   function requestPoint(scoringSide: 'a' | 'b', category: PointCategory) {
@@ -305,7 +333,7 @@ export function BadmintonScoreboard({
   function removeLastGame() {
     const nextGames = games.slice(0, -1)
     setGames(nextGames)
-    save.mutate(nextGames)
+    save.mutate({ sets: nextGames, player_stats: toPlayerStatsPayload(playerStats) })
     log('Undo last game')
   }
 
@@ -320,7 +348,7 @@ export function BadmintonScoreboard({
     intervalAcknowledgedRef.current.clear()
     logIdRef.current += 1
     setMatchLog([{ id: logIdRef.current, text: 'Game reset — all games, points, and stats cleared.', at: Date.now() }])
-    save.mutate([])
+    save.mutate({ sets: [], player_stats: [] })
   }
 
   async function copyShareLink() {
@@ -536,8 +564,18 @@ export function BadmintonScoreboard({
                             className={`w-10 shrink-0 rounded-md border px-1 py-1 text-center ${isDark ? 'border-slate-600 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white'}`}
                           />
                           <span className="flex-1 truncate font-medium">{m.name}</span>
-                          <span className={subtleText}>{stat?.points ?? 0} pts</span>
-                          <span className={subtleText}>{stat?.errors ?? 0} err</span>
+                          <span className={subtleText}>{stat?.points_won ?? 0} pts</span>
+                          {(['smash_winners', 'net_kills', 'aces'] as const).map((key) => (
+                            <button
+                              key={key}
+                              onClick={() => bumpStat(m.id, key)}
+                              disabled={isDecided}
+                              className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                            >
+                              {QUICK_STAT_LABEL[key]} {stat?.[key] ?? 0}
+                            </button>
+                          ))}
+                          <span className={subtleText}>{stat?.unforced_errors ?? 0} err</span>
                         </div>
                       )
                     })}

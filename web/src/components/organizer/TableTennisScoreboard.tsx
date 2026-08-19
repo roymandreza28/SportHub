@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchMatchRoster, updateMatchSets, type BracketMatch, type MatchRosterTeam, type SetScore, type Tournament } from '../../lib/organizerApi'
+import {
+  fetchMatchRoster,
+  toPlayerStatsPayload,
+  updateMatchSets,
+  type BracketMatch,
+  type MatchRosterTeam,
+  type PlayerStatEntry,
+  type SetScore,
+  type Tournament,
+} from '../../lib/organizerApi'
 import { buttonSecondary } from '../../lib/formStyles'
 
 // 🏓 Table Tennis Scoring System — rally scoring like volleyball/badminton
@@ -14,9 +23,17 @@ const SWITCH_ENDS_THRESHOLD = 5
 
 type PointCategory = 'point' | 'error'
 type RosterPlayer = { id: number; name: string }
-type PlayerStat = { points: number; errors: number }
+// Feeds the career stats pentagon (see api/app/Support/PlayerStatFieldSets.php).
+type PlayerStat = { points_won: number; winners: number; service_points: number; unforced_errors: number; forced_errors_won: number }
 type PlayerStats = Record<number, PlayerStat>
 type PointRequest = { scoringSide: 'a' | 'b'; category: PointCategory }
+type QuickStatKey = 'winners' | 'service_points' | 'forced_errors_won'
+
+const QUICK_STAT_LABEL: Record<QuickStatKey, string> = { winners: 'Winner', service_points: 'Serve Pt', forced_errors_won: 'FE Won' }
+
+function emptyStat(): PlayerStat {
+  return { points_won: 0, winners: 0, service_points: 0, unforced_errors: 0, forced_errors_won: 0 }
+}
 
 type RallySnapshot = { a: number; b: number; firstServer: 'a' | 'b'; playerStats: PlayerStats }
 type LogEntry = { id: number; text: string; at: number }
@@ -207,7 +224,7 @@ export function TableTennisScoreboard({
   const pickerTeam = pickerSide === 'a' ? roster?.team_a : pickerSide === 'b' ? roster?.team_b : null
 
   const save = useMutation({
-    mutationFn: (nextGames: SetScore[]) => updateMatchSets(match.id, nextGames),
+    mutationFn: (input: { sets: SetScore[]; player_stats?: PlayerStatEntry[] }) => updateMatchSets(match.id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizer', 'bracket', tournamentId] })
     },
@@ -248,16 +265,16 @@ export function TableTennisScoreboard({
     setCurrentA(nextA)
     setCurrentB(nextB)
 
-    setPlayerStats((s) => {
-      const prev = s[player.id] ?? { points: 0, errors: 0 }
-      return {
-        ...s,
-        [player.id]: {
-          points: prev.points + (category === 'point' ? 1 : 0),
-          errors: prev.errors + (category === 'error' ? 1 : 0),
-        },
-      }
-    })
+    const nextStats = {
+      ...playerStats,
+      [player.id]: {
+        ...emptyStat(),
+        ...playerStats[player.id],
+        points_won: (playerStats[player.id]?.points_won ?? 0) + (category === 'point' ? 1 : 0),
+        unforced_errors: (playerStats[player.id]?.unforced_errors ?? 0) + (category === 'error' ? 1 : 0),
+      },
+    }
+    setPlayerStats(nextStats)
 
     const scoringTeamName = scoringSide === 'a' ? homeName : awayName
     const logLine =
@@ -282,8 +299,20 @@ export function TableTennisScoreboard({
       setRallyHistoryLength(0)
       switchEndsAcknowledgedRef.current = false
       log(`Game ${nextGames.length} won by ${nextA > nextB ? homeName : awayName} (${nextA}-${nextB})`)
-      save.mutate(nextGames)
+      save.mutate({ sets: nextGames, player_stats: toPlayerStatsPayload(nextStats) })
     }
+  }
+
+  // Winners / service points / forced errors won are supplementary
+  // box-score taps — the Point/Opp. error buttons above don't distinguish
+  // how a rally was won or lost, so these are tapped directly on the roster
+  // row and round-trip immediately with the current (not-yet-finished) game
+  // score.
+  function bumpStat(playerId: number, key: QuickStatKey) {
+    if (isDecided) return
+    const nextStats = { ...playerStats, [playerId]: { ...emptyStat(), ...playerStats[playerId], [key]: (playerStats[playerId]?.[key] ?? 0) + 1 } }
+    setPlayerStats(nextStats)
+    save.mutate({ sets: games, player_stats: toPlayerStatsPayload(nextStats) })
   }
 
   function requestPoint(scoringSide: 'a' | 'b', category: PointCategory) {
@@ -314,7 +343,7 @@ export function TableTennisScoreboard({
   function removeLastGame() {
     const nextGames = games.slice(0, -1)
     setGames(nextGames)
-    save.mutate(nextGames)
+    save.mutate({ sets: nextGames, player_stats: toPlayerStatsPayload(playerStats) })
     log('Undo last game')
   }
 
@@ -329,7 +358,7 @@ export function TableTennisScoreboard({
     switchEndsAcknowledgedRef.current = false
     logIdRef.current += 1
     setMatchLog([{ id: logIdRef.current, text: 'Game reset — all games, points, and stats cleared.', at: Date.now() }])
-    save.mutate([])
+    save.mutate({ sets: [], player_stats: [] })
   }
 
   async function copyShareLink() {
@@ -544,8 +573,18 @@ export function TableTennisScoreboard({
                             className={`w-10 shrink-0 rounded-md border px-1 py-1 text-center ${isDark ? 'border-slate-600 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white'}`}
                           />
                           <span className="flex-1 truncate font-medium">{m.name}</span>
-                          <span className={subtleText}>{stat?.points ?? 0} pts</span>
-                          <span className={subtleText}>{stat?.errors ?? 0} err</span>
+                          <span className={subtleText}>{stat?.points_won ?? 0} pts</span>
+                          {(['winners', 'service_points', 'forced_errors_won'] as const).map((key) => (
+                            <button
+                              key={key}
+                              onClick={() => bumpStat(m.id, key)}
+                              disabled={isDecided}
+                              className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                            >
+                              {QUICK_STAT_LABEL[key]} {stat?.[key] ?? 0}
+                            </button>
+                          ))}
+                          <span className={subtleText}>{stat?.unforced_errors ?? 0} err</span>
                         </div>
                       )
                     })}

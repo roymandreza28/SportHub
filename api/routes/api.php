@@ -101,6 +101,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:player|coach')->prefix('social')->group(function () {
         Route::get('/users', [SocialSearchController::class, 'index']);
         Route::get('/users/{user}', [ProfileController::class, 'show']);
+        Route::get('/users/{user}/stat-summary', [ProfileController::class, 'statSummary']);
         Route::post('/profile/cover', [ProfileController::class, 'updateCover']);
 
         Route::get('/friends', [FriendshipController::class, 'index']);
