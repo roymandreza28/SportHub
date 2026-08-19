@@ -27,6 +27,13 @@ php artisan config:cache
 if [ "$1" = "supervisord" ]; then
     php artisan migrate --force
 
+    # Same fallback rationale as migrate above: nothing else in this
+    # deploy pipeline (Dockerfile build, Render's own predeploy) ever runs
+    # `storage:link`, so public/storage never gets created and every
+    # uploaded file (avatars, covers, news media) 404s. Laravel's own
+    # command already no-ops safely if the link exists.
+    php artisan storage:link || true
+
     # Opt-in, one-shot seeding hook — the free plan also can't run
     # `render jobs create` ("new paid services not allowed"), so this is the
     # only way to run a one-off artisan command at all on it. Every seeder
