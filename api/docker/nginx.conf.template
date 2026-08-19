@@ -1,3 +1,14 @@
+# Everything else in this container (supervisord, php-fpm, and every artisan
+# command entrypoint.sh runs at boot) runs as root — there's no other user
+# boundary in this single-tenant image (see Dockerfile: no USER directive).
+# Without an explicit `user` here, nginx's workers drop to Alpine's compiled-
+# in default ("nginx"), which can't reliably read files php-fpm/artisan just
+# created as root (e.g. seeded/uploaded storage/app/public files) — nginx
+# then falls through try_files to PHP, which 404s since no route matches a
+# static asset path. Root-owned nginx workers sidesteps that mismatch
+# entirely rather than chasing down every individual file/dir's permission
+# bits.
+user root;
 worker_processes auto;
 pid /run/nginx.pid;
 
