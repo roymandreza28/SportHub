@@ -10,7 +10,7 @@ class News extends Model
 {
     protected $table = 'news';
 
-    protected $fillable = ['author_id', 'title', 'body', 'cover_image_url', 'published_at'];
+    protected $fillable = ['author_id', 'tournament_id', 'title', 'body', 'cover_image_url', 'published_at'];
 
     protected function casts(): array
     {
@@ -22,6 +22,11 @@ class News extends Model
     public function author(): BelongsTo
     {
         return $this->belongsTo(User::class, 'author_id');
+    }
+
+    public function tournament(): BelongsTo
+    {
+        return $this->belongsTo(Tournament::class);
     }
 
     public function livestreams(): HasMany

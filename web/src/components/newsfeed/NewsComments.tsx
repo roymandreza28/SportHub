@@ -21,11 +21,19 @@ export function NewsComments({ newsId }: { newsId: number }) {
     queryClient.invalidateQueries({ queryKey: ['newsfeed'] })
   }
 
+  const [error, setError] = useState<string | null>(null)
+
   const addComment = useMutation({
     mutationFn: () => createNewsComment(newsId, body),
     onSuccess: () => {
       setBody('')
+      setError(null)
       refresh()
+    },
+    onError: (err: unknown) => {
+      const message =
+        (err as { response?: { data?: { errors?: { body?: string[] } } } })?.response?.data?.errors?.body?.[0]
+      setError(message ?? 'Could not post your comment.')
     },
   })
 
@@ -65,18 +73,21 @@ export function NewsComments({ newsId }: { newsId: number }) {
           e.preventDefault()
           if (body.trim()) addComment.mutate()
         }}
-        className="flex gap-2"
+        className="flex flex-col gap-1.5"
       >
-        <input
-          type="text"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="Write a comment..."
-          className={`${input} flex-1`}
-        />
-        <button type="submit" disabled={!body.trim() || addComment.isPending} className={buttonPrimary}>
-          Post
-        </button>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="Write a comment..."
+            className={`${input} flex-1`}
+          />
+          <button type="submit" disabled={!body.trim() || addComment.isPending} className={buttonPrimary}>
+            Post
+          </button>
+        </div>
+        {error && <p className="text-xs text-red-600">{error}</p>}
       </form>
     </div>
   )

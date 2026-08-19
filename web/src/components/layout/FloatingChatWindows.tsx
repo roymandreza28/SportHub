@@ -4,11 +4,19 @@ import { Link } from 'react-router'
 import { fetchConversations, fetchMessages, markConversationRead, type ConversationSummary } from '../../lib/chatApi'
 import { useAuth } from '../../lib/AuthContext'
 import { useChatUI } from '../../lib/ChatUIContext'
+import { Avatar } from './Avatar'
 import { conversationAvatarUrl, conversationTitle } from '../social/ConversationList'
 import { ConversationWindow } from '../social/ConversationWindow'
-import { Avatar } from './Avatar'
 
-function FloatingChatWindow({ conversation, onClose }: { conversation: ConversationSummary; onClose: () => void }) {
+function FloatingChatWindow({
+  conversation,
+  onClose,
+  fullScreen = false,
+}: {
+  conversation: ConversationSummary
+  onClose: () => void
+  fullScreen?: boolean
+}) {
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
@@ -28,7 +36,13 @@ function FloatingChatWindow({ conversation, onClose }: { conversation: Conversat
   const otherParticipant = conversation.type === 'direct' ? conversation.participants.find((p) => p.id !== user?.id) : null
 
   return (
-    <div className="flex h-96 w-80 flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl">
+    <div
+      className={
+        fullScreen
+          ? 'flex h-full w-full flex-col overflow-hidden bg-white'
+          : 'flex h-96 w-80 flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl'
+      }
+    >
       <div className="flex shrink-0 items-center justify-between gap-2 bg-teal-600 px-3 py-2 text-white">
         {otherParticipant ? (
           <Link to={`/profile/${otherParticipant.id}`} className="flex min-w-0 items-center gap-2 hover:opacity-90">
@@ -71,17 +85,37 @@ export function FloatingChatWindows() {
 
   if (!enabled || openWindows.length === 0) return null
 
+  // Mobile: a corner stack of 320px boxes doesn't fit a phone screen, and
+  // there's no hover affordance on touch to notice it — a new/incoming
+  // message instead pops the most recently opened conversation full-screen,
+  // with an explicit close button. Desktop keeps the existing Messenger-
+  // style corner stack (up to MAX_OPEN_WINDOWS, oldest-to-newest left-to-right).
+  const mostRecentId = openWindows[openWindows.length - 1]
+  const mostRecentConversation = conversations?.find((c) => c.id === mostRecentId)
+
   return (
-    // Right-anchored container, normal (non-reversed) row order: since
-    // openWindows lists oldest-opened first, the most recently opened
-    // conversation ends up as the last DOM child — closest to the corner —
-    // matching how Messenger keeps the newest chat nearest the edge.
-    <div className="fixed bottom-0 right-4 z-40 flex items-end gap-3">
-      {openWindows.map((id) => {
-        const conversation = conversations?.find((c) => c.id === id)
-        if (!conversation) return null
-        return <FloatingChatWindow key={id} conversation={conversation} onClose={() => closeChatWindow(id)} />
-      })}
-    </div>
+    <>
+      {mostRecentConversation && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <FloatingChatWindow
+            conversation={mostRecentConversation}
+            onClose={() => closeChatWindow(mostRecentId)}
+            fullScreen
+          />
+        </div>
+      )}
+
+      {/* Right-anchored container, normal (non-reversed) row order: since
+          openWindows lists oldest-opened first, the most recently opened
+          conversation ends up as the last DOM child — closest to the corner —
+          matching how Messenger keeps the newest chat nearest the edge. */}
+      <div className="fixed bottom-0 right-4 z-40 hidden items-end gap-3 md:flex">
+        {openWindows.map((id) => {
+          const conversation = conversations?.find((c) => c.id === id)
+          if (!conversation) return null
+          return <FloatingChatWindow key={id} conversation={conversation} onClose={() => closeChatWindow(id)} />
+        })}
+      </div>
+    </>
   )
 }

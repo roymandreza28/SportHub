@@ -1,8 +1,8 @@
 import { api } from './api'
-import type { Sport, SportFormat } from './venueApi'
+import type { Court, Sport, SportFormat } from './venueApi'
 
 export type TournamentFormat = 'single_elimination' | 'double_elimination' | 'round_robin' | 'group_stage' | 'swiss'
-export type TournamentStatus = 'draft' | 'open' | 'in_progress' | 'completed' | 'cancelled'
+export type TournamentStatus = 'draft' | 'registration' | 'preparation' | 'ongoing' | 'completed' | 'cancelled'
 export type ScoringType = 'single_score' | 'best_of_sets'
 
 export type OrganizerOption = { id: number; name: string; email: string }
@@ -27,6 +27,10 @@ export type Tournament = {
   // individual-registration behavior unchanged.
   sport_format_id: number | null
   sport_format?: SportFormat | null
+  // Only set once status is 'completed' — whichever of champion/champion_team
+  // is non-null tells you if this was an individual or team tournament.
+  champion?: { id: number; name: string } | null
+  champion_team?: { id: number; name: string } | null
 }
 
 export type SetScore = { score_a: number; score_b: number }
@@ -46,13 +50,18 @@ export type BracketMatch = {
   participant_a?: { id: number; name: string } | null
   participant_b?: { id: number; name: string } | null
   winner?: { id: number; name: string } | null
+  scheduled_at: string | null
+  court_id: number | null
+  court?: (Court & { venue: { id: number; name: string } }) | null
 }
 
 export type Bracket = {
   id: number
   tournament_id: number
   current_round: number
-  structure: BracketMatch[][]
+  // Null if generation failed partway through (e.g. too few registrants) —
+  // the bracket row exists but was never populated.
+  structure: BracketMatch[][] | null
   matches: BracketMatch[]
 }
 
@@ -79,6 +88,7 @@ export type LivestreamItem = {
   tournament_id: number | null
   news_id: number | null
   broadcaster: { id: number; name: string } | null
+  tournament: { id: number; organizer_id: number } | null
 }
 
 export type ChatMessageItem = {
@@ -104,16 +114,43 @@ export async function createTournament(input: {
   livestream_organizer_id?: number
   scoring_type?: ScoringType
   sets_to_win?: number
+  // Optional linked newsfeed announcement, published once registration opens.
+  post_title?: string
+  post_body?: string
+  post_media?: File[]
 }) {
-  const { data } = await api.post<Tournament>('/api/tournaments', input)
+  const form = new FormData()
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined || key === 'post_media') continue
+    form.append(key, String(value))
+  }
+  for (const file of input.post_media ?? []) {
+    form.append('post_media[]', file)
+  }
+  const { data } = await api.post<Tournament>('/api/tournaments', form)
   return data
 }
 
 export async function updateTournament(
   tournamentId: number,
-  input: Partial<{ name: string; starts_at: string; venue_id: number; status: TournamentStatus }>
+  input: Partial<{ name: string; starts_at: string; venue_id: number; status: 'registration' }>
 ) {
   const { data } = await api.patch<Tournament>(`/api/tournaments/${tournamentId}`, input)
+  return data
+}
+
+export async function proceedTournament(tournamentId: number) {
+  const { data } = await api.post<Tournament>(`/api/tournaments/${tournamentId}/proceed`)
+  return data
+}
+
+export async function cancelTournament(tournamentId: number) {
+  const { data } = await api.post<Tournament>(`/api/tournaments/${tournamentId}/cancel`)
+  return data
+}
+
+export async function scheduleMatch(matchId: number, input: { scheduled_at?: string | null; court_id?: number | null }) {
+  const { data } = await api.patch<BracketMatch>(`/api/matches/${matchId}/schedule`, input)
   return data
 }
 
@@ -161,10 +198,13 @@ export async function fetchNews() {
   return data
 }
 
-export async function createNews(input: { title: string; body: string; media?: File[] }) {
+export async function createNews(input: { title: string; body: string; media?: File[]; tournament_id?: number }) {
   const form = new FormData()
   form.append('title', input.title)
   form.append('body', input.body)
+  if (input.tournament_id !== undefined) {
+    form.append('tournament_id', String(input.tournament_id))
+  }
   for (const file of input.media ?? []) {
     form.append('media[]', file)
   }
@@ -195,6 +235,14 @@ export async function sendWebRTCSignal(
   data: object
 ) {
   await api.post(`/api/livestreams/${livestreamId}/signal`, { target_user_id: targetUserId, type, data })
+}
+
+export async function publishLivestreamToNews(livestreamId: number, input: { title: string; body: string }) {
+  const { data } = await api.post<LivestreamItem & { news: { id: number; title: string } }>(
+    `/api/livestreams/${livestreamId}/publish`,
+    input
+  )
+  return data
 }
 
 export async function fetchChatMessages(livestreamId: number) {

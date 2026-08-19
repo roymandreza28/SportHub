@@ -16,7 +16,7 @@ it('lets a coach register a player for an open tournament and rejects duplicate 
         'name' => 'Open Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $player->id])
@@ -48,19 +48,19 @@ it('makes a freshly-created tournament visible to coaches only after the organiz
     expect($create->json('status'))->toBe('draft');
     $tournamentId = $create->json('id');
 
-    // The coach module only ever fetches ?status=open — a draft tournament
-    // must not appear there, or a coach could try to register for a
-    // tournament the organizer hasn't finished setting up yet.
-    $beforeOpen = $this->actingAs($coach)->getJson('/api/tournaments?status=open');
+    // The coach module only ever fetches ?status=registration — a draft
+    // tournament must not appear there, or a coach could try to register for
+    // a tournament the organizer hasn't finished setting up yet.
+    $beforeOpen = $this->actingAs($coach)->getJson('/api/tournaments?status=registration');
     expect(collect($beforeOpen->json())->pluck('id'))->not->toContain($tournamentId);
 
     // The organizer explicitly opens registration (the step that was
     // previously missing from the frontend entirely).
-    $this->actingAs($organizer)->patchJson("/api/tournaments/{$tournamentId}", ['status' => 'open'])
+    $this->actingAs($organizer)->patchJson("/api/tournaments/{$tournamentId}", ['status' => 'registration'])
         ->assertOk()
-        ->assertJsonPath('status', 'open');
+        ->assertJsonPath('status', 'registration');
 
-    $afterOpen = $this->actingAs($coach)->getJson('/api/tournaments?status=open');
+    $afterOpen = $this->actingAs($coach)->getJson('/api/tournaments?status=registration');
     expect(collect($afterOpen->json())->pluck('id'))->toContain($tournamentId);
 
     $this->actingAs($coach)->postJson("/api/tournaments/{$tournamentId}/registrations", ['user_id' => $player->id])
@@ -81,7 +81,7 @@ it('lists only the registrations a coach created, not registrations made by othe
         'name' => 'Open Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $player->id])
@@ -109,14 +109,14 @@ it('denies tournament registration to a coach whose account is still pending ver
         'name' => 'Open Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $player->id])
         ->assertStatus(403);
 });
 
-it('rejects registration for a tournament that is not draft or open', function () {
+it('rejects registration for a tournament that is not draft or registration', function () {
     $coach = userWithRole('coach');
     $player = userWithRole('player');
     $organizer = userWithRole('organizer');

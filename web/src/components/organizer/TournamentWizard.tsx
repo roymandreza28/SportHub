@@ -3,12 +3,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createTournament,
   fetchAvailableOrganizers,
-  generateBracket,
   type ScoringType,
   type TournamentFormat,
 } from '../../lib/organizerApi'
 import { fetchSports, fetchSportFormats } from '../../lib/venueApi'
-import { buttonPrimary, buttonSuccess, fieldGroup, input, label, select } from '../../lib/formStyles'
+import { buttonPrimary, fieldGroup, input, label, select, textarea } from '../../lib/formStyles'
 
 const ALL_FORMATS: TournamentFormat[] = ['single_elimination', 'double_elimination', 'round_robin', 'group_stage', 'swiss']
 
@@ -20,8 +19,8 @@ const ALL_FORMATS: TournamentFormat[] = ['single_elimination', 'double_eliminati
 // systems, not a single-event bracket, so they're deliberately left out —
 // see the ladder-challenge memory note for the deferred-feature reasoning.)
 const SPORT_FORMATS: Record<string, TournamentFormat[]> = {
-  Basketball: ['single_elimination', 'double_elimination', 'round_robin', 'group_stage'],
-  Volleyball: ['round_robin', 'single_elimination', 'double_elimination', 'group_stage'],
+  Basketball: ['single_elimination', 'double_elimination', 'round_robin', 'group_stage', 'swiss'],
+  Volleyball: ['round_robin', 'single_elimination', 'double_elimination', 'group_stage', 'swiss'],
   Badminton: ['single_elimination', 'double_elimination', 'round_robin', 'swiss', 'group_stage'],
   Pickleball: ['single_elimination', 'double_elimination', 'group_stage'],
   Tennis: ['single_elimination', 'double_elimination', 'round_robin', 'group_stage', 'swiss'],
@@ -42,12 +41,14 @@ const FORMAT_NOTES: Record<string, Partial<Record<TournamentFormat, string>>> = 
     double_elimination: 'Gives every team a second chance after one loss — common at amateur/local basketball tournaments.',
     round_robin: 'Everyone plays everyone — best kept to 6-8 teams.',
     group_stage: 'Pool play into a knockout bracket — the most popular format for amateur basketball tournaments.',
+    swiss: 'Fixed number of rounds, no elimination, similar-record teams paired each round — good for a large field with limited court time.',
   },
   Volleyball: {
     round_robin: 'Every team plays every other team at least once; the top 4 qualify for playoffs.',
     single_elimination: 'Teams are paired off in a bracket — the loser of each match is eliminated immediately.',
     double_elimination: 'Teams are eliminated only after two losses — straightforward and decisive.',
     group_stage: 'Pool play, then the top teams from each pool advance — the gold standard volleyball format.',
+    swiss: 'Fixed number of rounds, no elimination, similar-record teams paired each round — good for a large field with limited court time.',
   },
   Badminton: {
     single_elimination: 'Quick, but can be unfair — one bad game ends a strong player\'s run.',
@@ -100,7 +101,9 @@ export function TournamentWizard() {
   const [startsAt, setStartsAt] = useState('')
   const [venueOrganizerId, setVenueOrganizerId] = useState<number | ''>('')
   const [livestreamOrganizerId, setLivestreamOrganizerId] = useState<number | ''>('')
-  const [createdId, setCreatedId] = useState<number | null>(null)
+  const [postTitle, setPostTitle] = useState('')
+  const [postBody, setPostBody] = useState('')
+  const [postMedia, setPostMedia] = useState<File[]>([])
   const [message, setMessage] = useState<string | null>(null)
 
   const selectedSportName = sports?.find((s) => s.id === sportId)?.name
@@ -113,6 +116,10 @@ export function TournamentWizard() {
   })
   const teamFormats = (sportFormats ?? []).filter((f) => f.players_per_side > 1)
   const isTeamTournament = sportFormatId !== ''
+  // Basketball/Volleyball (category 'team') can't be played individually —
+  // there's no meaningful solo 5v5 game — matching the backend's
+  // TournamentController::validateSportFormat() rule.
+  const sportRequiresTeam = sports?.find((s) => s.id === sportId)?.category === 'team'
 
   // Keep the selected bracket type valid whenever the sport changes to one
   // that doesn't offer it (e.g. switching from Badminton's Swiss option to
@@ -123,14 +130,6 @@ export function TournamentWizard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSportName])
-
-  // Team tournaments only support single elimination for now — force it the
-  // moment a team format is chosen, matching what the backend enforces.
-  useEffect(() => {
-    if (isTeamTournament) {
-      setFormat('single_elimination')
-    }
-  }, [isTeamTournament])
 
   const scoring = SCORING_OPTIONS.find((s) => s.value === scoringChoice) ?? SCORING_OPTIONS[0]
 
@@ -145,22 +144,14 @@ export function TournamentWizard() {
       livestream_organizer_id: livestreamOrganizerId ? Number(livestreamOrganizerId) : undefined,
       scoring_type: scoring.scoringType,
       sets_to_win: scoring.setsToWin,
+      post_title: postTitle || undefined,
+      post_body: postBody || undefined,
+      post_media: postMedia.length ? postMedia : undefined,
     }),
     onSuccess: (tournament) => {
-      setCreatedId(tournament.id)
-      setMessage(`Created "${tournament.name}" as a draft. Register players, then generate the bracket.`)
+      setMessage(`Created "${tournament.name}" as a draft. Select it from your tournament list to open registration when you're ready.`)
       queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] })
     },
-  })
-
-  const bracketMutation = useMutation({
-    mutationFn: () => generateBracket(createdId!),
-    onSuccess: () => {
-      setMessage('Bracket generated!')
-      queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] })
-      queryClient.invalidateQueries({ queryKey: ['organizer', 'bracket', createdId] })
-    },
-    onError: () => setMessage('Could not generate bracket (does it already have one, or no players registered?).'),
   })
 
   if (!open) {
@@ -207,7 +198,7 @@ export function TournamentWizard() {
             disabled={!sportId}
             className={select}
           >
-            <option value="">Individual (no team)</option>
+            {!sportRequiresTeam && <option value="">Individual (no team)</option>}
             {teamFormats.map((f) => (
               <option key={f.id} value={f.id}>
                 {f.name} ({f.players_per_side} per side)
@@ -217,28 +208,25 @@ export function TournamentWizard() {
           {sportId && teamFormats.length === 0 && (
             <p className="text-xs text-slate-400">This sport has no multi-player formats.</p>
           )}
+          {sportRequiresTeam && (
+            <p className="text-xs text-slate-500">{selectedSportName} tournaments must be a team tournament — pick a team format above.</p>
+          )}
         </div>
         <div className={fieldGroup}>
           <label className={label}>Bracket type</label>
           <select
             value={format}
             onChange={(e) => setFormat(e.target.value as TournamentFormat)}
-            disabled={isTeamTournament}
             className={select}
           >
-            {(isTeamTournament ? (['single_elimination'] as TournamentFormat[]) : availableFormats).map((f) => (
+            {availableFormats.map((f) => (
               <option key={f} value={f}>
                 {FORMAT_LABELS[f]}
               </option>
             ))}
           </select>
-          {isTeamTournament ? (
-            <p className="text-xs text-slate-500">Team tournaments only support single elimination for now.</p>
-          ) : (
-            selectedSportName &&
-            FORMAT_NOTES[selectedSportName]?.[format] && (
-              <p className="text-xs text-slate-500">{FORMAT_NOTES[selectedSportName][format]}</p>
-            )
+          {selectedSportName && FORMAT_NOTES[selectedSportName]?.[format] && (
+            <p className="text-xs text-slate-500">{FORMAT_NOTES[selectedSportName][format]}</p>
           )}
         </div>
         <div className={`${fieldGroup} sm:col-span-2`}>
@@ -316,24 +304,61 @@ export function TournamentWizard() {
         </div>
       </div>
 
+      <div className="max-w-xl border-t border-slate-200 pt-4">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Newsfeed announcement (optional)</h4>
+        <p className="mb-3 text-xs text-slate-500">
+          Posts to the newsfeed once you open registration. Coaches can tap it to register their team.
+        </p>
+        <div className="grid gap-4">
+          <div className={fieldGroup}>
+            <label className={label}>Post title</label>
+            <input
+              type="text"
+              placeholder="e.g. Barangay Basketball Cup now open!"
+              value={postTitle}
+              onChange={(e) => setPostTitle(e.target.value)}
+              className={input}
+            />
+          </div>
+          <div className={fieldGroup}>
+            <label className={label}>Post context</label>
+            <textarea
+              placeholder="Tell players and coaches about the tournament..."
+              value={postBody}
+              onChange={(e) => setPostBody(e.target.value)}
+              className={textarea}
+              rows={3}
+            />
+          </div>
+          <div className={fieldGroup}>
+            <label className={label}>Photos / video</label>
+            <input
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              onChange={(e) => setPostMedia(Array.from(e.target.files ?? []))}
+              className={input}
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-wrap gap-3">
         <button
           onClick={() => createMutation.mutate()}
-          disabled={!sportId || !name || !startsAt || !venueOrganizerId || !livestreamOrganizerId || createMutation.isPending}
+          disabled={
+            !sportId ||
+            !name ||
+            !startsAt ||
+            !venueOrganizerId ||
+            !livestreamOrganizerId ||
+            (sportRequiresTeam && !sportFormatId) ||
+            createMutation.isPending
+          }
           className={buttonPrimary}
         >
           {createMutation.isPending ? 'Creating...' : 'Create tournament'}
         </button>
-
-        {createdId && (
-          <button
-            onClick={() => bracketMutation.mutate()}
-            disabled={bracketMutation.isPending}
-            className={buttonSuccess}
-          >
-            {bracketMutation.isPending ? 'Generating...' : `Generate bracket for tournament #${createdId}`}
-          </button>
-        )}
       </div>
 
       {message && <p className="text-sm text-slate-600">{message}</p>}

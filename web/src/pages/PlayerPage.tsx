@@ -2,24 +2,11 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import type { Venue } from '../lib/venueApi'
-import {
-  fetchMySkillLevels,
-  fetchMyMatchmakingRequests,
-  fetchMyVenueRegistrations,
-  fetchMyTournamentRegistrationsAsPlayer,
-} from '../lib/playerApi'
+import { fetchMyVenueRegistrations, fetchMyTournamentRegistrationsAsPlayer } from '../lib/playerApi'
 import { fetchProfile } from '../lib/socialApi'
-import {
-  DashboardShell,
-  ListPreview,
-  ListRow,
-  Section,
-  StatCard,
-  StatCardGrid,
-  StatusBadge,
-  type NavItem,
-} from '../components/layout/DashboardShell'
-import { IconCalendar, IconHome, IconMapPin, IconNewspaper, IconTarget, IconTrophy, IconUsers } from '../components/layout/icons'
+import { DashboardShell, Section, type NavItem } from '../components/layout/DashboardShell'
+import { UpcomingEventsStrip, type UpcomingEventData } from '../components/layout/UpcomingEventsStrip'
+import { IconHome, IconPinCalendar, IconTarget, IconTrophy } from '../components/layout/icons'
 import { Newsfeed } from '../components/newsfeed/Newsfeed'
 import { VenueDirectory } from '../components/player/VenueDirectory'
 import { VenueRegistrationForm } from '../components/player/VenueRegistrationForm'
@@ -34,16 +21,18 @@ import { useAuth } from '../lib/AuthContext'
 import { useChatUI } from '../lib/ChatUIContext'
 import { useProfileMediaMutations } from '../lib/useProfileMedia'
 import { extractErrorMessage } from '../lib/errors'
-import { buttonSecondary } from '../lib/formStyles'
+import { buttonSecondary, chip } from '../lib/formStyles'
 
+// 'profile' is deliberately not in this list — the profile tab is still
+// reachable via the "Edit profile" link on ProfilePage.tsx (?tab=profile),
+// it's just no longer a permanent sidenav entry.
 const NAV_ITEMS: NavItem[] = [
-  { id: 'overview', label: 'Dashboard', icon: IconHome },
-  { id: 'profile', label: 'Profile', icon: IconUsers },
-  { id: 'newsfeed', label: 'Newsfeed', icon: IconNewspaper },
+  { id: 'newsfeed', label: 'Newsfeed', icon: IconHome },
   { id: 'matchmaking', label: 'Matchmaking', icon: IconTarget },
   { id: 'tournaments', label: 'Tournament', icon: IconTrophy },
-  { id: 'bookings', label: 'Bookings', icon: IconCalendar },
-  { id: 'venues', label: 'Venues', icon: IconMapPin },
+  // Bookings + Venues merged into one nav entry — a combined pin+calendar
+  // icon signals it covers both, with a sub-tab pill inside to switch.
+  { id: 'venues', label: 'Venues & Bookings', icon: IconPinCalendar },
 ]
 
 export function PlayerPage() {
@@ -51,11 +40,10 @@ export function PlayerPage() {
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
   const [searchParams] = useSearchParams()
   const [active, setActive] = useState(searchParams.get('tab') ?? NAV_ITEMS[0].id)
+  const [venuesSubTab, setVenuesSubTab] = useState<'venues' | 'bookings'>('venues')
   const { openChatWindow } = useChatUI()
   const { user } = useAuth()
 
-  const { data: skillLevels } = useQuery({ queryKey: ['skill-levels', 'mine'], queryFn: fetchMySkillLevels })
-  const { data: matchmaking } = useQuery({ queryKey: ['player', 'matchmaking'], queryFn: fetchMyMatchmakingRequests })
   const { data: bookings } = useQuery({ queryKey: ['player', 'venue-registrations'], queryFn: fetchMyVenueRegistrations })
   const { data: tournamentRegistrations } = useQuery({
     queryKey: ['player', 'tournament-registrations', 'mine'],
@@ -68,10 +56,14 @@ export function PlayerPage() {
   })
   const { avatarMutation, coverMutation } = useProfileMediaMutations(user?.id ?? 0)
 
-  const openRequests = (matchmaking ?? []).filter((r) => r.status === 'open').length
-
   const now = Date.now()
-  type UpcomingEvent = { key: string; date: string; primary: string; secondary: string; status: string }
+  type UpcomingEvent = {
+    key: string
+    date: string
+    primary: string
+    secondary: string
+    status: string
+  } & UpcomingEventData
 
   const upcomingBookingEvents: UpcomingEvent[] = (bookings ?? [])
     .filter((b) => b.status === 'approved' && new Date(b.ends_at).getTime() > now)
@@ -81,6 +73,8 @@ export function PlayerPage() {
       primary: b.court ? `${b.venue.name} — ${b.court.name}` : b.venue.name,
       secondary: `${new Date(b.starts_at).toLocaleString()} — ${new Date(b.ends_at).toLocaleTimeString()}`,
       status: b.status,
+      kind: 'booking',
+      booking: b,
     }))
 
   const upcomingTournamentEvents: UpcomingEvent[] = (tournamentRegistrations ?? [])
@@ -91,6 +85,8 @@ export function PlayerPage() {
       primary: r.tournament.name,
       secondary: `${r.tournament.sport.name}${r.tournament.venue ? ` — ${r.tournament.venue.name}` : ''} — ${new Date(r.tournament.starts_at).toLocaleDateString()}`,
       status: r.tournament.status,
+      kind: 'tournament',
+      tournament: r.tournament,
     }))
 
   const upcomingEvents = [...upcomingBookingEvents, ...upcomingTournamentEvents]
@@ -99,38 +95,6 @@ export function PlayerPage() {
 
   return (
     <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={setActive}>
-      {active === 'overview' && (
-        <>
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-slate-900">Player</h1>
-            <p className="mt-1 text-sm text-slate-500">Your profile, matches, and bookings.</p>
-          </div>
-
-          <StatCardGrid>
-            <StatCard label="Skill levels tracked" value={skillLevels?.length ?? '-'} />
-            <StatCard label="Open matchmaking requests" value={openRequests} />
-            <StatCard label="Bookings" value={bookings?.length ?? '-'} />
-          </StatCardGrid>
-
-          <ListPreview
-            title="My Upcoming Events"
-            description="Approved bookings and ongoing tournaments you're part of, soonest first."
-            emptyText="No upcoming events — visit Venues to request a booking."
-            rows={upcomingEvents.map((e) => (
-              <ListRow key={e.key} primary={e.primary} secondary={e.secondary} badge={<StatusBadge status={e.status} />} />
-            ))}
-            action={
-              <button
-                onClick={() => setActive('venues')}
-                className="text-sm font-medium text-teal-600 hover:text-teal-700"
-              >
-                Browse venues &rarr;
-              </button>
-            }
-          />
-        </>
-      )}
-
       {active === 'profile' && user && (
         <>
           <ProfileHeaderCard
@@ -177,19 +141,20 @@ export function PlayerPage() {
       )}
 
       {active === 'newsfeed' && (
-        <Section title="Newsfeed" description="News from organizers — react, comment, and share with friends.">
+        <Section title="Newsfeed" compact>
+          <UpcomingEventsStrip events={upcomingEvents} />
           <Newsfeed />
         </Section>
       )}
 
       {active === 'matchmaking' && (
-        <Section title="Matchmaking" description="Find an opponent for a sport, live.">
+        <Section title="Matchmaking" compact>
           <MatchmakingPanel />
         </Section>
       )}
 
       {active === 'tournaments' && (
-        <Section title="Tournament" description="Tournaments you're registered in, and their results.">
+        <Section title="Tournament" compact>
           <MyTournamentRegistrations
             selectedTournamentId={selectedTournamentId}
             onSelectTournament={setSelectedTournamentId}
@@ -197,19 +162,28 @@ export function PlayerPage() {
         </Section>
       )}
 
-      {active === 'bookings' && (
-        <Section title="Bookings" description="Venue slots you've requested.">
-          <MyBookings />
-        </Section>
-      )}
-
       {active === 'venues' && (
-        <Section title="Venues" description="Browse venues and request a booking.">
-          <VenueDirectory onSelect={setSelectedVenue} selectedId={selectedVenue?.id} />
-          {selectedVenue && (
-            <div className="mt-4 border-t border-slate-100 pt-4">
-              <VenueRegistrationForm venue={selectedVenue} />
-            </div>
+        <Section title="Venues & Bookings" compact>
+          <div className="mb-4 flex gap-2">
+            <button type="button" className={chip(venuesSubTab === 'venues')} onClick={() => setVenuesSubTab('venues')}>
+              Venues
+            </button>
+            <button type="button" className={chip(venuesSubTab === 'bookings')} onClick={() => setVenuesSubTab('bookings')}>
+              My Bookings
+            </button>
+          </div>
+
+          {venuesSubTab === 'venues' ? (
+            <>
+              <VenueDirectory onSelect={setSelectedVenue} selectedId={selectedVenue?.id} />
+              {selectedVenue && (
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <VenueRegistrationForm venue={selectedVenue} />
+                </div>
+              )}
+            </>
+          ) : (
+            <MyBookings />
           )}
         </Section>
       )}

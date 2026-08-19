@@ -6,10 +6,13 @@ use App\Events\BracketUpdated;
 use App\Events\RoundAdvanced;
 use App\Models\Bracket;
 use App\Models\GameMatch;
+use App\Models\Team;
 use App\Models\Tournament;
+use App\Models\User;
 use App\Support\Broadcasting;
 use App\Support\MatchParticipants;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class BracketService
 {
@@ -24,22 +27,26 @@ class BracketService
     public function autoStartExpired(): void
     {
         Tournament::query()
-            ->where('status', 'open')
+            ->where('status', 'registration')
             ->where('starts_at', '<=', now())
             ->whereDoesntHave('bracket')
             ->get()
             ->each(function (Tournament $tournament) {
                 $registeredCount = $tournament->registrations()->whereIn('status', ['pending', 'confirmed'])->count();
 
-                // Too few registrants to form even one match — leave it open
-                // rather than generating a broken/empty bracket. It'll be
-                // picked up again on the next read once more people join.
+                // Too few registrants to form even one match — still move to
+                // preparation rather than leaving this stuck in registration
+                // forever (the deadline already passed). No bracket gets
+                // generated; the organizer's only real option from here is to
+                // cancel, since registration itself is already closed.
                 if ($registeredCount < 2) {
+                    $tournament->update(['status' => 'preparation']);
+
                     return;
                 }
 
                 $this->generate($tournament);
-                $tournament->update(['status' => 'in_progress']);
+                $tournament->update(['status' => 'preparation']);
             });
     }
 
@@ -53,25 +60,25 @@ class BracketService
             ->shuffle()
             ->values();
 
-        $bracket = $tournament->bracket()->create(['current_round' => 1]);
+        // If anything below throws (e.g. a malformed participant list), the
+        // whole attempt rolls back instead of leaving an empty, structure-
+        // less Bracket row behind — a half-created bracket is worse than no
+        // bracket, since the UI has no "retry" affordance for it.
+        $bracket = DB::transaction(function () use ($tournament, $participantIds, $isTeamTournament) {
+            $bracket = $tournament->bracket()->create(['current_round' => 1]);
 
-        if ($isTeamTournament) {
-            // Team tournaments are single_elimination-only for now (enforced
-            // at tournament creation) — no other format branch needed here.
-            $this->generateSingleElimination($bracket, $participantIds, 1, true);
-        } else {
             match ($tournament->format) {
-                'round_robin' => $this->generateRoundRobin($bracket, $participantIds),
-                'group_stage' => $this->generateGroupStage($bracket, $participantIds),
-                'double_elimination' => $this->generateDoubleElimination($bracket, $participantIds),
-                'swiss' => $this->generateSwiss($bracket, $participantIds),
-                default => $this->generateSingleElimination($bracket, $participantIds),
+                'round_robin' => $this->generateRoundRobin($bracket, $participantIds, null, 1, $isTeamTournament),
+                'group_stage' => $this->generateGroupStage($bracket, $participantIds, $isTeamTournament),
+                'double_elimination' => $this->generateDoubleElimination($bracket, $participantIds, $isTeamTournament),
+                'swiss' => $this->generateSwiss($bracket, $participantIds, $isTeamTournament),
+                default => $this->generateSingleElimination($bracket, $participantIds, 1, $isTeamTournament),
             };
-        }
 
-        $bracket->update(['structure' => $this->buildStructure($bracket)]);
+            $bracket->update(['structure' => $this->buildStructure($bracket)]);
 
-        $bracket = $bracket->fresh();
+            return $bracket->fresh();
+        });
         Broadcasting::safely(fn () => BracketUpdated::dispatch($bracket));
 
         $this->notifyParticipants($tournament, "The bracket for {$tournament->name} is set — check your matchup!");
@@ -79,15 +86,18 @@ class BracketService
         return $bracket;
     }
 
-    protected function generateRoundRobin(Bracket $bracket, Collection $playerIds, ?int $groupNumber = null, int $round = 1): void
+    protected function generateRoundRobin(Bracket $bracket, Collection $playerIds, ?int $groupNumber = null, int $round = 1, bool $teamMode = false): void
     {
+        $aField = $teamMode ? 'participant_a_team_id' : 'participant_a_id';
+        $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
+
         for ($i = 0; $i < $playerIds->count(); $i++) {
             for ($j = $i + 1; $j < $playerIds->count(); $j++) {
                 $bracket->matches()->create([
                     'round' => $round,
                     'group_number' => $groupNumber,
-                    'participant_a_id' => $playerIds[$i],
-                    'participant_b_id' => $playerIds[$j],
+                    $aField => $playerIds[$i],
+                    $bField => $playerIds[$j],
                     'status' => 'scheduled',
                 ]);
             }
@@ -96,7 +106,7 @@ class BracketService
 
     // ---- Group stage: round-robin pools, then a single-elimination knockout ----
 
-    protected function generateGroupStage(Bracket $bracket, Collection $playerIds): void
+    protected function generateGroupStage(Bracket $bracket, Collection $playerIds, bool $teamMode = false): void
     {
         $numGroups = max(1, (int) ceil($playerIds->count() / 4));
 
@@ -109,7 +119,7 @@ class BracketService
         }
 
         foreach ($groups as $groupNumber => $members) {
-            $this->generateRoundRobin($bracket, $members, $groupNumber);
+            $this->generateRoundRobin($bracket, $members, $groupNumber, 1, $teamMode);
         }
     }
 
@@ -121,7 +131,7 @@ class BracketService
      * single_elimination tournaments use, just starting one round after the
      * group phase and skipping the shuffle (qualifiers are already ranked).
      */
-    protected function maybeStartGroupKnockout(Bracket $bracket): void
+    protected function maybeStartGroupKnockout(Bracket $bracket, bool $teamMode = false): void
     {
         $groupMatches = $bracket->matches()->whereNotNull('group_number')->get();
 
@@ -135,7 +145,7 @@ class BracketService
             return;
         }
 
-        $standings = $groupMatches->groupBy('group_number')->map(fn (Collection $matches) => $this->rankGroup($matches));
+        $standings = $groupMatches->groupBy('group_number')->map(fn (Collection $matches) => $this->rankGroup($matches, $teamMode));
 
         $ranked1 = $standings->map(fn ($s) => $s->get(0))->filter()->values();
         $ranked2 = $standings->map(fn ($s) => $s->get(1))->filter()->values();
@@ -147,17 +157,21 @@ class BracketService
 
         $startRound = $groupMatches->max('round') + 1;
 
-        $this->generateSingleElimination($bracket, $qualifiers, $startRound);
+        $this->generateSingleElimination($bracket, $qualifiers, $startRound, $teamMode);
     }
 
-    private function rankGroup(Collection $matches): Collection
+    private function rankGroup(Collection $matches, bool $teamMode = false): Collection
     {
+        $aField = $teamMode ? 'participant_a_team_id' : 'participant_a_id';
+        $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
+        $winnerField = $teamMode ? 'winner_team_id' : 'winner_id';
+
         $stats = collect();
 
         foreach ($matches as $match) {
             foreach ([
-                [$match->participant_a_id, $match->score_a, $match->score_b],
-                [$match->participant_b_id, $match->score_b, $match->score_a],
+                [$match->{$aField}, $match->score_a, $match->score_b],
+                [$match->{$bField}, $match->score_b, $match->score_a],
             ] as [$playerId, $scoredFor, $scoredAgainst]) {
                 if (! $playerId) {
                     continue;
@@ -166,7 +180,7 @@ class BracketService
                 $entry = $stats->get($playerId, ['id' => $playerId, 'wins' => 0, 'for' => 0, 'against' => 0]);
                 $entry['for'] += $scoredFor;
                 $entry['against'] += $scoredAgainst;
-                if ($match->winner_id === $playerId) {
+                if ($match->{$winnerField} === $playerId) {
                     $entry['wins']++;
                 }
                 $stats->put($playerId, $entry);
@@ -245,7 +259,7 @@ class BracketService
 
     // ---- Double elimination ----
 
-    protected function generateDoubleElimination(Bracket $bracket, Collection $playerIds): void
+    protected function generateDoubleElimination(Bracket $bracket, Collection $playerIds, bool $teamMode = false): void
     {
         $count = max($playerIds->count(), 2);
         $bracketSize = 2 ** (int) ceil(log($count, 2));
@@ -267,6 +281,10 @@ class BracketService
         }
         $slots = collect($slots);
 
+        $aField = $teamMode ? 'participant_a_team_id' : 'participant_a_id';
+        $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
+        $winnerField = $teamMode ? 'winner_team_id' : 'winner_id';
+
         $wbR1IsBye = [];
         $completedByeMatches = [];
 
@@ -280,10 +298,10 @@ class BracketService
             $match = $bracket->matches()->create([
                 'round' => 1,
                 'bracket_type' => 'winners',
-                'participant_a_id' => $a,
-                'participant_b_id' => $b,
+                $aField => $a,
+                $bField => $b,
                 'status' => $isBye ? 'completed' : 'scheduled',
-                'winner_id' => $winnerId,
+                $winnerField => $winnerId,
             ]);
 
             if ($isBye && $winnerId) {
@@ -346,14 +364,14 @@ class BracketService
         return intdiv($bracketSize, 2 ** ($k + 1));
     }
 
-    private function advanceDoubleElimination(GameMatch $match): void
+    private function advanceDoubleElimination(GameMatch $match, bool $teamMode = false): void
     {
         $bracket = $match->bracket;
         $tournament = $bracket->tournament;
 
         match ($match->bracket_type) {
-            'winners' => $this->advanceDoubleEliminationWinners($match, $bracket, $tournament),
-            'losers' => $this->advanceDoubleEliminationLosers($match, $bracket, $tournament),
+            'winners' => $this->advanceDoubleEliminationWinners($match, $bracket, $tournament, $teamMode),
+            'losers' => $this->advanceDoubleEliminationLosers($match, $bracket, $tournament, $teamMode),
             'final' => $this->completeDoubleElimination($tournament),
             default => null,
         };
@@ -364,26 +382,29 @@ class BracketService
 
     private function completeDoubleElimination(Tournament $tournament): void
     {
-        $tournament->update(['status' => 'completed']);
-        $this->notifyParticipants($tournament, "{$tournament->name} has ended — thanks for playing!");
+        $this->completeTournament($tournament);
     }
 
-    private function advanceDoubleEliminationWinners(GameMatch $match, Bracket $bracket, Tournament $tournament): void
+    private function advanceDoubleEliminationWinners(GameMatch $match, Bracket $bracket, Tournament $tournament, bool $teamMode = false): void
     {
+        $aField = $teamMode ? 'participant_a_team_id' : 'participant_a_id';
+        $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
+        $winnerField = $teamMode ? 'winner_team_id' : 'winner_id';
+
         $maxWbRound = $bracket->matches()->where('bracket_type', 'winners')->max('round');
         $roundMatches = $bracket->matches()->where('bracket_type', 'winners')->where('round', $match->round)->orderBy('id')->get();
         $index = $roundMatches->search(fn (GameMatch $m) => $m->id === $match->id);
-        $loserId = $match->participant_a_id === $match->winner_id ? $match->participant_b_id : $match->participant_a_id;
+        $loserId = $match->{$aField} === $match->{$winnerField} ? $match->{$bField} : $match->{$aField};
 
         if ($match->round < $maxWbRound) {
             $nextRoundMatches = $bracket->matches()->where('bracket_type', 'winners')->where('round', $match->round + 1)->orderBy('id')->get();
             $nextMatch = $nextRoundMatches[intdiv($index, 2)];
-            $slot = $index % 2 === 0 ? 'participant_a_id' : 'participant_b_id';
-            $nextMatch->update([$slot => $match->winner_id]);
+            $slot = $index % 2 === 0 ? $aField : $bField;
+            $nextMatch->update([$slot => $match->{$winnerField}]);
         } else {
             $final = $bracket->matches()->where('bracket_type', 'final')->first();
             if ($final) {
-                $final->update(['participant_a_id' => $match->winner_id]);
+                $final->update([$aField => $match->{$winnerField}]);
             } else {
                 // No losers bracket exists (only 2 entrants total) — the
                 // winners-bracket match is decisive on its own.
@@ -393,20 +414,24 @@ class BracketService
 
         // Byes have no real loser to route anywhere.
         if ($loserId) {
-            $this->dropIntoLosersBracket($bracket, $match->round, $index, $loserId);
+            $this->dropIntoLosersBracket($bracket, $match->round, $index, $loserId, $teamMode);
         }
     }
 
-    private function dropIntoLosersBracket(Bracket $bracket, int $wbRound, int $wbMatchIndex, int $loserId): void
+    private function dropIntoLosersBracket(Bracket $bracket, int $wbRound, int $wbMatchIndex, int $loserId, bool $teamMode = false): void
     {
+        $aField = $teamMode ? 'participant_a_team_id' : 'participant_a_id';
+        $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
+        $winnerField = $teamMode ? 'winner_team_id' : 'winner_id';
+
         if ($wbRound === 1) {
             $lbRoundOffset = 1;
             $lbPosition = intdiv($wbMatchIndex, 2);
-            $slot = $wbMatchIndex % 2 === 0 ? 'participant_a_id' : 'participant_b_id';
+            $slot = $wbMatchIndex % 2 === 0 ? $aField : $bField;
         } else {
             $lbRoundOffset = 2 * ($wbRound - 1);
             $lbPosition = $wbMatchIndex;
-            $slot = 'participant_b_id';
+            $slot = $bField;
         }
 
         $lbMatch = $bracket->matches()->where('bracket_type', 'losers')
@@ -430,10 +455,10 @@ class BracketService
             $wbR1 = $bracket->matches()->where('bracket_type', 'winners')->where('round', 1)->orderBy('id')->get();
             $siblingIndex = $wbMatchIndex % 2 === 0 ? $wbMatchIndex + 1 : $wbMatchIndex - 1;
             $sibling = $wbR1[$siblingIndex] ?? null;
-            $siblingIsBye = $sibling && (is_null($sibling->participant_a_id) || is_null($sibling->participant_b_id));
+            $siblingIsBye = $sibling && (is_null($sibling->{$aField}) || is_null($sibling->{$bField}));
 
             if ($siblingIsBye) {
-                $lbMatch->update(['status' => 'completed', 'winner_id' => $loserId]);
+                $lbMatch->update(['status' => 'completed', $winnerField => $loserId]);
                 $this->advanceWinner($lbMatch->fresh());
             }
         } else {
@@ -448,14 +473,18 @@ class BracketService
                 ->exists();
 
             if (! $prevExists) {
-                $lbMatch->update(['status' => 'completed', 'winner_id' => $loserId]);
+                $lbMatch->update(['status' => 'completed', $winnerField => $loserId]);
                 $this->advanceWinner($lbMatch->fresh());
             }
         }
     }
 
-    private function advanceDoubleEliminationLosers(GameMatch $match, Bracket $bracket, Tournament $tournament): void
+    private function advanceDoubleEliminationLosers(GameMatch $match, Bracket $bracket, Tournament $tournament, bool $teamMode = false): void
     {
+        $aField = $teamMode ? 'participant_a_team_id' : 'participant_a_id';
+        $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
+        $winnerField = $teamMode ? 'winner_team_id' : 'winner_id';
+
         $lbRound = $match->round - 100;
         $maxLbRound = $bracket->matches()->where('bracket_type', 'losers')->max('round') - 100;
 
@@ -463,7 +492,7 @@ class BracketService
             // Losers-bracket final: the winner becomes the LB champion,
             // waiting in the grand final's other slot.
             $final = $bracket->matches()->where('bracket_type', 'final')->first();
-            $final?->update(['participant_b_id' => $match->winner_id]);
+            $final?->update([$bField => $match->{$winnerField}]);
 
             return;
         }
@@ -477,15 +506,15 @@ class BracketService
             // that round's fresh winners-bracket dropper.
             $nextMatch = $bracket->matches()->where('bracket_type', 'losers')
                 ->where('round', $nextRound)->where('bracket_position', $position)->first();
-            $nextMatch?->update(['participant_a_id' => $match->winner_id]);
+            $nextMatch?->update([$aField => $match->{$winnerField}]);
         } else {
             // Even round: winners of this round's adjacent positions merge
             // together into the next (odd) round.
             $nextPosition = intdiv($position, 2);
-            $slot = $position % 2 === 0 ? 'participant_a_id' : 'participant_b_id';
+            $slot = $position % 2 === 0 ? $aField : $bField;
             $nextMatch = $bracket->matches()->where('bracket_type', 'losers')
                 ->where('round', $nextRound)->where('bracket_position', $nextPosition)->first();
-            $nextMatch?->update([$slot => $match->winner_id]);
+            $nextMatch?->update([$slot => $match->{$winnerField}]);
         }
     }
 
@@ -496,12 +525,13 @@ class BracketService
      * convention), no elimination — every round pairs players with similar
      * records so far. Standings after the final round decide the winner.
      */
-    protected function generateSwiss(Bracket $bracket, Collection $playerIds): void
+    protected function generateSwiss(Bracket $bracket, Collection $playerIds, bool $teamMode = false): void
     {
-        $this->pairSwissRound($bracket, $playerIds, 1);
+        $this->pairSwissRound($bracket, $playerIds, 1, $teamMode);
 
+        $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
         $byeMatches = $bracket->matches()->where('bracket_type', 'swiss')->where('round', 1)
-            ->whereNull('participant_b_id')->get();
+            ->whereNull($bField)->get();
 
         foreach ($byeMatches as $match) {
             $this->advanceWinner($match);
@@ -521,11 +551,15 @@ class BracketService
      * field's bye goes to the lowest-ranked player who hasn't had one yet, so
      * the same player never sits out twice while others never do.
      */
-    private function pairSwissRound(Bracket $bracket, Collection $orderedIds, int $round): void
+    private function pairSwissRound(Bracket $bracket, Collection $orderedIds, int $round, bool $teamMode = false): void
     {
+        $aField = $teamMode ? 'participant_a_team_id' : 'participant_a_id';
+        $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
+        $winnerField = $teamMode ? 'winner_team_id' : 'winner_id';
+
         $remaining = $orderedIds->values()->all();
-        $pastPairs = $round > 1 ? $this->swissPastPairs($bracket) : collect();
-        $priorByes = $round > 1 ? $this->swissPriorByeIds($bracket) : collect();
+        $pastPairs = $round > 1 ? $this->swissPastPairs($bracket, $teamMode) : collect();
+        $priorByes = $round > 1 ? $this->swissPriorByeIds($bracket, $teamMode) : collect();
         $pairs = [];
 
         if (count($remaining) % 2 === 1) {
@@ -559,10 +593,10 @@ class BracketService
             $bracket->matches()->create([
                 'round' => $round,
                 'bracket_type' => 'swiss',
-                'participant_a_id' => $a,
-                'participant_b_id' => $b,
+                $aField => $a,
+                $bField => $b,
                 'status' => $isBye ? 'completed' : 'scheduled',
-                'winner_id' => $isBye ? $a : null,
+                $winnerField => $isBye ? $a : null,
             ]);
         }
     }
@@ -572,18 +606,24 @@ class BracketService
         return implode('-', [min($a, $b), max($a, $b)]);
     }
 
-    private function swissPastPairs(Bracket $bracket): Collection
+    private function swissPastPairs(Bracket $bracket, bool $teamMode = false): Collection
     {
-        return $bracket->matches()->where('bracket_type', 'swiss')->whereNotNull('participant_b_id')->get()
-            ->map(fn (GameMatch $m) => $this->swissPairKey($m->participant_a_id, $m->participant_b_id));
+        $aField = $teamMode ? 'participant_a_team_id' : 'participant_a_id';
+        $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
+
+        return $bracket->matches()->where('bracket_type', 'swiss')->whereNotNull($bField)->get()
+            ->map(fn (GameMatch $m) => $this->swissPairKey($m->{$aField}, $m->{$bField}));
     }
 
-    private function swissPriorByeIds(Bracket $bracket): Collection
+    private function swissPriorByeIds(Bracket $bracket, bool $teamMode = false): Collection
     {
-        return $bracket->matches()->where('bracket_type', 'swiss')->whereNull('participant_b_id')->pluck('participant_a_id');
+        $aField = $teamMode ? 'participant_a_team_id' : 'participant_a_id';
+        $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
+
+        return $bracket->matches()->where('bracket_type', 'swiss')->whereNull($bField)->pluck($aField);
     }
 
-    private function maybeAdvanceSwissRound(Bracket $bracket, Tournament $tournament): void
+    private function maybeAdvanceSwissRound(Bracket $bracket, Tournament $tournament, bool $teamMode = false): void
     {
         $currentRound = (int) $bracket->matches()->where('bracket_type', 'swiss')->max('round');
         $roundMatches = $bracket->matches()->where('bracket_type', 'swiss')->where('round', $currentRound)->get();
@@ -599,18 +639,17 @@ class BracketService
         $totalRounds = $this->totalSwissRounds($playerCount);
 
         if ($currentRound >= $totalRounds) {
-            $tournament->update(['status' => 'completed']);
             $bracket->update(['structure' => $this->buildStructure($bracket)]);
             Broadcasting::safely(fn () => BracketUpdated::dispatch($bracket->fresh()));
 
-            $this->notifyParticipants($tournament, "{$tournament->name} has ended — thanks for playing!");
+            $this->completeTournament($tournament);
 
             return;
         }
 
-        $standings = collect($this->swissStandings($bracket))->pluck('id');
+        $standings = collect($this->swissStandings($bracket, $teamMode))->pluck('id');
         $nextRound = $currentRound + 1;
-        $this->pairSwissRound($bracket, $standings, $nextRound);
+        $this->pairSwissRound($bracket, $standings, $nextRound, $teamMode);
 
         $bracket->update([
             'current_round' => $nextRound,
@@ -621,8 +660,9 @@ class BracketService
         Broadcasting::safely(fn () => RoundAdvanced::dispatch($tournament->id, $nextRound));
         $this->notifyParticipants($tournament, "Round {$nextRound} has started in {$tournament->name}.");
 
+        $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
         $byeMatches = $bracket->matches()->where('bracket_type', 'swiss')->where('round', $nextRound)
-            ->whereNull('participant_b_id')->get();
+            ->whereNull($bField)->get();
 
         foreach ($byeMatches as $match) {
             $this->advanceWinner($match);
@@ -635,15 +675,19 @@ class BracketService
      * swiss-tagged match played so far (a bye counts as a win with no
      * points either way).
      */
-    private function swissStandings(Bracket $bracket): array
+    private function swissStandings(Bracket $bracket, bool $teamMode = false): array
     {
+        $aField = $teamMode ? 'participant_a_team_id' : 'participant_a_id';
+        $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
+        $winnerField = $teamMode ? 'winner_team_id' : 'winner_id';
+
         $matches = $bracket->matches()->where('bracket_type', 'swiss')->get();
         $stats = [];
 
         foreach ($matches as $match) {
             foreach ([
-                [$match->participant_a_id, $match->score_a, $match->score_b],
-                [$match->participant_b_id, $match->score_b, $match->score_a],
+                [$match->{$aField}, $match->score_a, $match->score_b],
+                [$match->{$bField}, $match->score_b, $match->score_a],
             ] as [$playerId, $scoredFor, $scoredAgainst]) {
                 if (! $playerId) {
                     continue;
@@ -652,7 +696,7 @@ class BracketService
                 $stats[$playerId] ??= ['id' => $playerId, 'wins' => 0, 'for' => 0, 'against' => 0];
                 $stats[$playerId]['for'] += $scoredFor;
                 $stats[$playerId]['against'] += $scoredAgainst;
-                if ($match->winner_id === $playerId) {
+                if ($match->{$winnerField} === $playerId) {
                     $stats[$playerId]['wins']++;
                 }
             }
@@ -683,9 +727,10 @@ class BracketService
     {
         $bracket = $match->bracket;
         $tournament = $bracket->tournament;
+        $isTeamTournament = $tournament->sport_format_id !== null;
 
         if ($tournament->format === 'group_stage' && $match->group_number !== null) {
-            $this->maybeStartGroupKnockout($bracket);
+            $this->maybeStartGroupKnockout($bracket, $isTeamTournament);
             $bracket->update(['structure' => $this->buildStructure($bracket)]);
             Broadcasting::safely(fn () => BracketUpdated::dispatch($bracket->fresh()));
 
@@ -693,13 +738,13 @@ class BracketService
         }
 
         if ($tournament->format === 'double_elimination') {
-            $this->advanceDoubleElimination($match);
+            $this->advanceDoubleElimination($match, $isTeamTournament);
 
             return;
         }
 
         if ($tournament->format === 'swiss') {
-            $this->maybeAdvanceSwissRound($bracket, $tournament);
+            $this->maybeAdvanceSwissRound($bracket, $tournament, $isTeamTournament);
 
             return;
         }
@@ -714,17 +759,15 @@ class BracketService
         $nextRoundMatches = $bracket->matches()->where('round', $match->round + 1)->orderBy('id')->get();
 
         if ($nextRoundMatches->isEmpty()) {
-            $tournament->update(['status' => 'completed']);
             $bracket->update(['structure' => $this->buildStructure($bracket)]);
             Broadcasting::safely(fn () => BracketUpdated::dispatch($bracket->fresh()));
 
-            $this->notifyParticipants($tournament, "{$tournament->name} has ended — thanks for playing!");
+            $this->completeTournament($tournament);
 
             return;
         }
 
         $nextMatch = $nextRoundMatches[intdiv($index, 2)];
-        $isTeamTournament = $tournament->sport_format_id !== null;
         $slot = match (true) {
             $isTeamTournament && $index % 2 === 0 => 'participant_a_team_id',
             $isTeamTournament => 'participant_b_team_id',
@@ -748,12 +791,68 @@ class BracketService
         }
     }
 
+    // Shared by every format's completion path (single/group-stage
+    // fallthrough in advanceWinner(), completeDoubleElimination(),
+    // maybeAdvanceSwissRound()) — previously each duplicated the same
+    // status-flip + notification inline. Persisting a champion and telling
+    // the organizer specifically (not just the generic participant blast) is
+    // new: nothing in this app tracked a tournament-level winner before.
+    private function completeTournament(Tournament $tournament): void
+    {
+        $champion = $this->determineChampion($tournament);
+
+        $tournament->update([
+            'status' => 'completed',
+            'champion_id' => $champion['user_id'],
+            'champion_team_id' => $champion['team_id'],
+        ]);
+
+        $this->notifyParticipants($tournament, "{$tournament->name} has ended — thanks for playing!");
+
+        NotificationService::send($tournament->organizer_id, 'tournament_champion_crowned', [
+            'tournament_id' => $tournament->id,
+            'tournament_name' => $tournament->name,
+            'champion_name' => $champion['name'],
+        ]);
+    }
+
+    // Most match wins across the whole bracket — for single/double-
+    // elimination this always lands on exactly the final's winner (you
+    // can't reach the final without winning every prior match), so one
+    // formula covers every format without branching on it. Ties (possible in
+    // round-robin/swiss) resolve to whichever id sorts first — a known,
+    // acceptable simplification rather than a full tiebreak chain.
+    private function determineChampion(Tournament $tournament): array
+    {
+        $isTeam = $tournament->sport_format_id !== null;
+        $wins = [];
+
+        foreach ($tournament->bracket->matches()->where('status', 'completed')->get() as $match) {
+            $winnerId = $isTeam ? $match->winner_team_id : $match->winner_id;
+            if ($winnerId !== null) {
+                $wins[$winnerId] = ($wins[$winnerId] ?? 0) + 1;
+            }
+        }
+
+        if (empty($wins)) {
+            return ['user_id' => null, 'team_id' => null, 'name' => null];
+        }
+
+        arsort($wins);
+        $championId = array_key_first($wins);
+        $champion = $isTeam ? Team::find($championId) : User::find($championId);
+
+        return $isTeam
+            ? ['user_id' => null, 'team_id' => $championId, 'name' => $champion?->name]
+            : ['user_id' => $championId, 'team_id' => null, 'name' => $champion?->name];
+    }
+
     // Every registrant gets notified, not just the two players in the match
     // that triggered the advance — "your tournament moved forward" is
     // relevant to the whole field, not just whoever just played. For a team
     // tournament that means every accepted member of every registered team,
     // not just the team's captain.
-    private function notifyParticipants(Tournament $tournament, string $message): void
+    public function notifyParticipants(Tournament $tournament, string $message): void
     {
         $userIds = $tournament->sport_format_id !== null
             ? $tournament->registrations()->with('team.members')->get()

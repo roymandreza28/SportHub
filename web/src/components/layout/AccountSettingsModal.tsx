@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useMutation } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { useAuth } from '../../lib/AuthContext'
@@ -28,7 +29,13 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
     },
   })
 
-  return (
+  // Portaled to <body> — this modal is opened from UserMenu, which lives
+  // inside the header's backdrop-blur bar (DashboardShell/SocialShell), and
+  // backdrop-filter establishes a new containing block for fixed-position
+  // descendants. Left inline, "fixed inset-0" resolved against the header's
+  // own short box instead of the viewport, squeezing the dialog into a
+  // strip near the top instead of centering it on the page.
+  return createPortal(
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/60 p-4">
       <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
         <h3 className="text-base font-bold text-slate-900">Account settings</h3>
@@ -73,6 +80,7 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

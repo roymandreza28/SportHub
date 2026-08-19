@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\News;
 use App\Models\NewsComment;
+use App\Support\ContentModerator;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class NewsCommentController extends Controller
 {
@@ -20,6 +22,14 @@ class NewsCommentController extends Controller
         $data = $request->validate([
             'body' => ['required', 'string', 'max:1000'],
         ]);
+
+        // Checked before the comment is ever created — "auto removed" means
+        // it never sticks, not a moderate-then-delete pass afterward.
+        if (ContentModerator::isInappropriate($data['body'])) {
+            throw ValidationException::withMessages([
+                'body' => ['Your comment contains inappropriate language and cannot be posted.'],
+            ]);
+        }
 
         $comment = $news->comments()->create([
             'user_id' => $request->user()->id,

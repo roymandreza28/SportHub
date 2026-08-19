@@ -6,17 +6,37 @@ export type NewsMediaItem = {
   url: string
 }
 
+export type NewsLivestreamItem = {
+  id: number
+  title: string
+  status: 'scheduled' | 'live' | 'ended'
+}
+
+export type NewsTournamentItem = {
+  id: number
+  name: string
+  sport_id: number
+  sport_format_id: number | null
+}
+
 export type NewsItem = {
   id: number
   title: string
   body: string
   cover_image_url: string | null
   published_at: string | null
-  author: { id: number; name: string }
+  // is_organizer drives hiding the personal name on the reading feed — an
+  // organizer's post reads as an official announcement, not a personal one.
+  author: { id: number; name: string; is_organizer: boolean }
   media: NewsMediaItem[]
+  livestreams: NewsLivestreamItem[]
   comments_count: number
   reactions_count: number
   viewer_has_reacted: boolean
+  // Set when this post announces or celebrates a tournament — a player who
+  // clicks the title gets told to ask their coach; a coach gets dropped into
+  // the team-registration wizard pre-seeded with this tournament.
+  tournament: NewsTournamentItem | null
 }
 
 export type NewsCommentItem = {

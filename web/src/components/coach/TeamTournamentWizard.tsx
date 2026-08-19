@@ -10,18 +10,27 @@ import { buttonPrimary, buttonSecondary, fieldGroup, input, label, select } from
 
 type Step = 'sport' | 'tournament' | 'register'
 
-export function TeamTournamentWizard({ onClose }: { onClose: () => void }) {
+// initialTournament lets a coach who clicked a tournament-linked newsfeed
+// post skip straight to the register step, pre-seeded with that tournament —
+// the sport/tournament-browsing steps never run in that case.
+export function TeamTournamentWizard({
+  onClose,
+  initialTournament,
+}: {
+  onClose: () => void
+  initialTournament?: Tournament
+}) {
   const { user } = useAuth()
   const isVerified = user?.verification_status === 'verified'
 
-  const [step, setStep] = useState<Step>('sport')
+  const [step, setStep] = useState<Step>(initialTournament ? 'register' : 'sport')
   const [sportId, setSportId] = useState<number | null>(null)
-  const [tournament, setTournament] = useState<Tournament | null>(null)
+  const [tournament, setTournament] = useState<Tournament | null>(initialTournament ?? null)
 
-  const { data: sports } = useQuery({ queryKey: ['sports'], queryFn: fetchSports })
+  const { data: sports } = useQuery({ queryKey: ['sports'], queryFn: fetchSports, enabled: !initialTournament })
   const { data: tournaments } = useQuery({
-    queryKey: ['coach', 'tournaments', 'open', sportId],
-    queryFn: () => fetchTournaments('open', sportId ?? undefined),
+    queryKey: ['coach', 'tournaments', 'registration', sportId],
+    queryFn: () => fetchTournaments('registration', sportId ?? undefined),
     enabled: step === 'tournament' && !!sportId,
   })
 
@@ -42,7 +51,7 @@ export function TeamTournamentWizard({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {step !== 'sport' && (
+      {step !== 'sport' && !initialTournament && (
         <button onClick={back} className="self-start text-xs font-medium text-teal-600 hover:text-teal-700">
           &larr; Back
         </button>

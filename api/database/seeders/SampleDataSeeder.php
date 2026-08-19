@@ -405,7 +405,7 @@ class SampleDataSeeder extends Seeder
             'starts_at' => now()->addDay(),
             'venue_id' => $venue->id,
             'venue_organizer_id' => $venueOrganizer->id,
-            'status' => 'in_progress',
+            'status' => 'ongoing',
             'scoring_type' => $scoringType,
             'sets_to_win' => $setsToWin,
         ]);
@@ -445,7 +445,7 @@ class SampleDataSeeder extends Seeder
             'starts_at' => now()->addDay(),
             'venue_id' => $venue->id,
             'venue_organizer_id' => $venueOrganizer->id,
-            'status' => 'in_progress',
+            'status' => 'ongoing',
             'scoring_type' => $scoringType,
             'sets_to_win' => $setsToWin,
         ]);

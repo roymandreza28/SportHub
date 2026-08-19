@@ -18,6 +18,7 @@ class Conversation extends Model
         'created_by',
         'direct_key',
         'venue_registration_id',
+        'team_id',
     ];
 
     public static function directKeyFor(int $a, int $b): string
@@ -44,5 +45,10 @@ class Conversation extends Model
     public function venueRegistration(): BelongsTo
     {
         return $this->belongsTo(VenueRegistration::class);
+    }
+
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
     }
 }

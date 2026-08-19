@@ -11,6 +11,7 @@ use App\Http\Controllers\EvaluationController;
 use App\Http\Controllers\LivestreamController;
 use App\Http\Controllers\MatchController;
 use App\Http\Controllers\MatchmakingRequestController;
+use App\Http\Controllers\MatchStatSheetController;
 use App\Http\Controllers\NewsCommentController;
 use App\Http\Controllers\NewsController;
 use App\Http\Controllers\NewsReactionController;
@@ -63,6 +64,11 @@ Route::get('/news/{news}/comments', [NewsCommentController::class, 'index']);
 Route::get('/livestreams', [LivestreamController::class, 'index']);
 Route::get('/livestreams/{livestream}', [LivestreamController::class, 'show']);
 Route::get('/livestreams/{livestream}/messages', [ChatMessageController::class, 'index']);
+// Hop 2 relay signaling — deliberately outside auth:sanctum, since anonymous
+// visitors on the public tabloid news modal need to reach it too. See
+// LivestreamController::publicSignal() for the safety gate (only relays for
+// a livestream that's actually live and published).
+Route::post('/livestreams/{livestream}/public-signal', [LivestreamController::class, 'publicSignal']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -201,12 +207,19 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/evaluations', [EvaluationController::class, 'index']);
         Route::post('/evaluations', [EvaluationController::class, 'store']);
+
+        Route::get('/matches/mine/upcoming-stat-sheets', [MatchStatSheetController::class, 'myUpcoming']);
+        Route::get('/matches/{match}/stat-sheet', [MatchStatSheetController::class, 'show']);
+        Route::patch('/matches/{match}/stat-sheet', [MatchStatSheetController::class, 'update']);
     });
 
     Route::middleware('role:organizer|admin')->group(function () {
         Route::post('/tournaments', [TournamentController::class, 'store']);
         Route::patch('/tournaments/{tournament}', [TournamentController::class, 'update']);
         Route::post('/tournaments/{tournament}/generate-bracket', [TournamentController::class, 'generateBracket']);
+        Route::post('/tournaments/{tournament}/proceed', [TournamentController::class, 'proceed']);
+        Route::post('/tournaments/{tournament}/cancel', [TournamentController::class, 'cancel']);
+        Route::patch('/matches/{match}/schedule', [MatchController::class, 'schedule']);
 
         Route::post('/news', [NewsController::class, 'store']);
         Route::patch('/news/{news}', [NewsController::class, 'update']);
@@ -232,6 +245,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/livestreams', [LivestreamController::class, 'store']);
         Route::patch('/livestreams/{livestream}', [LivestreamController::class, 'update']);
         Route::delete('/livestreams/{livestream}', [LivestreamController::class, 'destroy']);
+        Route::post('/livestreams/{livestream}/publish', [LivestreamController::class, 'publish']);
     });
 
     Route::post('/livestreams/{livestream}/messages', [ChatMessageController::class, 'store']);

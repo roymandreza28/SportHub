@@ -6,6 +6,7 @@ export type NotificationType =
   | 'booking_approved'
   | 'matchmaking_paired'
   | 'tournament_update'
+  | 'tournament_champion_crowned'
   | 'team_invite'
   | 'account_pending_verification'
   | 'account_verified'

@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchBracket, type BracketMatch } from '../../lib/organizerApi'
 import { echo } from '../../lib/echo'
+import { MatchScheduleModal } from './MatchScheduleModal'
+import { IconCalendar } from '../layout/icons'
 
 const STATUS_STYLE: Record<string, string> = {
   scheduled: 'bg-slate-100 text-slate-500',
@@ -21,10 +23,12 @@ function MatchCard({
   match,
   onClick,
   cardRef,
+  onSchedule,
 }: {
   match: BracketMatch
   onClick?: () => void
   cardRef?: (el: HTMLDivElement | null) => void
+  onSchedule?: () => void
 }) {
   const aDetermined = !!match.participant_a
   const bDetermined = !!match.participant_b
@@ -33,6 +37,7 @@ function MatchCard({
   const bName = match.participant_b?.name ?? 'TBD'
   const trackLabel = match.bracket_type ? TRACK_LABEL[match.bracket_type] : null
   const groupLabel = match.group_number != null ? `Group ${match.group_number + 1}` : null
+  const canSchedule = !!onSchedule && !isOpen && match.status !== 'completed'
 
   return (
     <div ref={cardRef}>
@@ -79,7 +84,22 @@ function MatchCard({
         >
           {isOpen ? 'awaiting players' : match.status}
         </div>
+        {match.scheduled_at && (
+          <div className="mt-1.5 text-[10px] text-slate-500">
+            {new Date(match.scheduled_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+            {match.court && ` — ${match.court.venue.name} (${match.court.name})`}
+          </div>
+        )}
       </button>
+      {canSchedule && (
+        <button
+          onClick={onSchedule}
+          className="mt-1.5 flex w-52 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50"
+        >
+          <IconCalendar className="h-3 w-3" />
+          {match.scheduled_at ? 'Reschedule' : 'Schedule'}
+        </button>
+      )}
     </div>
   )
 }
@@ -141,9 +161,13 @@ function SwissStandings({ matches }: { matches: BracketMatch[] }) {
 export function BracketView({
   tournamentId,
   onSelectMatch,
+  canScheduleMatches,
 }: {
   tournamentId: number
   onSelectMatch?: (match: BracketMatch) => void
+  // Only the main organizer sets the date/time/court for a game — distinct
+  // from onSelectMatch, which is the venue organizer's click-to-score path.
+  canScheduleMatches?: boolean
 }) {
   const queryClient = useQueryClient()
   const { data: bracket, isLoading } = useQuery({
@@ -151,13 +175,14 @@ export function BracketView({
     queryFn: () => fetchBracket(tournamentId),
     retry: false,
   })
+  const [schedulingMatch, setSchedulingMatch] = useState<BracketMatch | null>(null)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const cardEls = useRef<Map<number, HTMLDivElement>>(new Map())
   const [lines, setLines] = useState<ConnectorLine[]>([])
   const [svgSize, setSvgSize] = useState({ width: 0, height: 0 })
 
-  const isSwiss = bracket?.structure[0]?.[0]?.bracket_type === 'swiss'
+  const isSwiss = bracket?.structure?.[0]?.[0]?.bracket_type === 'swiss'
 
   // Public channel — spectators watching the bracket see round advances and
   // score-driven bracket changes live, without a manual refresh.
@@ -234,7 +259,10 @@ export function BracketView({
   }, [structure])
 
   if (isLoading) return <p className="text-sm text-slate-500">Loading bracket...</p>
-  if (!bracket) return <p className="text-sm text-slate-400">No bracket generated yet.</p>
+  // A bracket row can exist with no structure yet if generation failed
+  // partway through (e.g. too few registrants) — treat it the same as "no
+  // bracket" rather than crashing on a null structure.
+  if (!bracket || !bracket.structure) return <p className="text-sm text-slate-400">No bracket generated yet.</p>
 
   // A true single "Final" only exists for single-elimination-shaped
   // brackets — round-robin/swiss's last round is several matches, not one,
@@ -290,6 +318,7 @@ export function BracketView({
                 key={match.id}
                 match={match}
                 onClick={onSelectMatch ? () => onSelectMatch(match) : undefined}
+                onSchedule={canScheduleMatches ? () => setSchedulingMatch(match) : undefined}
                 cardRef={(el) => {
                   if (el) cardEls.current.set(match.id, el)
                   else cardEls.current.delete(match.id)
@@ -299,6 +328,14 @@ export function BracketView({
           </div>
         ))}
       </div>
+
+      {schedulingMatch && (
+        <MatchScheduleModal
+          match={schedulingMatch}
+          tournamentId={tournamentId}
+          onClose={() => setSchedulingMatch(null)}
+        />
+      )}
     </div>
   )
 }

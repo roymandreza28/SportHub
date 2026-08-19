@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+/* Counter-rotating ring for LoadingScreen — spins opposite to the built-in
+   animate-spin utility so the two rings around the logo visibly turn
+   against each other rather than together. */
+@theme {
+  --animate-spin-reverse: spin-reverse 1.6s linear infinite;
+}
+
+@keyframes spin-reverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
 html {
   scroll-behavior: smooth;
 }

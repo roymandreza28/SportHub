@@ -6,6 +6,7 @@ use App\Events\MatchEventCreated;
 use App\Events\MatchStatusChanged;
 use App\Models\GameMatch;
 use App\Models\MatchEvent;
+use App\Models\MatchStatSheet;
 use App\Models\Team;
 use App\Models\Tournament;
 use App\Services\BracketService;
@@ -69,11 +70,46 @@ class MatchController extends Controller
             // to know a group's matches are all done and start the knockout
             // stage regardless of whether every result had a clear winner.
             $bracketService->advanceWinner($match->fresh());
+
+            $this->lockStatSheets($match);
         }
 
         Broadcasting::safely(fn () => MatchStatusChanged::dispatch($match->fresh()));
 
         return $this->respond($match->fresh(self::PARTICIPANT_RELATIONS));
+    }
+
+    // Display-cache half of the stat sheet's dual lock design — a coach's
+    // MatchStatSheetController::show()/update() always independently
+    // re-derive lock state from $match->status too, so this hook existing
+    // or not can never let an edit slip through.
+    private function lockStatSheets(GameMatch $match): void
+    {
+        MatchStatSheet::where('match_id', $match->id)->update(['is_locked' => true, 'locked_at' => now()]);
+    }
+
+    // Setting date/time/court is the main organizer's job (see
+    // MatchPolicy::schedule()) — distinct from updateScore(), which belongs
+    // to the venue organizer. A completed game's result is locked in, so its
+    // schedule can't be changed anymore either.
+    public function schedule(Request $request, GameMatch $match)
+    {
+        $this->authorize('schedule', $match);
+
+        if ($match->status === 'completed') {
+            abort(422, 'Completed games can\'t be rescheduled.');
+        }
+
+        $data = $request->validate([
+            'scheduled_at' => ['nullable', 'date'],
+            'court_id' => ['nullable', 'exists:courts,id'],
+        ]);
+
+        $match->update($data);
+
+        Broadcasting::safely(fn () => MatchStatusChanged::dispatch($match->fresh()));
+
+        return $match->fresh(['court.venue', ...self::PARTICIPANT_RELATIONS]);
     }
 
     // Powers the scoreboard's player-attribution UI (jersey numbers, "who
@@ -150,6 +186,7 @@ class MatchController extends Controller
 
         if ($isDecided) {
             $bracketService->advanceWinner($match->fresh());
+            $this->lockStatSheets($match);
         }
 
         Broadcasting::safely(fn () => MatchStatusChanged::dispatch($match->fresh()));

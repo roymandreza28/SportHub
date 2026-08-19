@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { AuthModal, type AuthMode } from '../components/auth/AuthModal'
+import { PublicNewsModal } from '../components/landing/PublicNewsModal'
 
 function IconCalendar() {
   return (
@@ -148,6 +149,7 @@ export function LandingPage() {
     open: false,
     mode: 'login',
   })
+  const [newsModalOpen, setNewsModalOpen] = useState(false)
 
   function openAuth(mode: AuthMode) {
     setMobileMenuOpen(false)
@@ -166,6 +168,7 @@ export function LandingPage() {
             <a href="#home" className="hover:text-slate-900">Home</a>
             <a href="#features" className="hover:text-slate-900">Features</a>
             <a href="#about" className="hover:text-slate-900">About</a>
+            <button onClick={() => setNewsModalOpen(true)} className="hover:text-slate-900">News</button>
             <a href="#get-started" className="hover:text-slate-900">Get started</a>
           </div>
           {/* Sign In / Join Now only have room to sit inline with the nav
@@ -202,6 +205,12 @@ export function LandingPage() {
             <a href="#home" onClick={() => setMobileMenuOpen(false)} className="rounded px-2 py-2 hover:bg-slate-50">Home</a>
             <a href="#features" onClick={() => setMobileMenuOpen(false)} className="rounded px-2 py-2 hover:bg-slate-50">Features</a>
             <a href="#about" onClick={() => setMobileMenuOpen(false)} className="rounded px-2 py-2 hover:bg-slate-50">About</a>
+            <button
+              onClick={() => { setMobileMenuOpen(false); setNewsModalOpen(true) }}
+              className="rounded px-2 py-2 text-left hover:bg-slate-50"
+            >
+              News
+            </button>
             <a href="#get-started" onClick={() => setMobileMenuOpen(false)} className="rounded px-2 py-2 hover:bg-slate-50">Get started</a>
             <div className="mt-2 flex flex-col gap-2 border-t border-slate-100 pt-3">
               <button
@@ -370,6 +379,7 @@ export function LandingPage() {
           navigate('/dashboard')
         }}
       />
+      <PublicNewsModal open={newsModalOpen} onClose={() => setNewsModalOpen(false)} />
     </div>
   )
 }

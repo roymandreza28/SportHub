@@ -80,7 +80,7 @@ it('notifies a player when a coach registers them for a tournament', function ()
     $sport = Sport::create(['name' => 'Chess']);
     $tournament = Tournament::create([
         'organizer_id' => userWithRole('organizer')->id, 'sport_id' => $sport->id,
-        'name' => 'Notify Cup', 'format' => 'single_elimination', 'starts_at' => now()->addWeek(), 'status' => 'open',
+        'name' => 'Notify Cup', 'format' => 'single_elimination', 'starts_at' => now()->addWeek(), 'status' => 'registration',
     ]);
 
     $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", [
@@ -98,7 +98,7 @@ it('notifies every registrant when a bracket is generated and when a round advan
     $sport = Sport::create(['name' => 'Badminton']);
     $tournament = Tournament::create([
         'organizer_id' => $organizer->id, 'sport_id' => $sport->id,
-        'name' => 'Round Cup', 'format' => 'single_elimination', 'starts_at' => now()->addWeek(), 'status' => 'open',
+        'name' => 'Round Cup', 'format' => 'single_elimination', 'starts_at' => now()->addWeek(), 'status' => 'registration',
         'venue_organizer_id' => $venueOrganizer->id,
     ]);
 

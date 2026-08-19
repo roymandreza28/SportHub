@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Sport;
 use App\Models\SportFormat;
 use App\Models\Tournament;
 use App\Models\User;
 use App\Services\BracketService;
+use App\Support\NewsMediaStorage;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class TournamentController extends Controller
@@ -27,7 +30,8 @@ class TournamentController extends Controller
     {
         return $tournament->load(
             'sport:id,name', 'venue:id,name', 'organizer:id,name',
-            'venueOrganizer:id,name', 'livestreamOrganizer:id,name', 'sportFormat:id,name,players_per_side'
+            'venueOrganizer:id,name', 'livestreamOrganizer:id,name', 'sportFormat:id,name,players_per_side',
+            'champion:id,name', 'championTeam:id,name'
         );
     }
 
@@ -62,14 +66,42 @@ class TournamentController extends Controller
             'livestream_organizer_id' => ['required', 'exists:users,id', $this->hasRoleRule('livestream_organizer')],
             'scoring_type' => ['sometimes', 'in:single_score,best_of_sets'],
             'sets_to_win' => ['required_if:scoring_type,best_of_sets', 'nullable', 'integer', 'min:2', 'max:4'],
+            // Optional linked newsfeed announcement — mirrors NewsController::store()'s
+            // own post-shape validation so the tournament wizard can double as a post
+            // composer. Stays unpublished (published_at null) until the tournament
+            // actually opens for registration; see update() below.
+            'post_title' => ['nullable', 'required_with:post_body', 'string', 'max:255'],
+            'post_body' => ['nullable', 'required_with:post_title', 'string'],
+            'post_media' => ['nullable', 'array', 'max:6'],
+            'post_media.*' => [
+                'file',
+                'mimetypes:image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime',
+                'max:15360',
+            ],
         ]);
 
         $this->validateSportFormat($data);
 
-        $tournament = $request->user()->organizedTournaments()->create([
-            ...$data,
-            'status' => 'draft',
-        ]);
+        $tournament = DB::transaction(function () use ($request, $data) {
+            $tournament = $request->user()->organizedTournaments()->create([
+                ...collect($data)->except(['post_title', 'post_body', 'post_media'])->all(),
+                'status' => 'draft',
+            ]);
+
+            if (! empty($data['post_title'])) {
+                $news = $tournament->news()->create([
+                    'author_id' => $request->user()->id,
+                    'tournament_id' => $tournament->id,
+                    'title' => $data['post_title'],
+                    'body' => $data['post_body'],
+                    'published_at' => null,
+                ]);
+
+                NewsMediaStorage::store($news, $request->file('post_media', []));
+            }
+
+            return $tournament;
+        });
 
         return response()->json(
             $tournament->load(
@@ -80,11 +112,19 @@ class TournamentController extends Controller
         );
     }
 
-    // A team tournament (sport_format_id set) is single_elimination-only for
-    // now — every other bracket format's advancement logic would need a
-    // team-aware rework this pass doesn't cover yet.
+    // A sport flagged category='team' (Basketball, Volleyball) can only ever
+    // be played as a team tournament — there's no meaningful "individual"
+    // 5v5 game. Every other sport keeps today's optional-team behavior.
     private function validateSportFormat(array $data): void
     {
+        $sport = Sport::find($data['sport_id']);
+
+        if ($sport && $sport->category === 'team' && ! isset($data['sport_format_id'])) {
+            throw ValidationException::withMessages([
+                'sport_format_id' => ['This sport requires a team format — individual tournaments are not allowed.'],
+            ]);
+        }
+
         if (! isset($data['sport_format_id'])) {
             return;
         }
@@ -102,12 +142,6 @@ class TournamentController extends Controller
                 'sport_format_id' => ['This format does not require a team.'],
             ]);
         }
-
-        if (($data['format'] ?? null) !== 'single_elimination') {
-            throw ValidationException::withMessages([
-                'format' => ['Team tournaments only support single elimination for now.'],
-            ]);
-        }
     }
 
     public function update(Request $request, Tournament $tournament)
@@ -119,12 +153,21 @@ class TournamentController extends Controller
             'starts_at' => ['sometimes', 'date'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
             'venue_id' => ['nullable', 'exists:venues,id'],
-            'status' => ['sometimes', 'in:draft,open,in_progress,completed,cancelled'],
+            // Every other transition now has its own dedicated endpoint
+            // (proceed()/cancel(), and preparation is set automatically by
+            // BracketService) — a raw PATCH can only ever open registration,
+            // so it can't be used to skip steps like jumping straight to
+            // 'ongoing' without a bracket.
+            'status' => ['sometimes', 'in:registration'],
             'venue_organizer_id' => ['nullable', 'exists:users,id', $this->hasRoleRule('venue_organizer')],
             'livestream_organizer_id' => ['nullable', 'exists:users,id', $this->hasRoleRule('livestream_organizer')],
         ]);
 
         $tournament->update($data);
+
+        if (($data['status'] ?? null) === 'registration') {
+            $tournament->news()->whereNull('published_at')->update(['published_at' => now()]);
+        }
 
         return $tournament;
     }
@@ -146,11 +189,55 @@ class TournamentController extends Controller
             abort(422, 'This tournament already has a bracket.');
         }
 
+        $registeredCount = $tournament->registrations()->whereIn('status', ['pending', 'confirmed'])->count();
+
+        if ($registeredCount < 2) {
+            abort(422, 'This tournament needs at least 2 registrants before a bracket can be generated.');
+        }
+
         $bracket = $bracketService->generate($tournament);
 
-        $tournament->update(['status' => 'in_progress']);
+        $tournament->update(['status' => 'preparation']);
 
         return response()->json($bracket, 201);
+    }
+
+    // The organizer's real "not enough participants" wall — registration is
+    // already closed by the time a tournament reaches 'preparation', so the
+    // only path forward if a bracket never got generated is cancel(), not
+    // proceed().
+    public function proceed(Tournament $tournament, BracketService $bracketService)
+    {
+        $this->authorize('update', $tournament);
+
+        if ($tournament->status !== 'preparation') {
+            abort(422, 'Only a tournament in preparation can proceed.');
+        }
+
+        if (! $tournament->bracket) {
+            abort(422, 'This tournament has no bracket to proceed with.');
+        }
+
+        $tournament->update(['status' => 'ongoing']);
+
+        $bracketService->notifyParticipants($tournament, "{$tournament->name} has begun!");
+
+        return $tournament;
+    }
+
+    public function cancel(Tournament $tournament, BracketService $bracketService)
+    {
+        $this->authorize('update', $tournament);
+
+        if (! in_array($tournament->status, ['registration', 'preparation'], true)) {
+            abort(422, 'Only a tournament in registration or preparation can be cancelled.');
+        }
+
+        $tournament->update(['status' => 'cancelled']);
+
+        $bracketService->notifyParticipants($tournament, "{$tournament->name} has been cancelled.");
+
+        return $tournament;
     }
 
     public function bracket(Tournament $tournament, BracketService $bracketService)
@@ -168,7 +255,8 @@ class TournamentController extends Controller
 
         return $bracket->load(
             'matches.participantA:id,name', 'matches.participantB:id,name', 'matches.winner:id,name',
-            'matches.participantATeam:id,name', 'matches.participantBTeam:id,name', 'matches.winnerTeam:id,name'
+            'matches.participantATeam:id,name', 'matches.participantBTeam:id,name', 'matches.winnerTeam:id,name',
+            'matches.court:id,venue_id,name', 'matches.court.venue:id,name'
         );
     }
 }

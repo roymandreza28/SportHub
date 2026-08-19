@@ -93,11 +93,15 @@ function PickleballIcon() {
 }
 
 function TableTennisIcon() {
+  // Previously an all near-white palette (fill/stroke/highlight) on this
+  // card's near-white bg-teal-50/50 background, making the icon render but
+  // be effectively invisible — switched to the orange competition-ball
+  // colorway used at most table tennis clubs, matching every other icon
+  // here's use of a strongly saturated fill against a darker stroke.
   return (
     <svg viewBox="0 0 100 100" className={`h-full w-full ${spin}`}>
-      <circle cx="50" cy="50" r="40" fill="#fefefe" stroke="#e2e8f0" strokeWidth="2" />
-      <ellipse cx="37" cy="34" rx="9" ry="5" fill="#ffffff" opacity="0.95" />
-      <circle cx="50" cy="50" r="40" fill="none" stroke="#f1f5f9" strokeWidth="1" />
+      <circle cx="50" cy="50" r="46" fill="#fb923c" stroke="#c2410c" strokeWidth="3" />
+      <ellipse cx="37" cy="34" rx="9" ry="5" fill="#fff7ed" opacity="0.85" />
     </svg>
   )
 }

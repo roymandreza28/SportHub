@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchFriends } from '../../lib/friendsApi'
 import { createGroupConversation, startDirectConversation } from '../../lib/chatApi'
@@ -56,7 +57,13 @@ export function NewConversationModal({
 
   const isGroup = !singleSelect && (selected.size > 1 || !!groupName)
 
-  return (
+  // Portaled to <body> rather than rendered inline — this modal is opened
+  // from inside the header's backdrop-blur dropdown (HeaderMessagesMenu),
+  // and backdrop-filter establishes a new containing block for fixed-
+  // position descendants. Left inline, "fixed inset-0" resolves against the
+  // header's own (short) box instead of the viewport, squeezing the dialog
+  // into a thin strip at the top instead of centering it on the page.
+  return createPortal(
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/60 p-4">
       <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
         <h3 className="text-base font-bold text-slate-900">{title}</h3>
@@ -114,6 +121,7 @@ export function NewConversationModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

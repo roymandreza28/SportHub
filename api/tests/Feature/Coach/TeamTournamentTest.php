@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Conversation;
 use App\Models\Friendship;
 use App\Models\Sport;
 use App\Models\SportFormat;
@@ -46,22 +47,22 @@ it('lets an organizer create a team tournament with single elimination', functio
     expect($response->json('sport_format_id'))->toBe($format->id);
 });
 
-it('rejects a team tournament that is not single elimination', function () {
-    [$sport, $format] = doublesSetup();
+it('lets an organizer create a team tournament in every bracket format', function (string $format) {
+    [$sport, $sportFormat] = doublesSetup();
     $organizer = userWithRole('organizer');
     $venueOrganizer = userWithRole('venue_organizer');
     $livestreamOrganizer = userWithRole('livestream_organizer');
 
     $this->actingAs($organizer)->postJson('/api/tournaments', [
         'sport_id' => $sport->id,
-        'sport_format_id' => $format->id,
+        'sport_format_id' => $sportFormat->id,
         'name' => 'Doubles Cup',
-        'format' => 'round_robin',
+        'format' => $format,
         'starts_at' => now()->addWeek(),
         'venue_organizer_id' => $venueOrganizer->id,
         'livestream_organizer_id' => $livestreamOrganizer->id,
-    ])->assertStatus(422);
-});
+    ])->assertCreated();
+})->with(['single_elimination', 'double_elimination', 'round_robin', 'group_stage', 'swiss']);
 
 it('does not auto-enroll the coach as a roster member when they create a team', function () {
     [$sport, $format] = doublesSetup();
@@ -186,7 +187,7 @@ it('rejects registering a team that is not full yet', function () {
         'name' => 'Doubles Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     $team = $this->actingAs($coach)->postJson('/api/teams', [
@@ -215,7 +216,7 @@ it('registers a ready team for a tournament and rejects double registration', fu
         'name' => 'Doubles Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     $team = $this->actingAs($coach)->postJson('/api/teams', [
@@ -247,7 +248,7 @@ it('generates a bracket seeded with team participants and advances the winning t
         'name' => 'Doubles Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
         'venue_organizer_id' => $venueOrganizer->id,
     ]);
 
@@ -315,7 +316,7 @@ it('lets the assigned venue organizer read both teams full rosters for a match, 
         'name' => 'Doubles Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     $rosterNames = [];
@@ -363,7 +364,7 @@ it('denies a match roster read to an organizer not assigned to that tournament',
         'name' => 'Doubles Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     foreach (['Team A', 'Team B'] as $name) {
@@ -405,7 +406,7 @@ it('notifies every accepted team member, not just the captain, when a team regis
         'name' => 'Doubles Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     $team = $this->actingAs($coach)->postJson('/api/teams', [
@@ -420,4 +421,92 @@ it('notifies every accepted team member, not just the captain, when a team regis
 
     $this->assertDatabaseHas('notifications', ['user_id' => $playerA->id, 'type' => 'tournament_update']);
     $this->assertDatabaseHas('notifications', ['user_id' => $playerB->id, 'type' => 'tournament_update']);
+});
+
+it('rejects registering a team once a tournament has left draft/registration', function () {
+    [$sport, $format] = doublesSetup();
+    $organizer = userWithRole('organizer');
+    $coach = userWithRole('coach');
+    $playerA = userWithRole('player');
+    $playerB = userWithRole('player');
+    befriend($coach, $playerA);
+    befriend($coach, $playerB);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $organizer->id,
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+        'name' => 'Closed Doubles Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(),
+        'status' => 'preparation',
+    ]);
+
+    $team = $this->actingAs($coach)->postJson('/api/teams', [
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+    ])->json();
+    $this->actingAs($coach)->postJson("/api/teams/{$team['id']}/members", ['user_id' => $playerA->id]);
+    $this->actingAs($coach)->postJson("/api/teams/{$team['id']}/members", ['user_id' => $playerB->id]);
+
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/team-registrations", ['team_id' => $team['id']])
+        ->assertStatus(422);
+});
+
+it('creates exactly one group conversation for a team on registration, with the captain and accepted members attached, even after registering for a second tournament', function () {
+    [$sport, $format] = doublesSetup();
+    $organizerOne = userWithRole('organizer');
+    $organizerTwo = userWithRole('organizer');
+    $coach = userWithRole('coach');
+    $playerA = userWithRole('player');
+    $playerB = userWithRole('player');
+    befriend($coach, $playerA);
+    befriend($coach, $playerB);
+
+    $tournamentOne = Tournament::create([
+        'organizer_id' => $organizerOne->id,
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+        'name' => 'Conversation Cup One',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(),
+        'status' => 'registration',
+    ]);
+    $tournamentTwo = Tournament::create([
+        'organizer_id' => $organizerTwo->id,
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+        'name' => 'Conversation Cup Two',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(),
+        'status' => 'registration',
+    ]);
+
+    $team = $this->actingAs($coach)->postJson('/api/teams', [
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+        'name' => 'Conversation Squad',
+    ])->json();
+    $this->actingAs($coach)->postJson("/api/teams/{$team['id']}/members", ['user_id' => $playerA->id]);
+    $this->actingAs($coach)->postJson("/api/teams/{$team['id']}/members", ['user_id' => $playerB->id]);
+
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournamentOne->id}/team-registrations", ['team_id' => $team['id']])
+        ->assertCreated();
+
+    $this->assertDatabaseCount('conversations', 1);
+    $conversation = Conversation::where('team_id', $team['id'])->first();
+    expect($conversation)->not->toBeNull();
+    expect($conversation->type)->toBe('group');
+    expect($conversation->name)->toBe('Conversation Squad');
+
+    $participantIds = $conversation->participants->pluck('id')->sort()->values();
+    expect($participantIds->all())->toEqualCanonicalizing([$coach->id, $playerA->id, $playerB->id]);
+
+    // Registering the very same team for a second tournament must not create
+    // a second conversation or duplicate its participants.
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournamentTwo->id}/team-registrations", ['team_id' => $team['id']])
+        ->assertCreated();
+
+    $this->assertDatabaseCount('conversations', 1);
+    expect($conversation->fresh()->participants)->toHaveCount(3);
 });

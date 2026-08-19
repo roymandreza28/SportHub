@@ -12,6 +12,7 @@ class Tournament extends Model
     protected $fillable = [
         'organizer_id', 'sport_id', 'sport_format_id', 'name', 'format', 'starts_at', 'ends_at', 'venue_id', 'status',
         'venue_organizer_id', 'livestream_organizer_id', 'scoring_type', 'sets_to_win',
+        'champion_id', 'champion_team_id',
     ];
 
     protected function casts(): array
@@ -72,5 +73,23 @@ class Tournament extends Model
     public function livestreams(): HasMany
     {
         return $this->hasMany(Livestream::class);
+    }
+
+    // Two posts can exist over a tournament's life: the creation
+    // announcement and the completion congratulations — see
+    // TournamentController::store() and ChampionCongratsModal's publish flow.
+    public function news(): HasMany
+    {
+        return $this->hasMany(News::class);
+    }
+
+    public function champion(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'champion_id');
+    }
+
+    public function championTeam(): BelongsTo
+    {
+        return $this->belongsTo(Team::class, 'champion_team_id');
     }
 }

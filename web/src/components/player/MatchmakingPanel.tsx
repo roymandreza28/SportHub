@@ -6,6 +6,7 @@ import { fetchMyTeams } from '../../lib/teamsApi'
 import { useAuth } from '../../lib/AuthContext'
 import { echo } from '../../lib/echo'
 import { buttonGhost, buttonPrimary, chip, fieldGroup, input, label, select } from '../../lib/formStyles'
+import { IconChevronDown } from '../layout/icons'
 import { MatchmakingLoader } from './MatchmakingLoader'
 import { TeamPanel } from './TeamPanel'
 
@@ -40,6 +41,7 @@ export function MatchmakingPanel() {
 
   const [mode, setMode] = useState<Mode>('join')
   const [showTeams, setShowTeams] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const [sportId, setSportId] = useState<number | ''>('')
   const [formatId, setFormatId] = useState<number | ''>('')
   const [teamId, setTeamId] = useState<number | ''>('')
@@ -274,36 +276,52 @@ export function MatchmakingPanel() {
         </div>
       </div>
 
-      <ul className="flex flex-col gap-2">
-        {resolvedRequests.map((req) => (
-          <li
-            key={req.id}
-            className="flex items-center justify-between rounded-lg border border-slate-100 bg-white p-3 shadow-sm"
+      {resolvedRequests.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setShowHistory((s) => !s)}
+            aria-expanded={showHistory}
+            className="flex items-center justify-between rounded-lg border border-slate-100 bg-white px-4 py-2.5 text-left text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
           >
-            <div>
-              <p className="text-sm font-medium text-slate-800">
-                {req.sport.name}
-                {req.sport_format && <span className="font-normal text-slate-400"> — {req.sport_format.name}</span>}
-              </p>
-              <p className="mt-0.5 text-xs text-slate-500">
-                <span className={`rounded-full px-2 py-0.5 font-medium ${STATUS_STYLE[req.status] ?? ''}`}>
-                  {STATUS_LABEL[req.status] ?? req.status}
-                </span>
-                {req.opponent && ` with ${req.opponent.name} (${req.opponent.email})`}
-                {req.opponent_team && ` vs ${req.opponent_team.name}`}
-              </p>
-              {req.team && <p className="mt-0.5 text-xs text-slate-400">Your team: {req.team.name}</p>}
-              {(req.venue || req.preferred_start_at) && (
-                <p className="mt-0.5 text-xs text-slate-400">
-                  {req.venue && req.venue.name}
-                  {req.venue && req.preferred_start_at && ' · '}
-                  {req.preferred_start_at && new Date(req.preferred_start_at).toLocaleString()}
-                </p>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
+            Match history ({resolvedRequests.length})
+            <IconChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${showHistory ? 'rotate-180' : ''}`} />
+          </button>
+
+          {showHistory && (
+            <ul className="flex flex-col gap-2">
+              {resolvedRequests.map((req) => (
+                <li
+                  key={req.id}
+                  className="flex items-center justify-between rounded-lg border border-slate-100 bg-white p-3 shadow-sm"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">
+                      {req.sport.name}
+                      {req.sport_format && <span className="font-normal text-slate-400"> — {req.sport_format.name}</span>}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      <span className={`rounded-full px-2 py-0.5 font-medium ${STATUS_STYLE[req.status] ?? ''}`}>
+                        {STATUS_LABEL[req.status] ?? req.status}
+                      </span>
+                      {req.opponent && ` with ${req.opponent.name} (${req.opponent.email})`}
+                      {req.opponent_team && ` vs ${req.opponent_team.name}`}
+                    </p>
+                    {req.team && <p className="mt-0.5 text-xs text-slate-400">Your team: {req.team.name}</p>}
+                    {(req.venue || req.preferred_start_at) && (
+                      <p className="mt-0.5 text-xs text-slate-400">
+                        {req.venue && req.venue.name}
+                        {req.venue && req.preferred_start_at && ' · '}
+                        {req.preferred_start_at && new Date(req.preferred_start_at).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   )
 }

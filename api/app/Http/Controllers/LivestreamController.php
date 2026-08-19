@@ -2,24 +2,27 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\PublicSignalRelayed;
 use App\Events\WebRTCSignalSent;
 use App\Models\Livestream;
 use App\Models\News;
 use App\Models\Tournament;
 use App\Support\Broadcasting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class LivestreamController extends Controller
 {
     public function index()
     {
-        return Livestream::with('broadcaster:id,name')->orderByDesc('created_at')->get();
+        return Livestream::with(['broadcaster:id,name', 'tournament:id,organizer_id'])
+            ->orderByDesc('created_at')->get();
     }
 
     public function show(Livestream $livestream)
     {
-        return $livestream->load('broadcaster:id,name');
+        return $livestream->load(['broadcaster:id,name', 'tournament:id,organizer_id']);
     }
 
     public function store(Request $request)
@@ -58,7 +61,7 @@ class LivestreamController extends Controller
             'status' => 'scheduled',
         ]);
 
-        return response()->json($livestream->load('broadcaster:id,name'), 201);
+        return response()->json($livestream->load(['broadcaster:id,name', 'tournament:id,organizer_id']), 201);
     }
 
     public function update(Request $request, Livestream $livestream)
@@ -112,6 +115,66 @@ class LivestreamController extends Controller
 
         Broadcasting::safely(fn () => WebRTCSignalSent::dispatch(
             $livestream, $user, (int) $data['target_user_id'], $data['type'], $data['data']
+        ));
+
+        return response()->noContent();
+    }
+
+    // The main organizer's "go live to the newsfeed" action — creates the
+    // News article (title + context) and links this livestream to it via
+    // news_id, which is what makes it show up in both the authenticated
+    // Newsfeed and the public tabloid modal, and is what unlocks hop 2 of
+    // the relay (publicSignal() below refuses to relay an unpublished feed).
+    public function publish(Request $request, Livestream $livestream)
+    {
+        $user = $request->user();
+
+        abort_unless(
+            $livestream->tournament && $livestream->tournament->organizer_id === $user->id,
+            403
+        );
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'body' => ['required', 'string'],
+        ]);
+
+        $livestream = DB::transaction(function () use ($user, $data, $livestream) {
+            $news = $user->news()->create([
+                'title' => $data['title'],
+                'body' => $data['body'],
+                'published_at' => now(),
+            ]);
+
+            $livestream->update(['news_id' => $news->id]);
+
+            return $livestream;
+        });
+
+        return $livestream->fresh()->load(['broadcaster:id,name', 'tournament:id,organizer_id', 'news']);
+    }
+
+    // Hop 2 signaling relay (main organizer -> every newsfeed viewer,
+    // logged-in or fully anonymous) — deliberately unauthenticated, since
+    // anonymous visitors on the public tabloid modal need to reach it too.
+    // Every subscriber on the public channel filters by from_token/
+    // target_token client-side (see PublicSignalRelayed) rather than this
+    // endpoint addressing anyone directly, so there's no per-viewer identity
+    // to check here — only that the livestream is actually a live, published
+    // broadcast, so this can't be used as an open relay for anything else.
+    public function publicSignal(Request $request, Livestream $livestream)
+    {
+        abort_unless($livestream->news_id !== null && $livestream->status === 'live', 404);
+
+        $data = $request->validate([
+            'from_token' => ['required', 'string', 'max:100'],
+            'target_token' => ['required', 'string', 'max:100'],
+            'type' => ['required', 'in:join,offer,answer,ice-candidate'],
+            'data' => ['present', 'array'],
+        ]);
+
+        Broadcasting::safely(fn () => PublicSignalRelayed::dispatch(
+            $livestream, $data['from_token'], $data['target_token'], $data['type'], $data['data']
         ));
 
         return response()->noContent();

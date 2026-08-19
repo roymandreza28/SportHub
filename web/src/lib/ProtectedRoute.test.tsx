@@ -45,10 +45,11 @@ function renderAt(initialPath: string) {
 }
 
 describe('ProtectedRoute', () => {
-  it('renders nothing while auth is still loading', () => {
+  it('shows the loading screen while auth is still loading', () => {
     mockAuth({ isLoading: true })
-    const { container } = renderAt('/anywhere')
-    expect(container).toBeEmptyDOMElement()
+    renderAt('/anywhere')
+    expect(screen.getByText('Loading...')).toBeInTheDocument()
+    expect(screen.queryByText('Protected content')).not.toBeInTheDocument()
   })
 
   it('redirects to /login when there is no authenticated user', () => {

@@ -1,7 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchOrganizerTournaments, fetchLivestreams, fetchBracket, updateTournament, type Tournament } from '../lib/organizerApi'
+import {
+  fetchOrganizerTournaments,
+  fetchLivestreams,
+  fetchBracket,
+  updateTournament,
+  proceedTournament,
+  cancelTournament,
+  generateBracket,
+  type Tournament,
+} from '../lib/organizerApi'
 import { useAuth } from '../lib/AuthContext'
+import { fetchNotifications, markNotificationRead, type NotificationItem } from '../lib/notificationsApi'
 import {
   DashboardShell,
   ListPreview,
@@ -13,9 +23,10 @@ import {
   type NavItem,
 } from '../components/layout/DashboardShell'
 import { IconChevronDown, IconFileText, IconHome, IconRadio, IconTrophy } from '../components/layout/icons'
-import { buttonPrimary } from '../lib/formStyles'
+import { buttonDanger, buttonPrimary, buttonSuccess } from '../lib/formStyles'
 import { TournamentWizard } from '../components/organizer/TournamentWizard'
 import { BracketView } from '../components/organizer/BracketView'
+import { ChampionCongratsModal } from '../components/organizer/ChampionCongratsModal'
 import { ScoreboardLive } from '../components/organizer/ScoreboardLive'
 import { NewsEditor } from '../components/organizer/NewsEditor'
 import { NewsFeed } from '../components/organizer/NewsFeed'
@@ -94,14 +105,65 @@ export function OrganizerPage() {
   const [active, setActive] = useState(NAV_ITEMS[0].id)
 
   // A new tournament starts as a draft so an organizer can finish setting
-  // it up before coaches see it — but coaches only ever fetch status=open
-  // tournaments to register for, so this is the step that actually makes
-  // a tournament joinable. Without it, every tournament stays invisible to
-  // coaches indefinitely.
+  // it up before coaches see it — but coaches only ever fetch
+  // status=registration tournaments to register for, so this is the step
+  // that actually makes a tournament joinable. Without it, every tournament
+  // stays invisible to coaches indefinitely.
   const openRegistrationMutation = useMutation({
-    mutationFn: (tournamentId: number) => updateTournament(tournamentId, { status: 'open' }),
+    mutationFn: (tournamentId: number) => updateTournament(tournamentId, { status: 'registration' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] }),
   })
+
+  const proceedMutation = useMutation({
+    mutationFn: proceedTournament,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] }),
+  })
+
+  const cancelMutation = useMutation({
+    mutationFn: cancelTournament,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] }),
+  })
+
+  const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
+  const [activeMatchId, setActiveMatchId] = useState<number | null>(null)
+
+  // The organizer's "close registration early" option — the same action
+  // BracketService::autoStartExpired() performs automatically once starts_at
+  // passes, exposed here for a tournament already selected in the list
+  // (distinct from TournamentWizard's own copy of this mutation, which only
+  // applies to a tournament just created in that form).
+  const bracketMutation = useMutation({
+    mutationFn: generateBracket,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] })
+      queryClient.invalidateQueries({ queryKey: ['organizer', 'bracket', selectedTournamentId] })
+    },
+  })
+
+  // The one place a notification type drives a pop-up rather than just
+  // dropdown text/read-state — every other notification is a passive read,
+  // but crowning a champion needs the organizer to actually act (post a
+  // congratulations) right when it happens. Shares HeaderNotificationsMenu's
+  // ['notifications'] query/socket subscription rather than opening a second
+  // echo.private() connection to the same channel — laravel-echo's `.leave()`
+  // tears down the whole shared channel, so a second subscriber unmounting
+  // here would silently kill the header's listeners too.
+  const { data: notifications } = useQuery({ queryKey: ['notifications'], queryFn: fetchNotifications, enabled: isMainOrganizer })
+  const [championModal, setChampionModal] = useState<{ id: number; name: string; championName: string | null } | null>(null)
+
+  useEffect(() => {
+    if (!isMainOrganizer || championModal) return
+
+    const unread = (notifications ?? []).find((n) => n.type === 'tournament_champion_crowned' && !n.read_at)
+    if (!unread) return
+
+    setChampionModal({
+      id: Number(unread.data.tournament_id),
+      name: String(unread.data.tournament_name ?? ''),
+      championName: unread.data.champion_name != null ? String(unread.data.champion_name) : null,
+    })
+    markNotificationRead(unread.id).then(() => queryClient.invalidateQueries({ queryKey: ['notifications'] }))
+  }, [notifications, isMainOrganizer, championModal, queryClient])
 
   const myTournaments = (tournaments ?? [])
     .filter((t) => {
@@ -113,8 +175,6 @@ export function OrganizerPage() {
     .slice(0, 20)
   const activeTournaments = myTournaments.filter((t) => t.status !== 'completed' && t.status !== 'cancelled')
   const inactiveTournaments = myTournaments.filter((t) => t.status === 'completed' || t.status === 'cancelled')
-  const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
-  const [activeMatchId, setActiveMatchId] = useState<number | null>(null)
 
   // Shares its query key with BracketView's own bracket query, so once a
   // score/finish mutation invalidates ['organizer', 'bracket', id] (already
@@ -139,7 +199,7 @@ export function OrganizerPage() {
   const [selectedLivestreamId, setSelectedLivestreamId] = useState<number | null>(null)
   const selectedLivestream = myLivestreams.find((l) => l.id === selectedLivestreamId)
 
-  const inProgressCount = myTournaments.filter((t) => t.status === 'in_progress').length
+  const inProgressCount = myTournaments.filter((t) => t.status === 'ongoing').length
   const liveStreamCount = myLivestreams.filter((l) => l.status === 'live').length
 
   return (
@@ -231,20 +291,85 @@ export function OrganizerPage() {
             />
             {selectedTournamentId && (
               <>
-                {isMainOrganizer && myTournaments.find((t) => t.id === selectedTournamentId)?.status === 'draft' && (
-                  <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                    <p className="flex-1 text-xs text-amber-800">
-                      This tournament is still a draft — coaches can&apos;t see it or register players until you
-                      open it for registration.
-                    </p>
-                    <button
-                      onClick={() => openRegistrationMutation.mutate(selectedTournamentId)}
-                      disabled={openRegistrationMutation.isPending}
-                      className={buttonPrimary}
-                    >
-                      {openRegistrationMutation.isPending ? 'Opening...' : 'Open for registration'}
-                    </button>
-                  </div>
+                {(() => {
+                  const selected = myTournaments.find((t) => t.id === selectedTournamentId)
+                  if (!isMainOrganizer || !selected) return null
+
+                  if (selected.status === 'draft') {
+                    return (
+                      <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <p className="flex-1 text-xs text-amber-800">
+                          This tournament is still a draft — coaches can&apos;t see it or register players until you
+                          open it for registration.
+                        </p>
+                        <button
+                          onClick={() => openRegistrationMutation.mutate(selectedTournamentId)}
+                          disabled={openRegistrationMutation.isPending}
+                          className={buttonPrimary}
+                        >
+                          {openRegistrationMutation.isPending ? 'Opening...' : 'Open for registration'}
+                        </button>
+                      </div>
+                    )
+                  }
+
+                  if (selected.status === 'registration') {
+                    return (
+                      <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-teal-200 bg-teal-50 p-3">
+                        <p className="flex-1 text-xs text-teal-800">
+                          Registration is open. Close it early to generate the bracket, or cancel if turnout is too
+                          low.
+                        </p>
+                        <button
+                          onClick={() => bracketMutation.mutate(selectedTournamentId)}
+                          disabled={bracketMutation.isPending}
+                          className={buttonSuccess}
+                        >
+                          {bracketMutation.isPending ? 'Generating...' : 'Close registration & generate bracket'}
+                        </button>
+                        <button
+                          onClick={() => cancelMutation.mutate(selectedTournamentId)}
+                          disabled={cancelMutation.isPending}
+                          className={buttonDanger}
+                        >
+                          Cancel tournament
+                        </button>
+                      </div>
+                    )
+                  }
+
+                  if (selected.status === 'preparation') {
+                    return (
+                      <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <p className="flex-1 text-xs text-amber-800">
+                          Registration closed. Schedule each match below, then proceed once you&apos;re ready to
+                          play.
+                        </p>
+                        <button
+                          onClick={() => proceedMutation.mutate(selectedTournamentId)}
+                          disabled={proceedMutation.isPending}
+                          className={buttonSuccess}
+                        >
+                          {proceedMutation.isPending ? 'Starting...' : 'Proceed to ongoing'}
+                        </button>
+                        <button
+                          onClick={() => cancelMutation.mutate(selectedTournamentId)}
+                          disabled={cancelMutation.isPending}
+                          className={buttonDanger}
+                        >
+                          Cancel tournament
+                        </button>
+                      </div>
+                    )
+                  }
+
+                  return null
+                })()}
+                {proceedMutation.isError && (
+                  <p className="mb-3 text-xs text-red-600">
+                    Could not proceed — this tournament has no bracket yet (not enough registrants?). Cancel it
+                    instead.
+                  </p>
                 )}
                 {/* The main organizer gets a read-only bracket — results are
                     the outcome of matches facilitated by whichever venue
@@ -253,10 +378,13 @@ export function OrganizerPage() {
                     makes every match card non-clickable (see MatchCard's
                     disabled={!onClick}), while a venue organizer viewing
                     their own "Tournament to Facilitate" tab keeps full
-                    click-to-score access. */}
+                    click-to-score access. Scheduling matches, though, is the
+                    main organizer's job specifically — canScheduleMatches is
+                    the opposite gate from onSelectMatch. */}
                 <BracketView
                   tournamentId={selectedTournamentId}
                   onSelectMatch={isMainOrganizer ? undefined : (match) => setActiveMatchId(match.id)}
+                  canScheduleMatches={isMainOrganizer}
                 />
               </>
             )}
@@ -314,6 +442,15 @@ export function OrganizerPage() {
             )}
           </div>
         </Section>
+      )}
+
+      {championModal && (
+        <ChampionCongratsModal
+          tournamentId={championModal.id}
+          tournamentName={championModal.name}
+          championName={championModal.championName}
+          onClose={() => setChampionModal(null)}
+        />
       )}
     </DashboardShell>
   )

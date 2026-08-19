@@ -82,6 +82,25 @@ export function IconMapPin(props: IconProps) {
   )
 }
 
+// Calendar (bookings) + pin (venues) combined into one icon — used where
+// the two are merged into a single nav entry, so the icon itself signals
+// "this covers both" rather than looking like a plain calendar or pin alone.
+export function IconPinCalendar(props: IconProps) {
+  return base(
+    <>
+      <g transform="translate(-1.5,-1.5) scale(0.78)">
+        <rect x="3" y="4.5" width="18" height="16" rx="2" />
+        <path d="M3 9.5h18M8 3v3M16 3v3" />
+      </g>
+      <g transform="translate(6.5,6.5) scale(0.5)">
+        <path d="M12 21s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12Z" />
+        <circle cx="12" cy="9" r="2.5" />
+      </g>
+    </>,
+    props
+  )
+}
+
 export function IconTrophy(props: IconProps) {
   return base(
     <>

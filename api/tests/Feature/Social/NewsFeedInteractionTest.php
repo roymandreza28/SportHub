@@ -36,6 +36,30 @@ it('reports comment/reaction counts and the viewers own reaction state on the pu
         ->assertJsonPath('reactions_count', 1);
 });
 
+it('flags an organizer-authored post so the feed can hide their personal name, without leaking the roles relation', function () {
+    $news = makePublishedNews();
+
+    $response = $this->getJson('/api/news')->assertOk();
+
+    expect($response->json('0.author.is_organizer'))->toBeTrue();
+    expect($response->json('0.author.name'))->not->toBeNull();
+    expect($response->json('0.author.roles'))->toBeNull();
+});
+
+it('does not flag a non-organizer author as an organizer post', function () {
+    $coach = userWithRole('coach');
+    News::create([
+        'author_id' => $coach->id,
+        'title' => 'A coachs post',
+        'body' => 'Not an official organizer announcement.',
+        'published_at' => now(),
+    ]);
+
+    $response = $this->getJson('/api/news')->assertOk();
+
+    expect($response->json('0.author.is_organizer'))->toBeFalse();
+});
+
 it('lets a player or coach comment on a published article, visible to anyone reading it', function () {
     $news = makePublishedNews();
     $player = userWithRole('player');
@@ -50,6 +74,28 @@ it('lets a player or coach comment on a published article, visible to anyone rea
         ->assertCreated();
 
     $this->getJson("/api/news/{$news->id}/comments")->assertOk()->assertJsonCount(2);
+});
+
+it('auto-rejects a comment with inappropriate language in English or Tagalog before it is ever created', function () {
+    $news = makePublishedNews();
+    $player = userWithRole('player');
+
+    $this->actingAs($player)->postJson("/api/news/{$news->id}/comments", ['body' => 'This is such bullshit.'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('body');
+
+    $this->actingAs($player)->postJson("/api/news/{$news->id}/comments", ['body' => 'Tangina mo naman.'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('body');
+
+    // A basic repeat-letter obfuscation is still caught.
+    $this->actingAs($player)->postJson("/api/news/{$news->id}/comments", ['body' => 'Puta ka talaga.'])
+        ->assertStatus(422);
+
+    $this->assertDatabaseCount('news_comments', 0);
+
+    $this->actingAs($player)->postJson("/api/news/{$news->id}/comments", ['body' => 'Great game today!'])
+        ->assertCreated();
 });
 
 it('denies commenting to a role without the interact-with-news permission', function () {

@@ -108,7 +108,7 @@ export type PlayerTournamentRegistration = {
   tournament: {
     id: number
     name: string
-    status: 'draft' | 'open' | 'in_progress' | 'completed' | 'cancelled'
+    status: 'draft' | 'registration' | 'preparation' | 'ongoing' | 'completed' | 'cancelled'
     starts_at: string
     sport: Sport
     venue: { id: number; name: string } | null

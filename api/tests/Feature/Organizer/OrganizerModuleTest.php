@@ -1,10 +1,14 @@
 <?php
 
+use App\Models\Court;
 use App\Models\Livestream;
+use App\Models\News;
 use App\Models\Sport;
 use App\Models\Tournament;
 use App\Models\TournamentRegistration;
 use App\Models\User;
+use App\Models\Venue;
+use App\Services\BracketService;
 
 it('denies tournament creation and match scoring to a non-organizer role', function () {
     $player = userWithRole('player');
@@ -26,7 +30,7 @@ it('auto-starts an open tournament past its start time the next time tournaments
         'name' => 'Auto-Start Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->subMinute(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     foreach (range(1, 2) as $i) {
@@ -40,16 +44,16 @@ it('auto-starts an open tournament past its start time the next time tournaments
     $this->actingAs($organizer)->getJson('/api/tournaments')->assertOk();
 
     $tournament->refresh();
-    expect($tournament->status)->toBe('in_progress');
+    expect($tournament->status)->toBe('preparation');
     expect($tournament->bracket)->not->toBeNull();
     expect($tournament->bracket->matches)->toHaveCount(1);
 
-    // A player relies on 'open' to know they can still join — this must
-    // never happen while an organizer just deep-links a tournament page.
-    $this->assertDatabaseMissing('tournaments', ['id' => $tournament->id, 'status' => 'open']);
+    // A player relies on 'registration' to know they can still join — this
+    // must never happen while an organizer just deep-links a tournament page.
+    $this->assertDatabaseMissing('tournaments', ['id' => $tournament->id, 'status' => 'registration']);
 });
 
-it('does not auto-start an open tournament past its start time with fewer than two registrants', function () {
+it('moves a tournament past its start time to preparation without generating a bracket when there are fewer than two registrants', function () {
     $organizer = userWithRole('organizer');
     $sport = Sport::create(['name' => 'Basketball']);
 
@@ -59,7 +63,7 @@ it('does not auto-start an open tournament past its start time with fewer than t
         'name' => 'Understaffed Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->subMinute(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     TournamentRegistration::create([
@@ -71,7 +75,7 @@ it('does not auto-start an open tournament past its start time with fewer than t
     $this->actingAs($organizer)->getJson('/api/tournaments')->assertOk();
 
     $tournament->refresh();
-    expect($tournament->status)->toBe('open');
+    expect($tournament->status)->toBe('preparation');
     expect($tournament->bracket)->toBeNull();
 });
 
@@ -91,7 +95,7 @@ it('creates a tournament, generates a bracket, and plays it through to completio
     ])->assertCreated();
 
     $tournamentId = $create->json('id');
-    $this->actingAs($organizer)->patchJson("/api/tournaments/{$tournamentId}", ['status' => 'open'])->assertOk();
+    $this->actingAs($organizer)->patchJson("/api/tournaments/{$tournamentId}", ['status' => 'registration'])->assertOk();
 
     foreach (range(1, 4) as $i) {
         $player = userWithRole('player');
@@ -129,6 +133,30 @@ it('creates a tournament, generates a bracket, and plays it through to completio
     expect(Tournament::find($tournamentId)->status)->toBe('completed');
 });
 
+it('rejects generating a bracket with fewer than 2 registrants, leaving no orphaned bracket row', function () {
+    $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
+    $sport = Sport::create(['name' => 'Basketball']);
+
+    $create = $this->actingAs($organizer)->postJson('/api/tournaments', [
+        'sport_id' => $sport->id,
+        'name' => 'Empty Cup',
+        'format' => 'double_elimination',
+        'starts_at' => now()->addWeek()->toIso8601String(),
+        'venue_organizer_id' => $venueOrganizer->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
+    ])->assertCreated();
+
+    $tournamentId = $create->json('id');
+
+    // Zero registrants — must be rejected before BracketService ever runs,
+    // not left to crash mid-generation and leave a structureless Bracket row.
+    $this->actingAs($organizer)->postJson("/api/tournaments/{$tournamentId}/generate-bracket")->assertStatus(422);
+
+    expect(Tournament::find($tournamentId)->bracket)->toBeNull();
+});
+
 it('denies scoring a match belonging to another organizers tournament', function () {
     $owner = userWithRole('organizer');
     $other = userWithRole('organizer');
@@ -140,7 +168,7 @@ it('denies scoring a match belonging to another organizers tournament', function
         'name' => 'Owned Cup',
         'format' => 'round_robin',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     foreach (range(1, 2) as $i) {
@@ -166,7 +194,7 @@ it('denies the main organizer from scoring a match in their own tournament — t
         'name' => 'Delegated Cup',
         'format' => 'round_robin',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
         'venue_organizer_id' => $venueOrganizer->id,
     ]);
 
@@ -220,7 +248,7 @@ it('publishes news and creates a livestream tied to a tournament the organizer o
         'name' => 'Stream Cup',
         'format' => 'round_robin',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     $this->actingAs($organizer)->postJson('/api/news', ['title' => 'Big news', 'body' => 'Details'])
@@ -251,7 +279,7 @@ it('relays a WebRTC signal to its target and flips livestream status only when t
         'name' => 'Signal Cup',
         'format' => 'round_robin',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
         'livestream_organizer_id' => $livestreamOrganizer->id,
     ]);
 
@@ -302,7 +330,7 @@ it('validates the WebRTC signal payload', function () {
 
     $tournament = Tournament::create([
         'organizer_id' => $owner->id, 'sport_id' => $sport->id,
-        'name' => 'Bad Signal Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'open',
+        'name' => 'Bad Signal Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'registration',
     ]);
     $livestream = $this->actingAs($owner)->postJson('/api/livestreams', [
         'tournament_id' => $tournament->id, 'title' => 'Feed',
@@ -326,7 +354,7 @@ it('denies signaling to a guest', function () {
 
     $tournament = Tournament::create([
         'organizer_id' => $owner->id, 'sport_id' => $sport->id,
-        'name' => 'Guest Signal Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'open',
+        'name' => 'Guest Signal Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'registration',
     ]);
     // Created directly via Eloquent, not through an authenticated HTTP
     // call — actingAs() would otherwise leave this test's guard
@@ -343,6 +371,78 @@ it('denies signaling to a guest', function () {
     ])->assertStatus(401);
 });
 
+it('lets the main organizer publish a livestream to the newsfeed, creating a linked News article', function () {
+    $owner = userWithRole('organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id, 'sport_id' => $sport->id,
+        'name' => 'Publish Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'registration',
+        'livestream_organizer_id' => $livestreamOrganizer->id,
+    ]);
+    $livestream = $this->actingAs($owner)->postJson('/api/livestreams', [
+        'tournament_id' => $tournament->id, 'title' => 'Finals feed',
+    ])->assertCreated();
+
+    $response = $this->actingAs($owner)->postJson("/api/livestreams/{$livestream->json('id')}/publish", [
+        'title' => 'Live from the finals!',
+        'body' => 'Catch the championship match as it happens.',
+    ])->assertOk();
+
+    expect($response->json('news_id'))->not->toBeNull();
+    expect($response->json('news.title'))->toBe('Live from the finals!');
+    $this->assertDatabaseHas('news', [
+        'id' => $response->json('news_id'), 'author_id' => $owner->id, 'title' => 'Live from the finals!',
+    ]);
+});
+
+it('denies publishing a livestream to news by anyone other than the tournaments main organizer', function () {
+    $owner = userWithRole('organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id, 'sport_id' => $sport->id,
+        'name' => 'No Publish Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'registration',
+        'livestream_organizer_id' => $livestreamOrganizer->id,
+    ]);
+    $livestream = $this->actingAs($owner)->postJson('/api/livestreams', [
+        'tournament_id' => $tournament->id, 'title' => 'Finals feed',
+    ])->assertCreated();
+
+    $this->actingAs($livestreamOrganizer)->postJson("/api/livestreams/{$livestream->json('id')}/publish", [
+        'title' => 'Hijacked feed', 'body' => 'x',
+    ])->assertForbidden();
+});
+
+it('relays a public signal only for a livestream that is live and published, reaching anonymous callers', function () {
+    $owner = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id, 'sport_id' => $sport->id,
+        'name' => 'Relay Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'registration',
+    ]);
+    $livestream = Livestream::create([
+        'tournament_id' => $tournament->id, 'title' => 'Feed',
+        'broadcaster_id' => $owner->id, 'status' => 'scheduled',
+    ]);
+
+    // Not yet published/live — anonymous relay is refused.
+    $this->postJson("/api/livestreams/{$livestream->id}/public-signal", [
+        'from_token' => 'viewer-1', 'target_token' => 'organizer', 'type' => 'join', 'data' => [],
+    ])->assertStatus(404);
+
+    $news = News::create(['author_id' => $owner->id, 'title' => 'x', 'body' => 'y', 'published_at' => now()]);
+    $livestream->update(['news_id' => $news->id, 'status' => 'live']);
+
+    // No auth header at all — a genuinely anonymous request.
+    $this->postJson("/api/livestreams/{$livestream->id}/public-signal", [
+        'from_token' => 'viewer-1', 'target_token' => 'organizer', 'type' => 'join', 'data' => [],
+    ])->assertNoContent();
+});
+
 it('lets a venue organizer score a match belonging to the tournament they were assigned to', function () {
     $owner = userWithRole('organizer');
     $venueOrganizer = userWithRole('venue_organizer');
@@ -354,7 +454,7 @@ it('lets a venue organizer score a match belonging to the tournament they were a
         'name' => 'Venue-Run Cup',
         'format' => 'round_robin',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
         'venue_organizer_id' => $venueOrganizer->id,
     ]);
 
@@ -382,7 +482,7 @@ it('denies a venue organizer from scoring a match on a tournament they were not 
         'name' => 'Unassigned Cup',
         'format' => 'round_robin',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     foreach (range(1, 2) as $i) {
@@ -420,7 +520,7 @@ it('lets a livestream organizer create a livestream for the tournament they were
         'name' => 'Streamed Cup',
         'format' => 'round_robin',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
         'livestream_organizer_id' => $livestreamOrganizer->id,
     ]);
 
@@ -441,7 +541,7 @@ it('denies a livestream organizer from creating a livestream for a tournament th
         'name' => 'Unassigned Stream Cup',
         'format' => 'round_robin',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     $this->actingAs($livestreamOrganizer)->postJson('/api/livestreams', [
@@ -461,7 +561,7 @@ it('denies a livestream organizer from scoring matches or creating tournaments',
         'name' => 'No Score Access Cup',
         'format' => 'round_robin',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     foreach (range(1, 2) as $i) {
@@ -541,7 +641,7 @@ it('denies creating a livestream tied to a tournament the organizer does not own
         'name' => 'Owned Cup',
         'format' => 'round_robin',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     $this->actingAs($other)->postJson('/api/livestreams', [
@@ -601,7 +701,7 @@ it('completes a best_of_sets match once a side reaches sets_to_win and advances 
         'scoring_type' => 'best_of_sets',
         'sets_to_win' => 2, // best of 3
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
         'venue_organizer_id' => $venueOrganizer->id,
     ]);
 
@@ -621,7 +721,7 @@ it('completes a best_of_sets match once a side reaches sets_to_win and advances 
         ->assertJsonPath('score_a', 1)
         ->assertJsonPath('score_b', 0);
 
-    expect($tournament->fresh()->status)->toBe('in_progress');
+    expect($tournament->fresh()->status)->toBe('preparation');
 
     // Second set clinches it 2-0.
     $response = $this->actingAs($venueOrganizer)->patchJson("/api/matches/{$match->id}/score", [
@@ -651,7 +751,7 @@ it('does not complete a best_of_sets match before the deciding set is reached', 
         'scoring_type' => 'best_of_sets',
         'sets_to_win' => 3, // best of 5
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
         'venue_organizer_id' => $venueOrganizer->id,
     ]);
 
@@ -673,5 +773,233 @@ it('does not complete a best_of_sets match before the deciding set is reached', 
     $response->assertOk();
     $response->assertJsonPath('status', 'live');
     $response->assertJsonPath('score_a', 2);
-    expect($tournament->fresh()->status)->toBe('in_progress');
+    expect($tournament->fresh()->status)->toBe('preparation');
+});
+
+// ---- Tournament lifecycle: draft -> registration -> auto-started prep -> proceed -> ongoing -> completed ----
+
+it('runs a tournament through its full lifecycle from draft to a crowned champion', function () {
+    $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $create = $this->actingAs($organizer)->postJson('/api/tournaments', [
+        'sport_id' => $sport->id,
+        'name' => 'Lifecycle Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek()->toIso8601String(),
+        'venue_organizer_id' => $venueOrganizer->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
+    ])->assertCreated();
+    $tournamentId = $create->json('id');
+    expect(Tournament::find($tournamentId)->status)->toBe('draft');
+
+    $this->actingAs($organizer)->patchJson("/api/tournaments/{$tournamentId}", ['status' => 'registration'])->assertOk();
+
+    foreach (range(1, 2) as $i) {
+        $player = userWithRole('player');
+        TournamentRegistration::create(['tournament_id' => $tournamentId, 'user_id' => $player->id, 'status' => 'pending']);
+    }
+
+    // Simulate the deadline having passed since registration opened.
+    Tournament::find($tournamentId)->update(['starts_at' => now()->subMinute()]);
+
+    $this->actingAs($organizer)->getJson('/api/tournaments')->assertOk();
+
+    $tournament = Tournament::find($tournamentId);
+    expect($tournament->status)->toBe('preparation');
+    expect($tournament->bracket)->not->toBeNull();
+
+    $this->actingAs($organizer)->postJson("/api/tournaments/{$tournamentId}/proceed")->assertOk();
+    expect(Tournament::find($tournamentId)->status)->toBe('ongoing');
+
+    $match = $tournament->bracket->matches->first();
+    $this->actingAs($venueOrganizer)->patchJson("/api/matches/{$match->id}/score", [
+        'score_a' => 21, 'score_b' => 10, 'status' => 'completed',
+    ])->assertOk();
+
+    $final = Tournament::find($tournamentId);
+    expect($final->status)->toBe('completed');
+    expect($final->champion_id)->not->toBeNull();
+    expect($final->champion_id)->toBe($match->fresh()->winner_id);
+
+    $this->assertDatabaseHas('notifications', [
+        'user_id' => $organizer->id,
+        'type' => 'tournament_champion_crowned',
+    ]);
+});
+
+it('cancels a tournament from registration or preparation, but rejects cancellation from draft, ongoing, or completed', function () {
+    $organizer = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $makeTournament = fn (string $status) => Tournament::create([
+        'organizer_id' => $organizer->id, 'sport_id' => $sport->id,
+        'name' => 'Cancel Cup', 'format' => 'single_elimination', 'starts_at' => now()->addWeek(), 'status' => $status,
+    ]);
+
+    $this->actingAs($organizer)->postJson('/api/tournaments/'.$makeTournament('draft')->id.'/cancel')->assertStatus(422);
+
+    $registration = $makeTournament('registration');
+    $player = userWithRole('player');
+    TournamentRegistration::create(['tournament_id' => $registration->id, 'user_id' => $player->id, 'status' => 'pending']);
+    $this->actingAs($organizer)->postJson("/api/tournaments/{$registration->id}/cancel")->assertOk();
+    expect($registration->fresh()->status)->toBe('cancelled');
+    $this->assertDatabaseHas('notifications', ['user_id' => $player->id, 'type' => 'tournament_update']);
+
+    $preparation = $makeTournament('preparation');
+    $this->actingAs($organizer)->postJson("/api/tournaments/{$preparation->id}/cancel")->assertOk();
+    expect($preparation->fresh()->status)->toBe('cancelled');
+
+    $this->actingAs($organizer)->postJson('/api/tournaments/'.$makeTournament('ongoing')->id.'/cancel')->assertStatus(422);
+    $this->actingAs($organizer)->postJson('/api/tournaments/'.$makeTournament('completed')->id.'/cancel')->assertStatus(422);
+});
+
+it('rejects proceed unless the tournament is in preparation with a generated bracket', function () {
+    $organizer = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $registration = Tournament::create([
+        'organizer_id' => $organizer->id, 'sport_id' => $sport->id,
+        'name' => 'Proceed Cup', 'format' => 'single_elimination', 'starts_at' => now()->addWeek(), 'status' => 'registration',
+    ]);
+    $this->actingAs($organizer)->postJson("/api/tournaments/{$registration->id}/proceed")->assertStatus(422);
+
+    // Fewer than two registrants at the deadline auto-transitions straight
+    // to preparation without ever generating a bracket (see BracketService).
+    $understaffed = Tournament::create([
+        'organizer_id' => $organizer->id, 'sport_id' => $sport->id,
+        'name' => 'Understaffed Proceed Cup', 'format' => 'single_elimination', 'starts_at' => now()->subMinute(), 'status' => 'registration',
+    ]);
+    TournamentRegistration::create(['tournament_id' => $understaffed->id, 'user_id' => userWithRole('player')->id, 'status' => 'pending']);
+    app(BracketService::class)->autoStartExpired();
+    expect($understaffed->fresh()->status)->toBe('preparation');
+    expect($understaffed->fresh()->bracket)->toBeNull();
+
+    $this->actingAs($organizer)->postJson("/api/tournaments/{$understaffed->id}/proceed")->assertStatus(422);
+});
+
+it('rejects registering a player for a tournament that has already left draft/registration', function () {
+    $coach = userWithRole('coach');
+    $organizer = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $preparation = Tournament::create([
+        'organizer_id' => $organizer->id, 'sport_id' => $sport->id,
+        'name' => 'Closed Cup', 'format' => 'single_elimination', 'starts_at' => now()->addWeek(), 'status' => 'preparation',
+    ]);
+    $this->actingAs($coach)->postJson("/api/tournaments/{$preparation->id}/registrations", [
+        'user_id' => userWithRole('player')->id,
+    ])->assertStatus(422);
+
+    $ongoing = Tournament::create([
+        'organizer_id' => $organizer->id, 'sport_id' => $sport->id,
+        'name' => 'Ongoing Cup', 'format' => 'single_elimination', 'starts_at' => now()->addWeek(), 'status' => 'ongoing',
+    ]);
+    $this->actingAs($coach)->postJson("/api/tournaments/{$ongoing->id}/registrations", [
+        'user_id' => userWithRole('player')->id,
+    ])->assertStatus(422);
+});
+
+it('lets the main organizer set a scheduled time and court on a match, rejects it once completed, and denies the venue organizer or a non-owning organizer', function () {
+    $organizer = userWithRole('organizer');
+    $otherOrganizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+    $venue = Venue::create([
+        'facilitator_id' => userWithRole('venue_facilitator')->id,
+        'name' => 'Schedule Venue', 'address' => '1 St', 'latitude' => 1, 'longitude' => 1,
+    ]);
+    $court = Court::create(['venue_id' => $venue->id, 'name' => 'Court 1', 'type' => 'court']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $organizer->id,
+        'sport_id' => $sport->id,
+        'name' => 'Schedule Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(),
+        'status' => 'registration',
+        'venue_organizer_id' => $venueOrganizer->id,
+    ]);
+
+    foreach (range(1, 2) as $i) {
+        $player = userWithRole('player');
+        TournamentRegistration::create(['tournament_id' => $tournament->id, 'user_id' => $player->id, 'status' => 'pending']);
+    }
+
+    $this->actingAs($organizer)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
+    $match = $tournament->fresh()->bracket->matches->first();
+
+    // The venue organizer scores matches — scheduling is the main organizer's job alone.
+    $this->actingAs($venueOrganizer)->patchJson("/api/matches/{$match->id}/schedule", [
+        'scheduled_at' => now()->addDay()->toIso8601String(), 'court_id' => $court->id,
+    ])->assertForbidden();
+
+    // An organizer who doesn't own this tournament is denied too.
+    $this->actingAs($otherOrganizer)->patchJson("/api/matches/{$match->id}/schedule", [
+        'scheduled_at' => now()->addDay()->toIso8601String(), 'court_id' => $court->id,
+    ])->assertForbidden();
+
+    $scheduledAt = now()->addDay();
+    $response = $this->actingAs($organizer)->patchJson("/api/matches/{$match->id}/schedule", [
+        'scheduled_at' => $scheduledAt->toIso8601String(), 'court_id' => $court->id,
+    ])->assertOk();
+    expect($response->json('court_id'))->toBe($court->id);
+
+    $this->actingAs($venueOrganizer)->patchJson("/api/matches/{$match->id}/score", [
+        'score_a' => 21, 'score_b' => 10, 'status' => 'completed',
+    ])->assertOk();
+
+    $this->actingAs($organizer)->patchJson("/api/matches/{$match->id}/schedule", [
+        'scheduled_at' => now()->addDays(2)->toIso8601String(),
+    ])->assertStatus(422);
+});
+
+it('creates an unpublished linked News post when a tournament is created with post_title/post_body, and publishes it once status moves to registration', function () {
+    $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $create = $this->actingAs($organizer)->postJson('/api/tournaments', [
+        'sport_id' => $sport->id,
+        'name' => 'Announced Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek()->toIso8601String(),
+        'venue_organizer_id' => $venueOrganizer->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
+        'post_title' => 'Announcing the Cup',
+        'post_body' => 'Details about the cup.',
+    ])->assertCreated();
+    $tournamentId = $create->json('id');
+
+    $news = News::where('tournament_id', $tournamentId)->first();
+    expect($news)->not->toBeNull();
+    expect($news->title)->toBe('Announcing the Cup');
+    expect($news->author_id)->toBe($organizer->id);
+    expect($news->published_at)->toBeNull();
+
+    $this->actingAs($organizer)->patchJson("/api/tournaments/{$tournamentId}", ['status' => 'registration'])->assertOk();
+
+    expect($news->fresh()->published_at)->not->toBeNull();
+});
+
+it('lets a tournaments organizer create a news post tied to it, and denies a different organizer', function () {
+    $owner = userWithRole('organizer');
+    $other = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id, 'sport_id' => $sport->id,
+        'name' => 'Owned News Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'registration',
+    ]);
+
+    $this->actingAs($owner)->postJson('/api/news', [
+        'title' => 'Update', 'body' => 'Body', 'tournament_id' => $tournament->id,
+    ])->assertCreated()->assertJsonPath('tournament_id', $tournament->id);
+
+    $this->actingAs($other)->postJson('/api/news', [
+        'title' => 'Hijack', 'body' => 'Body', 'tournament_id' => $tournament->id,
+    ])->assertForbidden();
 });

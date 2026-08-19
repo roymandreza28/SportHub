@@ -1,24 +1,22 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { fetchTournaments } from '../lib/coachApi'
+import type { Venue } from '../lib/venueApi'
+import { fetchMyTournamentRegistrations, fetchMyUpcomingStatSheetMatches } from '../lib/coachApi'
 import { fetchProfile } from '../lib/socialApi'
-import {
-  DashboardShell,
-  ListPreview,
-  ListRow,
-  Section,
-  StatCard,
-  StatCardGrid,
-  StatusBadge,
-  type NavItem,
-} from '../components/layout/DashboardShell'
-import { IconClipboard, IconHome, IconNewspaper, IconTarget, IconTrophy, IconUsers } from '../components/layout/icons'
+import { DashboardShell, Section, type NavItem } from '../components/layout/DashboardShell'
+import { UpcomingEventsStrip, type UpcomingEventCardData } from '../components/layout/UpcomingEventsStrip'
+import { IconClipboard, IconHome, IconPinCalendar, IconTarget, IconTrophy } from '../components/layout/icons'
 import { Newsfeed } from '../components/newsfeed/Newsfeed'
 import { MatchmakingPanel } from '../components/player/MatchmakingPanel'
+import { VenueDirectory } from '../components/player/VenueDirectory'
+import { VenueRegistrationForm } from '../components/player/VenueRegistrationForm'
+import { MyBookings } from '../components/player/MyBookings'
 import { MyTournamentRegistrations } from '../components/coach/MyTournamentRegistrations'
 import { RegisterPlayerModal } from '../components/coach/RegisterPlayerModal'
 import { EvaluationForm } from '../components/coach/EvaluationForm'
+import { StatSheetTrigger } from '../components/coach/StatSheetTrigger'
+import { StatSheetModal } from '../components/coach/StatSheetModal'
 import { MyPosts } from '../components/social/MyPosts'
 import { FriendsList } from '../components/social/FriendsList'
 import { ProfileHeaderCard } from '../components/social/ProfileHeaderCard'
@@ -26,25 +24,38 @@ import { useAuth } from '../lib/AuthContext'
 import { useChatUI } from '../lib/ChatUIContext'
 import { useProfileMediaMutations } from '../lib/useProfileMedia'
 import { extractErrorMessage } from '../lib/errors'
-import { buttonPrimary, buttonSecondary } from '../lib/formStyles'
+import { buttonPrimary, buttonSecondary, chip } from '../lib/formStyles'
 
+// 'profile' is deliberately not in this list — the profile tab is still
+// reachable via the "Edit profile" link on ProfilePage.tsx (?tab=profile),
+// it's just no longer a permanent sidenav entry.
 const NAV_ITEMS: NavItem[] = [
-  { id: 'overview', label: 'Dashboard', icon: IconHome },
-  { id: 'profile', label: 'Profile', icon: IconUsers },
-  { id: 'newsfeed', label: 'Newsfeed', icon: IconNewspaper },
+  { id: 'newsfeed', label: 'Newsfeed', icon: IconHome },
   { id: 'matchmaking', label: 'Matchmaking', icon: IconTarget },
   { id: 'registrations', label: 'Tournament', icon: IconTrophy },
   { id: 'evaluations', label: 'Evaluations', icon: IconClipboard },
+  // Same combined venue-booking entry as the player dashboard — the
+  // /venue-registrations endpoints already allow role:player|coach, this
+  // was just never surfaced in the coach UI.
+  { id: 'venues', label: 'Venues & Bookings', icon: IconPinCalendar },
 ]
 
 export function CoachPage() {
-  const { data: openTournaments } = useQuery({ queryKey: ['tournaments', 'open'], queryFn: () => fetchTournaments('open') })
   const [searchParams] = useSearchParams()
   const [active, setActive] = useState(searchParams.get('tab') ?? NAV_ITEMS[0].id)
   const { openChatWindow } = useChatUI()
   const { user } = useAuth()
   const [showRegisterModal, setShowRegisterModal] = useState(false)
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
+  const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
+  const [venuesSubTab, setVenuesSubTab] = useState<'venues' | 'bookings'>('venues')
+  const [statSheetMatchId, setStatSheetMatchId] = useState<number | null>(null)
+
+  const { data: upcomingStatSheetMatches } = useQuery({
+    queryKey: ['coach', 'matches', 'upcoming-stat-sheets'],
+    queryFn: fetchMyUpcomingStatSheetMatches,
+    refetchInterval: 30000,
+  })
 
   const { data: myProfile } = useQuery({
     queryKey: ['social', 'profile', user?.id],
@@ -53,46 +64,32 @@ export function CoachPage() {
   })
   const { avatarMutation, coverMutation } = useProfileMediaMutations(user?.id ?? 0)
 
+  // Every tournament a player or a team the coach registered is part of —
+  // one card per tournament, same "upcoming events" concept as the player
+  // dashboard, just sourced from the coach's own registrations instead of
+  // venue bookings + a player's own tournament entries. Withdrawn/completed/
+  // cancelled ones are filtered the same way the player side does (by the
+  // tournament's own status, not the registration's).
+  const { data: myRegistrations } = useQuery({
+    queryKey: ['coach', 'tournament-registrations', 'mine'],
+    queryFn: fetchMyTournamentRegistrations,
+  })
+
+  const upcomingEvents: UpcomingEventCardData[] = (myRegistrations ?? [])
+    .filter((r) => r.tournament.status !== 'completed' && r.tournament.status !== 'cancelled')
+    .sort((a, b) => new Date(a.tournament.starts_at).getTime() - new Date(b.tournament.starts_at).getTime())
+    .slice(0, 5)
+    .map((r) => ({
+      key: `tournament-${r.tournament.id}`,
+      primary: r.tournament.name,
+      secondary: `${r.tournament.sport.name}${r.tournament.venue ? ` — ${r.tournament.venue.name}` : ''} — ${new Date(r.tournament.starts_at).toLocaleDateString()}`,
+      status: r.tournament.status,
+      kind: 'tournament',
+      tournament: r.tournament,
+    }))
+
   return (
     <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={setActive}>
-      {active === 'overview' && (
-        <>
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-slate-900">Coach</h1>
-            <p className="mt-1 text-sm text-slate-500">Register players and track their skill.</p>
-          </div>
-
-          <StatCardGrid>
-            <StatCard label="Open tournaments" value={openTournaments?.length ?? '-'} />
-          </StatCardGrid>
-
-          <ListPreview
-            title="Open Tournaments"
-            description="Tournaments currently accepting registrations."
-            emptyText="No open tournaments right now."
-            rows={(openTournaments ?? []).map((t) => (
-              <ListRow
-                key={t.id}
-                primary={t.name}
-                secondary={`${t.sport.name} — starts ${new Date(t.starts_at).toLocaleDateString()}`}
-                badge={<StatusBadge status={t.status} />}
-              />
-            ))}
-            action={
-              <button
-                onClick={() => {
-                  setActive('registrations')
-                  setShowRegisterModal(true)
-                }}
-                className="text-sm font-medium text-teal-600 hover:text-teal-700"
-              >
-                Register a player &rarr;
-              </button>
-            }
-          />
-        </>
-      )}
-
       {active === 'profile' && user && (
         <>
           <ProfileHeaderCard
@@ -133,13 +130,14 @@ export function CoachPage() {
       )}
 
       {active === 'newsfeed' && (
-        <Section title="Newsfeed" description="News from organizers — react, comment, and share with friends.">
+        <Section title="Newsfeed" compact>
+          <UpcomingEventsStrip events={upcomingEvents} title="Upcoming Tournaments" />
           <Newsfeed />
         </Section>
       )}
 
       {active === 'matchmaking' && (
-        <Section title="Matchmaking" description="Find an opponent for a sport, live.">
+        <Section title="Matchmaking" compact>
           <MatchmakingPanel />
         </Section>
       )}
@@ -147,7 +145,7 @@ export function CoachPage() {
       {active === 'registrations' && (
         <Section
           title="Tournament"
-          description="Tournaments your players are registered in, and their results."
+          compact
           action={
             <button onClick={() => setShowRegisterModal(true)} className={buttonPrimary}>
               Register for tournament
@@ -158,16 +156,61 @@ export function CoachPage() {
             selectedTournamentId={selectedTournamentId}
             onSelectTournament={setSelectedTournamentId}
           />
+
+          {(upcomingStatSheetMatches ?? []).length > 0 && (
+            <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stat Sheets</p>
+              {upcomingStatSheetMatches!.map((m) => (
+                <button
+                  key={m.match_id}
+                  onClick={() => setStatSheetMatchId(m.match_id)}
+                  className={`${buttonSecondary} self-start`}
+                >
+                  Stat Sheet — {m.participant_name} vs {m.opponent_name}
+                </button>
+              ))}
+            </div>
+          )}
         </Section>
       )}
 
       {active === 'evaluations' && (
-        <Section title="Evaluations" description="Record a skill level and see a player's history.">
+        <Section title="Evaluations" compact>
           <EvaluationForm />
         </Section>
       )}
 
+      {active === 'venues' && (
+        <Section title="Venues & Bookings" compact>
+          <div className="mb-4 flex gap-2">
+            <button type="button" className={chip(venuesSubTab === 'venues')} onClick={() => setVenuesSubTab('venues')}>
+              Venues
+            </button>
+            <button type="button" className={chip(venuesSubTab === 'bookings')} onClick={() => setVenuesSubTab('bookings')}>
+              My Bookings
+            </button>
+          </div>
+
+          {venuesSubTab === 'venues' ? (
+            <>
+              <VenueDirectory onSelect={setSelectedVenue} selectedId={selectedVenue?.id} />
+              {selectedVenue && (
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <VenueRegistrationForm venue={selectedVenue} />
+                </div>
+              )}
+            </>
+          ) : (
+            <MyBookings />
+          )}
+        </Section>
+      )}
+
       {showRegisterModal && <RegisterPlayerModal onClose={() => setShowRegisterModal(false)} />}
+      {statSheetMatchId !== null && (
+        <StatSheetModal matchId={statSheetMatchId} onClose={() => setStatSheetMatchId(null)} />
+      )}
+      <StatSheetTrigger />
     </DashboardShell>
   )
 }

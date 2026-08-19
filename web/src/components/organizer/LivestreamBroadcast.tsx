@@ -93,17 +93,20 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
     // unmounted together with this component under the same selected-
     // livestream view) already joins for chat/viewer-count — Echo shares
     // one underlying subscription per channel name.
+    const mainOrganizerId = livestream.tournament?.organizer_id
     const presenceChannel = echo.join(`livestream.${livestream.id}.chat`)
     presenceChannel.joining((member: { id: number; name: string }) => {
-      // Idempotent by design, not just belt-and-suspenders: laravel-echo's
-      // PresenceChannel.joining() has no matching "stop" callback, so this
-      // handler can end up bound more than once for the same member (React
-      // StrictMode double-invokes effects in dev; switching between two of
-      // this broadcaster's own livestreams without unmounting would too).
+      // The livestream_organizer's only job is feeding the main organizer —
+      // never anyone else who happens to join this presence channel (e.g. a
+      // player browsing the tournament's Livestreams tab before it's
+      // published to news). Idempotent by design, not just belt-and-
+      // suspenders: laravel-echo's PresenceChannel.joining() has no matching
+      // "stop" callback, so this handler can end up bound more than once for
+      // the same member (React StrictMode double-invokes effects in dev).
       // Skipping when a peer connection already exists keeps a duplicate
       // firing harmless instead of corrupting the SDP with two concurrent
       // offers on the same RTCPeerConnection.
-      if (isLiveRef.current && member.id !== user.id && !peersRef.current.has(member.id)) {
+      if (isLiveRef.current && member.id === mainOrganizerId && !peersRef.current.has(member.id)) {
         offerTo(member.id).catch(() => setError('Failed to connect to a new viewer.'))
       }
     })

@@ -12,8 +12,8 @@ export function TournamentRegistrationForm({
   const { user } = useAuth()
   const isVerified = user?.verification_status === 'verified'
   const { data: tournaments } = useQuery({
-    queryKey: ['tournaments', 'open'],
-    queryFn: () => fetchTournaments('open'),
+    queryKey: ['tournaments', 'registration'],
+    queryFn: () => fetchTournaments('registration'),
     enabled: !fixedTournamentId,
   })
   const [tournamentId, setTournamentId] = useState<number | ''>(fixedTournamentId ?? '')

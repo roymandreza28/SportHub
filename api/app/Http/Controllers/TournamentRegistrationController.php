@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Conversation;
 use App\Models\Team;
 use App\Models\Tournament;
 use App\Models\TournamentRegistration;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class TournamentRegistrationController extends Controller
@@ -52,7 +54,9 @@ class TournamentRegistrationController extends Controller
             'user_id' => ['required', 'exists:users,id'],
         ]);
 
-        if (! in_array($tournament->status, ['draft', 'open'], true)) {
+        abort_if($tournament->sport_format_id !== null, 422, 'This tournament requires team registration.');
+
+        if (! in_array($tournament->status, ['draft', 'registration'], true)) {
             throw ValidationException::withMessages(['tournament' => ['Registration is closed for this tournament.']]);
         }
 
@@ -101,7 +105,7 @@ class TournamentRegistrationController extends Controller
 
         abort_if($tournament->sport_format_id === null, 422, 'This tournament does not use team registration.');
 
-        if (! in_array($tournament->status, ['draft', 'open'], true)) {
+        if (! in_array($tournament->status, ['draft', 'registration'], true)) {
             throw ValidationException::withMessages(['tournament' => ['Registration is closed for this tournament.']]);
         }
 
@@ -139,6 +143,29 @@ class TournamentRegistrationController extends Controller
             ]);
         }
 
+        $this->ensureTeamConversation($team);
+
         return response()->json($registration->load('team.members.user:id,name,email', 'tournament:id,name'), 201);
+    }
+
+    // Created directly (not through Social\ConversationController::store())
+    // for the same reason as VenueRegistrationController::ensureBookingConversation() —
+    // a coach and their roster of players aren't necessarily already friends.
+    // The unique team_id column on conversations makes this idempotent, so
+    // registering the same team for a second tournament won't create a
+    // duplicate chat.
+    private function ensureTeamConversation(Team $team): void
+    {
+        DB::transaction(function () use ($team) {
+            $conversation = Conversation::firstOrCreate(
+                ['team_id' => $team->id],
+                ['type' => 'group', 'name' => $team->name, 'created_by' => $team->captain_id]
+            );
+
+            if ($conversation->wasRecentlyCreated) {
+                $memberIds = $team->members()->where('status', 'accepted')->pluck('user_id');
+                $conversation->participants()->attach($memberIds->push($team->captain_id)->unique());
+            }
+        });
     }
 }

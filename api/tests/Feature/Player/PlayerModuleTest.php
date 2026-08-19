@@ -180,7 +180,7 @@ it('lets a player see their own tournament registrations, not another players', 
         'name' => 'Open Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek(),
-        'status' => 'open',
+        'status' => 'registration',
     ]);
 
     TournamentRegistration::create([
