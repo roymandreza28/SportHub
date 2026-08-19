@@ -78,7 +78,7 @@ export function LivestreamViewer({ livestream }: { livestream: LivestreamItem })
         }
       }
 
-      await pc.setRemoteDescription(new RTCSessionDescription(message.data as RTCSessionDescriptionInit))
+      await pc.setRemoteDescription(new RTCSessionDescription(message.data as unknown as RTCSessionDescriptionInit))
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
       await sendWebRTCSignal(livestream.id, message.from_user_id, 'answer', { sdp: answer.sdp, type: answer.type })
@@ -146,7 +146,7 @@ export function LivestreamViewer({ livestream }: { livestream: LivestreamItem })
       } else if (message.type === 'answer') {
         relayPeersRef.current
           .get(message.from_token)
-          ?.setRemoteDescription(new RTCSessionDescription(message.data as RTCSessionDescriptionInit))
+          ?.setRemoteDescription(new RTCSessionDescription(message.data as unknown as RTCSessionDescriptionInit))
       } else if (message.type === 'ice-candidate') {
         relayPeersRef.current.get(message.from_token)?.addIceCandidate(new RTCIceCandidate(message.data as RTCIceCandidateInit))
       }

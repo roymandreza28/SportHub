@@ -115,7 +115,6 @@ export function TournamentWizard() {
     enabled: !!sportId,
   })
   const teamFormats = (sportFormats ?? []).filter((f) => f.players_per_side > 1)
-  const isTeamTournament = sportFormatId !== ''
   // Basketball/Volleyball (category 'team') can't be played individually —
   // there's no meaningful solo 5v5 game — matching the backend's
   // TournamentController::validateSportFormat() rule.

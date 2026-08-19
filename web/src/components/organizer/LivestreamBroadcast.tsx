@@ -118,7 +118,7 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
       if (!pc) return
 
       if (message.type === 'answer') {
-        pc.setRemoteDescription(new RTCSessionDescription(message.data as RTCSessionDescriptionInit))
+        pc.setRemoteDescription(new RTCSessionDescription(message.data as unknown as RTCSessionDescriptionInit))
       } else if (message.type === 'ice-candidate') {
         pc.addIceCandidate(new RTCIceCandidate(message.data as RTCIceCandidateInit))
       }

@@ -46,7 +46,7 @@ export function LiveRelayVideo({ livestreamId }: { livestreamId: number }) {
         }
       }
 
-      await pc.setRemoteDescription(new RTCSessionDescription(message.data as RTCSessionDescriptionInit))
+      await pc.setRemoteDescription(new RTCSessionDescription(message.data as unknown as RTCSessionDescriptionInit))
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
       await sendPublicSignal(livestreamId, myToken, 'organizer', 'answer', { sdp: answer.sdp, type: answer.type })

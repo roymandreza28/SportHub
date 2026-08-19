@@ -11,7 +11,7 @@ import {
   type Tournament,
 } from '../lib/organizerApi'
 import { useAuth } from '../lib/AuthContext'
-import { fetchNotifications, markNotificationRead, type NotificationItem } from '../lib/notificationsApi'
+import { fetchNotifications, markNotificationRead } from '../lib/notificationsApi'
 import {
   DashboardShell,
   ListPreview,
@@ -193,7 +193,7 @@ export function OrganizerPage() {
   // normalized participant_a/participant_b/winner shape — the raw `matches`
   // relation's participant_a is the individual-player relation, which is
   // null for every team match regardless of who's actually seeded in it.
-  const activeMatch = activeBracket?.structure.flat().find((m) => m.id === activeMatchId) ?? null
+  const activeMatch = activeBracket?.structure?.flat().find((m) => m.id === activeMatchId) ?? null
 
   const myLivestreams = livestreams ?? []
   const [selectedLivestreamId, setSelectedLivestreamId] = useState<number | null>(null)
