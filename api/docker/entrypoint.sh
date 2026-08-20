@@ -51,6 +51,16 @@ if [ "$1" = "supervisord" ]; then
     if [ "$SEED_ON_BOOT" = "true" ]; then
         php artisan db:seed --force || echo "db:seed failed — continuing boot anyway"
     fi
+
+    # Same one-shot-hook pattern as SEED_ON_BOOT above, for the opposite
+    # operation — wiping every table except accounts/roles/sports back to a
+    # fresh state. --force skips the interactive confirmation prompt, which
+    # would otherwise hang forever with no stdin attached. Unset
+    # RESET_ON_BOOT after use — unlike seeding, leaving this set would wipe
+    # the database again on every future restart.
+    if [ "$RESET_ON_BOOT" = "true" ]; then
+        php artisan system:reset-keep-accounts --force || echo "system:reset-keep-accounts failed — continuing boot anyway"
+    fi
 fi
 
 exec "$@"
