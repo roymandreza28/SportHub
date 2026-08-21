@@ -13,6 +13,7 @@ use App\Models\TournamentRegistration;
 use App\Models\User;
 use App\Models\Venue;
 use App\Services\BracketService;
+use App\Support\PlayerStatFieldSets;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
 
@@ -48,6 +49,7 @@ class ExtendedTournamentsSeeder extends Seeder
         $livestreamOrganizer = User::where('email', 'livestream_organizer@sporthub.test')->first();
         $gymnasium = Venue::where('name', 'Morong Gymnasium')->first();
         $badmintonCenter = Venue::where('name', "Tapal's Badminton Center")->first();
+        $tennisCourts = Venue::where('name', 'Morong Tennis Courts')->first();
 
         if (! $organizer || ! $venueOrganizer || ! $livestreamOrganizer || ! $gymnasium) {
             return;
@@ -87,12 +89,23 @@ class ExtendedTournamentsSeeder extends Seeder
 
         if ($volleyball) {
             $this->seedDraftVolleyball($organizer, $venueOrganizer, $livestreamOrganizer, $volleyball);
+
+            $sixVSix = SportFormat::where('sport_id', $volleyball->id)->where('name', '6v6')->first();
+            $volleyballCourt = $gymnasium->courts()->where('name', 'Volleyball Court')->first();
+            if ($sixVSix && $volleyballCourt) {
+                $this->seedVolleyballFinals($organizer, $venueOrganizer, $livestreamOrganizer, $volleyball, $sixVSix, $gymnasium, $volleyballCourt, $coaches, $players, $bracketService);
+            }
         }
 
         if ($badminton && $badmintonCenter) {
             $doubles = SportFormat::where('sport_id', $badminton->id)->where('name', 'Doubles')->first();
             if ($doubles) {
                 $this->seedRegistrationBadminton($organizer, $venueOrganizer, $livestreamOrganizer, $badminton, $doubles, $badmintonCenter, $coaches, $players);
+
+                $badmintonCourt = $badmintonCenter->courts()->where('name', 'Court 1')->first();
+                if ($badmintonCourt) {
+                    $this->seedBadmintonFinals($organizer, $venueOrganizer, $livestreamOrganizer, $badminton, $doubles, $badmintonCenter, $badmintonCourt, $coaches, $players, $bracketService);
+                }
             }
         }
 
@@ -101,10 +114,22 @@ class ExtendedTournamentsSeeder extends Seeder
             if ($singles) {
                 $this->seedPreparationTableTennis($organizer, $venueOrganizer, $livestreamOrganizer, $tableTennis, $gymnasium, $players, $bracketService);
             }
+
+            $tableTennisCourt = $gymnasium->courts()->where('name', 'Table Tennis Corner')->first();
+            if ($tableTennisCourt) {
+                $this->seedTableTennisCompleted($organizer, $venueOrganizer, $livestreamOrganizer, $tableTennis, $gymnasium, $tableTennisCourt, $coaches, $players, $bracketService);
+            }
         }
 
         if ($pickleball && $badmintonCenter) {
             $this->seedCancelledPickleball($organizer, $venueOrganizer, $livestreamOrganizer, $pickleball, $badmintonCenter, $players);
+        }
+
+        if ($tennisCourts) {
+            $tennis = Sport::where('name', 'Tennis')->first();
+            if ($tennis) {
+                $this->seedTennisCompleted($organizer, $venueOrganizer, $livestreamOrganizer, $tennis, $tennisCourts, $players, $bracketService);
+            }
         }
     }
 
@@ -175,14 +200,97 @@ class ExtendedTournamentsSeeder extends Seeder
             'scheduled_at' => now()->subHours(rand(6, 72)),
         ]);
 
+        $sportName = $match->bracket->tournament->sport->name;
         $sportId = $match->bracket->tournament->sport_id;
-        $this->recordPlayerStats($match, $match->participant_a_team_id, $scoreA, $sportId);
-        $this->recordPlayerStats($match, $match->participant_b_team_id, $scoreB, $sportId);
+        $this->recordPlayerStats($match, $match->participant_a_team_id, $scoreA, $sportId, $sportName);
+        $this->recordPlayerStats($match, $match->participant_b_team_id, $scoreB, $sportId, $sportName);
 
         $bracketService->advanceWinner($match->fresh());
     }
 
-    private function recordPlayerStats(GameMatch $match, ?int $teamId, int $teamScore, int $sportId): void
+    // Best-of-sets sports (badminton/volleyball/table tennis/tennis here)
+    // don't have a single "score" the way single_score sports do — score_a/
+    // score_b there is SETS WON, not points — so each set's points are
+    // randomly generated directly rather than derived from a target score,
+    // matching how the real venue-organizer scoreboards accumulate them
+    // set by set. Mirrors MatchController::updateSetsScore()'s own
+    // score_a/score_b-is-sets-won convention exactly, so the bracket/champion
+    // logic downstream treats these identically to a real scored match.
+    private function simulateBestOfSetsTeamMatch(GameMatch $match, BracketService $bracketService, Tournament $tournament, int $setPointsMin = 15, int $setPointsMax = 25): void
+    {
+        $setsToWin = $tournament->sets_to_win ?? 2;
+        $sets = [];
+        $setsWonA = 0;
+        $setsWonB = 0;
+
+        while ($setsWonA < $setsToWin && $setsWonB < $setsToWin) {
+            $a = rand($setPointsMin, $setPointsMax);
+            $b = rand($setPointsMin, $setPointsMax);
+            if ($a === $b) {
+                $b--;
+            }
+            $a > $b ? $setsWonA++ : $setsWonB++;
+            $sets[] = ['score_a' => $a, 'score_b' => $b];
+        }
+
+        $match->update([
+            'sets' => $sets,
+            'score_a' => $setsWonA,
+            'score_b' => $setsWonB,
+            'status' => 'completed',
+            'winner_team_id' => $setsWonA > $setsWonB ? $match->participant_a_team_id : $match->participant_b_team_id,
+            'scheduled_at' => now()->subHours(rand(6, 72)),
+        ]);
+
+        $sportName = $tournament->sport->name;
+        $this->recordPlayerStats($match, $match->participant_a_team_id, rand(60, 150), $tournament->sport_id, $sportName);
+        $this->recordPlayerStats($match, $match->participant_b_team_id, rand(60, 150), $tournament->sport_id, $sportName);
+
+        $bracketService->advanceWinner($match->fresh());
+    }
+
+    private function simulateBestOfSetsIndividualMatch(GameMatch $match, BracketService $bracketService, Tournament $tournament, int $setPointsMin = 4, int $setPointsMax = 11): void
+    {
+        $setsToWin = $tournament->sets_to_win ?? 3;
+        $sets = [];
+        $setsWonA = 0;
+        $setsWonB = 0;
+
+        while ($setsWonA < $setsToWin && $setsWonB < $setsToWin) {
+            $a = rand($setPointsMin, $setPointsMax);
+            $b = rand($setPointsMin, $setPointsMax);
+            if ($a === $b) {
+                $b--;
+            }
+            $a > $b ? $setsWonA++ : $setsWonB++;
+            $sets[] = ['score_a' => $a, 'score_b' => $b];
+        }
+
+        $match->update([
+            'sets' => $sets,
+            'score_a' => $setsWonA,
+            'score_b' => $setsWonB,
+            'status' => 'completed',
+            'winner_id' => $setsWonA > $setsWonB ? $match->participant_a_id : $match->participant_b_id,
+            'scheduled_at' => now()->subHours(rand(6, 72)),
+        ]);
+
+        $sportName = $tournament->sport->name;
+        $this->recordIndividualPlayerStats($match, $match->participant_a_id, rand(40, 90), $tournament->sport_id, $sportName);
+        $this->recordIndividualPlayerStats($match, $match->participant_b_id, rand(40, 90), $tournament->sport_id, $sportName);
+
+        $bracketService->advanceWinner($match->fresh());
+    }
+
+    // Sport-aware — pulls the same 5-axis field list the real venue-organizer
+    // scoreboards write to (api/app/Support/PlayerStatFieldSets.php) rather
+    // than hardcoding one sport's columns, so every sport's box score uses
+    // its own real stat names. The field literally named "points" or
+    // "points_won" (every sport's field set has exactly one of the two) gets
+    // the realistic top-scorer-weighted split; every other field gets an
+    // independent plausible value scaled off that field's own career
+    // scale_max ceiling.
+    private function recordPlayerStats(GameMatch $match, ?int $teamId, int $primaryStatTotal, int $sportId, string $sportName): void
     {
         if (! $teamId) {
             return;
@@ -194,25 +302,56 @@ class ExtendedTournamentsSeeder extends Seeder
             return;
         }
 
-        $points = $this->distributePoints($teamScore, $memberIds->count());
+        $fields = PlayerStatFieldSets::for($sportName);
+        if (! $fields) {
+            return;
+        }
+
+        $primaryKey = collect($fields)->pluck('key')->first(fn ($k) => in_array($k, ['points', 'points_won'], true)) ?? $fields[0]['key'];
+        $primaryValues = $this->distributePoints($primaryStatTotal, $memberIds->count());
 
         foreach ($memberIds as $i => $userId) {
+            $stats = [];
+            foreach ($fields as $field) {
+                $stats[$field['key']] = $field['key'] === $primaryKey
+                    ? $primaryValues[$i]
+                    : rand(0, max(1, intdiv($field['scale_max'], 15)));
+            }
+
             MatchPlayerStat::updateOrCreate(
                 ['match_id' => $match->id, 'user_id' => $userId],
-                [
-                    'team_id' => $teamId,
-                    'sport_id' => $sportId,
-                    'stats' => [
-                        'points' => $points[$i],
-                        'rebounds' => rand(0, 12),
-                        'assists' => rand(0, 8),
-                        'steals' => rand(0, 5),
-                        'blocks' => rand(0, 4),
-                        'fouls' => rand(0, 4),
-                    ],
-                ]
+                ['team_id' => $teamId, 'sport_id' => $sportId, 'stats' => $stats]
             );
         }
+    }
+
+    // Individual-match counterpart — same field-set logic, but a single
+    // player's stats row (team_id null) rather than splitting a total
+    // across a roster.
+    private function recordIndividualPlayerStats(GameMatch $match, ?int $userId, int $primaryStatTotal, int $sportId, string $sportName): void
+    {
+        if (! $userId) {
+            return;
+        }
+
+        $fields = PlayerStatFieldSets::for($sportName);
+        if (! $fields) {
+            return;
+        }
+
+        $primaryKey = collect($fields)->pluck('key')->first(fn ($k) => in_array($k, ['points', 'points_won'], true)) ?? $fields[0]['key'];
+
+        $stats = [];
+        foreach ($fields as $field) {
+            $stats[$field['key']] = $field['key'] === $primaryKey
+                ? $primaryStatTotal
+                : rand(0, max(1, intdiv($field['scale_max'], 15)));
+        }
+
+        MatchPlayerStat::updateOrCreate(
+            ['match_id' => $match->id, 'user_id' => $userId],
+            ['team_id' => null, 'sport_id' => $sportId, 'stats' => $stats]
+        );
     }
 
     // Splits a team's final score across its roster with a realistic
@@ -318,6 +457,187 @@ class ExtendedTournamentsSeeder extends Seeder
         $bracket = $bracketService->generate($tournament);
         $final = GameMatch::where('bracket_id', $bracket->id)->first();
         $this->simulateTeamMatch($final, $bracketService, 15, 21);
+    }
+
+    // 4 teams, 6-a-side — same "push it to the final" shape as the
+    // basketball flagship, just scaled to a 4-team bracket (2 semifinals
+    // instead of 4 quarterfinals + 2 semis).
+    /** @param  Collection<int, User>  $coaches
+     *  @param  Collection<int, User>  $players */
+    private function seedVolleyballFinals(
+        User $organizer, User $venueOrganizer, User $livestreamOrganizer,
+        Sport $sport, SportFormat $format, Venue $venue, Court $court,
+        Collection $coaches, Collection $players, BracketService $bracketService,
+    ): Tournament {
+        $tournament = Tournament::create([
+            'organizer_id' => $organizer->id,
+            'name' => 'Morong Volleyball Championship Cup',
+            'sport_id' => $sport->id,
+            'sport_format_id' => $format->id,
+            'format' => 'single_elimination',
+            'starts_at' => now()->subDays(2),
+            'venue_id' => $venue->id,
+            'venue_organizer_id' => $venueOrganizer->id,
+            'livestream_organizer_id' => $livestreamOrganizer->id,
+            'status' => 'ongoing',
+            'scoring_type' => 'best_of_sets',
+            'sets_to_win' => 3,
+        ]);
+
+        $teamNames = ['Coastal Spikers', 'Highland Blockers', 'River Aces', 'Summit Diggers'];
+        foreach ($teamNames as $i => $teamName) {
+            $roster = $players->slice($i * 6, 6)->values();
+            $team = $this->makeTeam($sport, $format, $coaches[$i % $coaches->count()], $teamName, $roster);
+            $this->registerTeam($tournament, $team);
+        }
+
+        $bracket = $bracketService->generate($tournament);
+
+        $semis = GameMatch::where('bracket_id', $bracket->id)->where('round', 1)->orderBy('id')->get();
+        foreach ($semis as $match) {
+            $this->simulateBestOfSetsTeamMatch($match, $bracketService, $tournament);
+        }
+
+        GameMatch::where('bracket_id', $bracket->id)->where('round', 2)->first()
+            ?->update(['scheduled_at' => now()->addMinutes(9), 'court_id' => $court->id]);
+
+        return $tournament;
+    }
+
+    // 4 doubles teams — same "at the final" shape again, best-of-sets.
+    /** @param  Collection<int, User>  $coaches
+     *  @param  Collection<int, User>  $players */
+    private function seedBadmintonFinals(
+        User $organizer, User $venueOrganizer, User $livestreamOrganizer,
+        Sport $sport, SportFormat $format, Venue $venue, Court $court,
+        Collection $coaches, Collection $players, BracketService $bracketService,
+    ): Tournament {
+        $tournament = Tournament::create([
+            'organizer_id' => $organizer->id,
+            'name' => 'Morong Badminton Doubles Championship',
+            'sport_id' => $sport->id,
+            'sport_format_id' => $format->id,
+            'format' => 'single_elimination',
+            'starts_at' => now()->subDays(1),
+            'venue_id' => $venue->id,
+            'venue_organizer_id' => $venueOrganizer->id,
+            'livestream_organizer_id' => $livestreamOrganizer->id,
+            'status' => 'ongoing',
+            'scoring_type' => 'best_of_sets',
+            'sets_to_win' => 2,
+        ]);
+
+        $teamNames = ['Shuttle Storm', 'Featherweight Falcons', 'Smash Brigade', 'Net Guardians'];
+        foreach ($teamNames as $i => $teamName) {
+            $roster = $players->slice(20 + $i * 2, 2)->values();
+            $team = $this->makeTeam($sport, $format, $coaches[$i % $coaches->count()], $teamName, $roster);
+            $this->registerTeam($tournament, $team);
+        }
+
+        $bracket = $bracketService->generate($tournament);
+
+        $semis = GameMatch::where('bracket_id', $bracket->id)->where('round', 1)->orderBy('id')->get();
+        foreach ($semis as $match) {
+            $this->simulateBestOfSetsTeamMatch($match, $bracketService, $tournament, 15, 21);
+        }
+
+        GameMatch::where('bracket_id', $bracket->id)->where('round', 2)->first()
+            ?->update(['scheduled_at' => now()->addMinutes(10), 'court_id' => $court->id]);
+
+        return $tournament;
+    }
+
+    // 4 individual players, singles — taken all the way to a crowned
+    // champion (unlike the "at the final" tournaments above), for variety
+    // and to give the newsfeed a genuine champion-congrats post to show.
+    /** @param  Collection<int, User>  $players */
+    private function seedTennisCompleted(
+        User $organizer, User $venueOrganizer, User $livestreamOrganizer,
+        Sport $sport, Venue $venue, Collection $players, BracketService $bracketService,
+    ): Tournament {
+        $tournament = Tournament::create([
+            'organizer_id' => $organizer->id,
+            'name' => 'Morong Tennis Singles Championship',
+            'sport_id' => $sport->id,
+            'format' => 'single_elimination',
+            'starts_at' => now()->subDays(4),
+            'ends_at' => now()->subDays(4)->addHours(3),
+            'venue_id' => $venue->id,
+            'venue_organizer_id' => $venueOrganizer->id,
+            'livestream_organizer_id' => $livestreamOrganizer->id,
+            'status' => 'ongoing',
+            'scoring_type' => 'best_of_sets',
+            'sets_to_win' => 2,
+        ]);
+
+        foreach ($players->slice(30, 4) as $registrant) {
+            TournamentRegistration::create([
+                'tournament_id' => $tournament->id,
+                'user_id' => $registrant->id,
+                'registered_by' => $registrant->id,
+                'status' => 'confirmed',
+            ]);
+        }
+
+        $bracket = $bracketService->generate($tournament);
+
+        $semis = GameMatch::where('bracket_id', $bracket->id)->where('round', 1)->orderBy('id')->get();
+        foreach ($semis as $match) {
+            $this->simulateBestOfSetsIndividualMatch($match, $bracketService, $tournament, 3, 6);
+        }
+
+        $final = GameMatch::where('bracket_id', $bracket->id)->where('round', 2)->first();
+        if ($final) {
+            $this->simulateBestOfSetsIndividualMatch($final, $bracketService, $tournament, 3, 6);
+        }
+
+        return $tournament;
+    }
+
+    // 4 doubles teams — also taken all the way to a crowned champion.
+    /** @param  Collection<int, User>  $coaches
+     *  @param  Collection<int, User>  $players */
+    private function seedTableTennisCompleted(
+        User $organizer, User $venueOrganizer, User $livestreamOrganizer,
+        Sport $sport, Venue $venue, Court $court, Collection $coaches, Collection $players, BracketService $bracketService,
+    ): Tournament {
+        $tournament = Tournament::create([
+            'organizer_id' => $organizer->id,
+            'name' => 'Morong Table Tennis Doubles Championship',
+            'sport_id' => $sport->id,
+            'sport_format_id' => SportFormat::where('sport_id', $sport->id)->where('name', 'Doubles')->value('id'),
+            'format' => 'single_elimination',
+            'starts_at' => now()->subDays(5),
+            'ends_at' => now()->subDays(5)->addHours(2),
+            'venue_id' => $venue->id,
+            'venue_organizer_id' => $venueOrganizer->id,
+            'livestream_organizer_id' => $livestreamOrganizer->id,
+            'status' => 'ongoing',
+            'scoring_type' => 'best_of_sets',
+            'sets_to_win' => 3,
+        ]);
+
+        $format = SportFormat::find($tournament->sport_format_id);
+        $teamNames = ['Paddle Panthers', 'Spin City Squad', 'Topspin Titans', 'Backhand Bandits'];
+        foreach ($teamNames as $i => $teamName) {
+            $roster = $players->slice($i * 2, 2)->values();
+            $team = $this->makeTeam($sport, $format, $coaches[($i + 4) % $coaches->count()], $teamName, $roster);
+            $this->registerTeam($tournament, $team);
+        }
+
+        $bracket = $bracketService->generate($tournament);
+
+        $semis = GameMatch::where('bracket_id', $bracket->id)->where('round', 1)->orderBy('id')->get();
+        foreach ($semis as $match) {
+            $this->simulateBestOfSetsTeamMatch($match, $bracketService, $tournament, 4, 11);
+        }
+
+        $final = GameMatch::where('bracket_id', $bracket->id)->where('round', 2)->first();
+        if ($final) {
+            $this->simulateBestOfSetsTeamMatch($final, $bracketService, $tournament, 4, 11);
+        }
+
+        return $tournament;
     }
 
     private function seedDraftVolleyball(User $organizer, User $venueOrganizer, User $livestreamOrganizer, Sport $sport): void
