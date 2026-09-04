@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Court extends Model
 {
-    protected $fillable = ['venue_id', 'name', 'type', 'capacity', 'status'];
+    protected $fillable = ['venue_id', 'name', 'type', 'capacity', 'status', 'block_hours', 'block_price'];
 
     public function venue(): BelongsTo
     {

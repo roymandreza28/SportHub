@@ -73,15 +73,15 @@ export function LiveRelayVideo({ livestreamId }: { livestreamId: number }) {
   }, [livestreamId])
 
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-900">
+    <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
       <video ref={videoRef} autoPlay playsInline className="h-full w-full" />
       {!connected && (
-        <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-300">
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-pure-white/70">
           Connecting to the live broadcast...
         </div>
       )}
       {connected && needsPlayClick && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/60">
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/60">
           <button
             onClick={() => videoRef.current?.play().then(() => setNeedsPlayClick(false))}
             className={buttonPrimary}

@@ -48,7 +48,7 @@ export function UserActionsModal({ user, onClose }: { user: AdminUser; onClose: 
   })
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/60 p-4">
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4">
       <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
         <h3 className="text-base font-bold text-slate-900">Manage {user.name}</h3>
         <p className="mt-1 text-xs text-slate-500">{user.email}</p>

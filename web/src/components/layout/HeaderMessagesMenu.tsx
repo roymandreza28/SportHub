@@ -7,12 +7,17 @@ import { useChatUI } from '../../lib/ChatUIContext'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { ConversationList, conversationTitle } from '../social/ConversationList'
 import { NewConversationModal } from '../social/NewConversationModal'
+import { ColleagueDirectoryModal } from '../social/ColleagueDirectoryModal'
 import { IconMessageCircle, IconSearch, IconX } from './icons'
 
 type FilterTab = 'all' | 'unread' | 'groups'
 
 export function HeaderMessagesMenu() {
-  const { user } = useAuth()
+  const { user, hasRole } = useAuth()
+  // The organizer family has no friends list (only player/coach hold
+  // 'manage friendships'), so "New" opens the staff directory instead of
+  // NewConversationModal's friend picker — see ColleagueDirectoryModal.
+  const isOrganizerFamily = hasRole('organizer', 'venue_organizer', 'livestream_organizer')
   const { openChatWindow } = useChatUI()
   const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
@@ -90,7 +95,7 @@ export function HeaderMessagesMenu() {
             key={t}
             onClick={() => setTab(t)}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize transition ${
-              tab === t ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              tab === t ? 'bg-teal-600 text-pure-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
             {t}
@@ -118,7 +123,7 @@ export function HeaderMessagesMenu() {
       >
         <IconMessageCircle className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-semibold text-white">
+          <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-semibold text-pure-white">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -134,7 +139,18 @@ export function HeaderMessagesMenu() {
           short box instead of the real viewport. */}
       {open && isMobile && createPortal(<div className="fixed inset-0 z-40">{panel}</div>, document.body)}
 
-      {showNewModal && (
+      {showNewModal && isOrganizerFamily && (
+        <ColleagueDirectoryModal
+          onClose={() => setShowNewModal(false)}
+          onOpened={(conversationId) => {
+            setShowNewModal(false)
+            setOpen(false)
+            openChatWindow(conversationId)
+          }}
+        />
+      )}
+
+      {showNewModal && !isOrganizerFamily && (
         <NewConversationModal
           onClose={() => setShowNewModal(false)}
           onCreated={(conversationId) => {

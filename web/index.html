@@ -3,7 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0d9488" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- iOS only grants Web Push permission to a site added to the Home
+         Screen — apple-mobile-web-app-capable is what makes that installed
+         icon launch as a standalone app instead of just a Safari bookmark. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Sporthub</title>
   </head>
   <body>

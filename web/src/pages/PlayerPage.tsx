@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import type { Venue } from '../lib/venueApi'
@@ -40,6 +40,14 @@ export function PlayerPage() {
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
   const [searchParams] = useSearchParams()
   const [active, setActive] = useState(searchParams.get('tab') ?? NAV_ITEMS[0].id)
+  // Re-applies ?tab= whenever it changes, not just on first mount — a
+  // notification click (e.g. "you were matched" → /player?tab=matchmaking)
+  // navigates to this same route while it's already mounted, which the
+  // useState initializer above alone would never see.
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab) setActive(tab)
+  }, [searchParams])
   const [venuesSubTab, setVenuesSubTab] = useState<'venues' | 'bookings'>('venues')
   const { openChatWindow } = useChatUI()
   const { user } = useAuth()

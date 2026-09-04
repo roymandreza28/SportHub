@@ -1,16 +1,32 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../lib/AuthContext'
+import { useChatUI } from '../../lib/ChatUIContext'
+import { useTheme } from '../../lib/ThemeContext'
+import { contactAdmin } from '../../lib/chatApi'
 import { AccountSettingsModal } from './AccountSettingsModal'
 import { Avatar } from './Avatar'
-import { IconChevronDown, IconLogOut, IconSettings, IconSwitch } from './icons'
+import { IconChevronDown, IconHelpCircle, IconLogOut, IconMoon, IconSettings, IconSun, IconSwitch } from './icons'
 
 export function UserMenu() {
   const { user, logout, hasRole } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { openChatWindow } = useChatUI()
   const [open, setOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  const contactAdminMutation = useMutation({
+    mutationFn: contactAdmin,
+    onSuccess: (conversation) => {
+      queryClient.invalidateQueries({ queryKey: ['social', 'conversations'] })
+      openChatWindow(conversation.id)
+      setOpen(false)
+    },
+  })
 
   useEffect(() => {
     if (!open) return
@@ -102,6 +118,39 @@ export function UserMenu() {
                   <IconSettings className="h-4 w-4" />
                   Account settings
                 </button>
+
+                <button
+                  onClick={toggleTheme}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+                >
+                  {theme === 'dark' ? <IconMoon className="h-4 w-4" /> : <IconSun className="h-4 w-4" />}
+                  <span className="flex-1">{theme === 'dark' ? 'Dark mode' : 'Light mode'}</span>
+                  <span
+                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-slate-200 bg-slate-100 transition`}
+                  >
+                    <span
+                      className={`absolute left-0.5 inline-block h-3.5 w-3.5 rounded-full bg-teal-600 shadow transition-transform ${
+                        theme === 'dark' ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </span>
+                </button>
+
+                {hasRole('player', 'coach', 'venue_facilitator', 'organizer', 'venue_organizer', 'livestream_organizer') && (
+                  <>
+                    <button
+                      onClick={() => contactAdminMutation.mutate()}
+                      disabled={contactAdminMutation.isPending}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50"
+                    >
+                      <IconHelpCircle className="h-4 w-4" />
+                      {contactAdminMutation.isPending ? 'Opening...' : 'FAQ'}
+                    </button>
+                    {contactAdminMutation.isError && (
+                      <p className="px-3 pb-1 text-xs text-red-600">Couldn't reach support. Try again shortly.</p>
+                    )}
+                  </>
+                )}
 
                 {canSwitchCoachPlayer && (
                   <>

@@ -23,7 +23,7 @@ export function PostGrid({ posts, onDelete }: { posts: Post[]; onDelete?: (post:
       </div>
 
       {selected && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/70 p-4" onClick={() => setSelected(null)}>
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/70 p-4" onClick={() => setSelected(null)}>
           <div className="max-w-lg rounded-xl bg-white p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <img src={selected.image_url} alt={selected.caption ?? ''} className="max-h-[70vh] w-full rounded-lg object-contain" />
             {selected.caption && <p className="mt-3 text-sm text-slate-700">{selected.caption}</p>}

@@ -8,9 +8,12 @@ use App\Models\MatchmakingRequest;
 use App\Models\Sport;
 use App\Models\SportFormat;
 use App\Models\Team;
+use App\Models\Venue;
 use App\Services\MatchmakingCleanupService;
 use App\Services\NotificationService;
+use App\Services\VenueBookingService;
 use App\Support\Broadcasting;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -31,6 +34,7 @@ class MatchmakingRequestController extends Controller
         $requests->each(function (MatchmakingRequest $mmr) {
             $match = MatchmakingMatch::where('request_a_id', $mmr->id)
                 ->orWhere('request_b_id', $mmr->id)
+                ->with('venueRegistration:id,venue_id,status,starts_at,ends_at')
                 ->first();
 
             if ($match) {
@@ -39,6 +43,20 @@ class MatchmakingRequestController extends Controller
                     ->find($opponentRequestId);
                 $mmr->opponent = $opponentRequest?->user;
                 $mmr->opponent_team = $opponentRequest?->team;
+
+                // The down-payment prompt on the frontend keys off this —
+                // present only when the pair's chosen venue+time actually
+                // got auto-reserved (see store()'s VenueBookingService call).
+                if ($match->venueRegistration) {
+                    $conversation = $match->venueRegistration->conversation()->first(['conversations.id']);
+                    $mmr->venue_registration = [
+                        'id' => $match->venueRegistration->id,
+                        'status' => $match->venueRegistration->status,
+                        'starts_at' => $match->venueRegistration->starts_at,
+                        'ends_at' => $match->venueRegistration->ends_at,
+                        'conversation_id' => $conversation?->id,
+                    ];
+                }
             }
         });
 
@@ -60,8 +78,20 @@ class MatchmakingRequestController extends Controller
             'sport_format_id' => ['required', 'exists:sport_formats,id'],
             'team_id' => ['nullable', 'exists:teams,id'],
             'venue_id' => ['nullable', 'exists:venues,id'],
-            'preferred_start_at' => ['nullable', 'date', 'after:now'],
-            'preferred_end_at' => ['nullable', 'date', 'after:preferred_start_at'],
+            // Booking a specific venue means booking a specific slot — both
+            // ends of it are required the moment a venue is named, not
+            // optional extras. The 3-hour floor (not just "in the future")
+            // gives the venue facilitator real lead time to see and approve
+            // the auto-reservation store() creates below before it starts.
+            'preferred_start_at' => [
+                'nullable', 'date', 'required_with:venue_id',
+                function ($attribute, $value, $fail) {
+                    if ($value && Carbon::parse($value)->lt(now()->addHours(3))) {
+                        $fail('The match must be at least 3 hours from now.');
+                    }
+                },
+            ],
+            'preferred_end_at' => ['nullable', 'date', 'after:preferred_start_at', 'required_with:venue_id'],
         ]);
 
         $user = $request->user();
@@ -122,13 +152,36 @@ class MatchmakingRequestController extends Controller
                 ->first();
 
             if ($candidate) {
-                MatchmakingMatch::create([
+                $match = MatchmakingMatch::create([
                     'request_a_id' => $candidate->id,
                     'request_b_id' => $mine->id,
                     'matched_at' => now(),
                 ]);
                 $candidate->update(['status' => 'matched']);
                 $mine->update(['status' => 'matched']);
+
+                // Whichever side actually named a venue+time is the one
+                // whose preference gets auto-reserved — "join" mode never
+                // sets these, and a "create" mode request matched against
+                // an open-to-anywhere candidate is the common case. If
+                // reservation fails (slot taken in the race between this
+                // request and the one it matched against, venue since
+                // closed, etc.) the pair still stands — see
+                // VenueBookingService::reserve()'s own doc comment for why
+                // that's a soft failure here, not an aborted request.
+                $booker = $mine->venue_id ? $mine : ($candidate->venue_id ? $candidate : null);
+                $registration = null;
+
+                if ($booker && ($venue = Venue::find($booker->venue_id))) {
+                    $registration = VenueBookingService::reserve(
+                        $venue, null, $booker->preferred_start_at, $booker->preferred_end_at, $booker->user_id
+                    );
+
+                    if ($registration) {
+                        $match->update(['venue_registration_id' => $registration->id]);
+                        VenueBookingService::ensureBookingConversation($registration);
+                    }
+                }
 
                 Broadcasting::safely(fn () => MatchmakingPairFound::dispatch($candidate->fresh(), $mine->fresh()));
 
@@ -147,6 +200,24 @@ class MatchmakingRequestController extends Controller
                     'opponent_name' => $candidate->user->name,
                     'sport_name' => $sportName,
                 ]);
+
+                // A separate notification (rather than folding this into
+                // matchmaking_paired above) so the frontend can show the
+                // "pay a down payment" prompt distinctly from the plain
+                // "you've been matched" one, and so a match with no venue
+                // preference never gets an empty/irrelevant prompt.
+                if ($registration) {
+                    $venueName = $registration->venue->name;
+
+                    foreach ([$candidate->user_id, $user->id] as $notifyUserId) {
+                        NotificationService::send($notifyUserId, 'matchmaking_venue_reserved', [
+                            'matchmaking_request_id' => $notifyUserId === $user->id ? $mine->id : $candidate->id,
+                            'venue_registration_id' => $registration->id,
+                            'venue_name' => $venueName,
+                            'starts_at' => $registration->starts_at,
+                        ]);
+                    }
+                }
             }
 
             return response()->json($mine->fresh(['sport', 'venue', 'sportFormat', 'team.members.user:id,name,email']), 201);

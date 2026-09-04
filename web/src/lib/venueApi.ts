@@ -12,6 +12,13 @@ export type Court = {
   type: 'court' | 'field' | 'pool'
   capacity: number | null
   status: 'active' | 'maintenance'
+  // Set only for a court sold as a fixed-length, fixed-price package
+  // instead of the venue's flat price_per_hour (e.g. BRCC's badminton
+  // gymnasium: ₱1,500 for an exact 3-hour block, no hourly rate at all).
+  // When set, a booking's duration must be an exact multiple of
+  // block_hours — enforced server-side in VenueRegistrationController.
+  block_hours: number | null
+  block_price: string | null
 }
 
 export type Equipment = {
@@ -55,8 +62,27 @@ export type ScheduleEvent = {
   user: { id: number; name: string; email: string } | null
   walk_in_name: string | null
   is_walk_in: boolean
-  // Only present once approved — see MyVenueRegistration in playerApi.ts.
+  // Present the instant the booking is requested, not only once approved —
+  // see MyVenueRegistration in playerApi.ts.
   conversation_id: number | null
+}
+
+// Straight duration × rate — venues in this app carry one flat
+// price_per_hour rather than per-sport/per-court rates (see VenueSeeder's
+// own doc comment on that limitation), so this is the full extent of the
+// calculation. Null whenever the venue hasn't published a rate at all,
+// rather than silently treating an unpublished rate as free.
+export function calculateVenueRent(venue: Venue, startsAtIso: string, endsAtIso: string): number | null {
+  if (!venue.price_per_hour) return null
+
+  const hours = (new Date(endsAtIso).getTime() - new Date(startsAtIso).getTime()) / (1000 * 60 * 60)
+  if (!Number.isFinite(hours) || hours <= 0) return null
+
+  return Number(venue.price_per_hour) * hours
+}
+
+export function formatPeso(amount: number): string {
+  return `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
 
 export async function fetchVenues(sportId?: number) {

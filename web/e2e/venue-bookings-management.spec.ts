@@ -20,7 +20,7 @@ test('a facilitator browses bookings per venue, approves one, and views it on th
     await facilitatorPage.getByRole('button', { name: 'Venues', exact: true }).click()
     await facilitatorPage.getByRole('button', { name: '+ Create Venue', exact: true }).click()
     await facilitatorPage.getByLabel('Name').fill(venueName)
-    await facilitatorPage.getByLabel('Address / Location').fill('Brgy. San Juan, Morong, Rizal')
+    await facilitatorPage.getByLabel('Address / Location').fill('Brgy. San Carlos, Binangonan, Rizal')
     await facilitatorPage.getByPlaceholder('Court name (optional)').fill('Court 1')
     await facilitatorPage.getByRole('button', { name: '+ Add court', exact: true }).click()
     await facilitatorPage.getByRole('button', { name: 'Create venue', exact: true }).click()

@@ -36,7 +36,7 @@ class EvaluationController extends Controller
         $data = $request->validate([
             'player_id' => ['required', 'exists:users,id'],
             'sport_id' => ['required', 'exists:sports,id'],
-            'level' => ['required', 'in:beginner,casual_player,developing_athlete,competitive_athlete'],
+            'level' => ['required', 'in:beginner,casual_player,developing_athlete,competitive_athlete,professional'],
             'score' => ['nullable', 'numeric', 'between:0,999.99'],
             'criteria' => ['nullable', 'array'],
             'notes' => ['nullable', 'string', 'max:2000'],

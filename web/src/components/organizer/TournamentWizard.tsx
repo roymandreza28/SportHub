@@ -25,6 +25,13 @@ const SPORT_FORMATS: Record<string, TournamentFormat[]> = {
   Pickleball: ['single_elimination', 'double_elimination', 'group_stage'],
   Tennis: ['single_elimination', 'double_elimination', 'round_robin', 'group_stage', 'swiss'],
   'Table Tennis': ['round_robin', 'single_elimination', 'swiss'],
+  // Scratch Singles / Handicap Doubles / Team Baker are entrant STRUCTURE,
+  // not bracket shape — those live in the "Team format" dropdown below
+  // (seeded as this sport's SportFormat rows) rather than here. What
+  // bowling calls "Eliminator Rounds" and "Bracket Side Events" are both
+  // just single elimination at the bracket-topology level a tournament here
+  // already models — see the note below.
+  Bowling: ['single_elimination', 'double_elimination', 'round_robin'],
 }
 
 const FORMAT_LABELS: Record<TournamentFormat, string> = {
@@ -73,6 +80,11 @@ const FORMAT_NOTES: Record<string, Partial<Record<TournamentFormat, string>>> = 
     round_robin: 'Every player faces every other player — fair and predictable, ideal for small fields and leagues.',
     single_elimination: 'Also called "Knockout" — lose once and you\'re out. Fast-paced, but needs one strong performance throughout.',
     swiss: 'Players are matched against opponents with similar records each round — ideal for larger fields.',
+  },
+  Bowling: {
+    single_elimination: 'Covers both "Eliminator Rounds" (lowest game score of each pairing is knocked out) and "Bracket Side Events" (a small side bracket run alongside the main event) — fast and dramatic, but one bad game ends a run.',
+    double_elimination: 'A bowler is eliminated only after two losses — more forgiving than a straight eliminator bracket.',
+    round_robin: 'Everyone bowls everyone — best for a small, social, or fundraiser-style field (pairs well with Handicap Doubles).',
   },
 }
 

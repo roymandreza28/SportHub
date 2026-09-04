@@ -107,6 +107,12 @@ services:
         value: 443
       - key: REVERB_SCHEME
         value: https
+      - key: VAPID_PUBLIC_KEY
+        sync: false # generate with Minishlink\WebPush\VAPID::createVapidKeys() — see .env.production.example
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:admin@sporthub.test
 
   - type: web
     name: sporthub-reverb

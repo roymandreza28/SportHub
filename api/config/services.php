@@ -35,4 +35,18 @@ return [
         ],
     ],
 
+    // Web Push (browser/device notifications) — VAPID identifies this
+    // server to push services (FCM, Mozilla's push service, etc.) without
+    // needing a per-platform API key the way native push (APNs/FCM app
+    // credentials) would. Generated once via
+    // Minishlink\WebPush\VAPID::createVapidKeys() — regenerating these
+    // invalidates every existing subscription (every device would need to
+    // re-subscribe), so treat them as a long-lived secret, not something to
+    // rotate casually.
+    'webpush' => [
+        'public_key' => env('VAPID_PUBLIC_KEY'),
+        'private_key' => env('VAPID_PRIVATE_KEY'),
+        'subject' => env('VAPID_SUBJECT', 'mailto:admin@sporthub.test'),
+    ],
+
 ];

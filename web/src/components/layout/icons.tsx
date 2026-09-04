@@ -279,3 +279,28 @@ export function IconImage(props: IconProps) {
     props
   )
 }
+
+export function IconHelpCircle(props: IconProps) {
+  return base(
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.3 9.2a2.7 2.7 0 0 1 5.2.9c0 1.8-2.5 2.1-2.5 3.9" />
+      <circle cx="12" cy="17" r="0.1" fill="currentColor" stroke="currentColor" />
+    </>,
+    props
+  )
+}
+
+export function IconSun(props: IconProps) {
+  return base(
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
+    </>,
+    props
+  )
+}
+
+export function IconMoon(props: IconProps) {
+  return base(<path d="M20 14.5a8.5 8.5 0 1 1-9.5-9.4 7 7 0 0 0 9.5 9.4Z" />, props)
+}

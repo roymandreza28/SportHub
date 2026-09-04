@@ -80,7 +80,7 @@ export function ProfileHeaderCard({
                 aria-label={avatarUrl ? 'Change profile photo' : 'Add profile photo'}
               >
                 <Avatar name={name} url={avatarUrl} size="xl" className="border-4 border-white shadow" />
-                <span className="absolute inset-0 hidden items-center justify-center rounded-full bg-black/40 text-xs font-semibold text-white group-hover:flex">
+                <span className="absolute inset-0 hidden items-center justify-center rounded-full bg-black/40 text-xs font-semibold text-pure-white group-hover:flex">
                   {avatarPending ? '...' : 'Change'}
                 </span>
               </button>

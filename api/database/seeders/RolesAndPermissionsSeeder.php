@@ -23,17 +23,20 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage courts',
             'manage equipment',
             'manage venue registrations',
+            'manage news',
         ],
         // Scores/fouls/timeouts for any organizer's ongoing tournament —
-        // deliberately excludes 'manage tournaments'/'generate bracket'/
-        // 'manage news' so this role can't create or restructure tournaments.
+        // deliberately excludes 'manage tournaments'/'generate bracket' so
+        // this role can't create or restructure tournaments.
         'venue_organizer' => [
             'update match score',
+            'manage news',
         ],
         // Feeds camera footage into a livestream tied to any organizer's
         // tournament — deliberately excludes every other organizer ability.
         'livestream_organizer' => [
             'manage livestreams',
+            'manage news',
         ],
         'player' => [
             'create venue registration',

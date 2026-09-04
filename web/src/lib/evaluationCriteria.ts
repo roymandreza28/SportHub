@@ -1,37 +1,73 @@
-export type GeneralCriterionKey =
-  | 'physical_athletic_capabilities'
-  | 'technical_skill_proficiency'
-  | 'mental_game_understanding'
-  | 'team_interaction'
-  | 'psychological_resilience'
+export type AttributeCriterionDef = { key: string; label: string; description: string }
 
-export const GENERAL_CRITERIA: { key: GeneralCriterionKey; label: string; description: string }[] = [
-  {
-    key: 'physical_athletic_capabilities',
-    label: 'Physical Athletic Capabilities',
-    description: 'Speed, lateral quickness, vertical jump, endurance, strength.',
-  },
-  {
-    key: 'technical_skill_proficiency',
-    label: 'Technical Skill Proficiency',
-    description: 'Shooting mechanics, ball handling, footwork, defensive positioning, passing accuracy.',
-  },
-  {
-    key: 'mental_game_understanding',
-    label: 'Mental Game Understanding',
-    description: 'Basketball/game IQ, reading the defense, decision speed, game comprehension.',
-  },
-  {
-    key: 'team_interaction',
-    label: 'Team Interaction',
-    description: 'Communication on defense, leadership in tight moments, willingness to accept a role, coachability.',
-  },
-  {
-    key: 'psychological_resilience',
-    label: 'Psychological Resilience',
-    description: 'Focus under pressure, emotional control after mistakes, consistency regardless of the score.',
-  },
-]
+// Every sport's own attribute-rating categories (coach rates each 1-10,
+// grouped into an overall skill level) — replaces a single generic
+// sport-agnostic 5-criterion list with real per-sport categories, since
+// e.g. "Ball Handling" only means something for Basketball and "Spin
+// Control" only for Table Tennis.
+export const SPORT_ATTRIBUTE_CRITERIA: Record<string, AttributeCriterionDef[]> = {
+  Basketball: [
+    { key: 'shooting', label: 'Shooting', description: 'Accuracy, range.' },
+    { key: 'ball_handling', label: 'Ball Handling', description: 'Dribbling, control under pressure.' },
+    { key: 'passing', label: 'Passing', description: 'Vision, accuracy.' },
+    { key: 'defense', label: 'Defense', description: 'On-ball, help defense, steals, blocks.' },
+    { key: 'athleticism', label: 'Athleticism', description: 'Speed, strength, vertical jump.' },
+    { key: 'basketball_iq', label: 'Basketball IQ', description: 'Decision-making, awareness.' },
+  ],
+  Volleyball: [
+    { key: 'serving', label: 'Serving', description: 'Accuracy, power, consistency.' },
+    { key: 'passing', label: 'Passing', description: 'Serve receive, forearm control.' },
+    { key: 'setting', label: 'Setting', description: 'Precision, decision-making.' },
+    { key: 'attacking', label: 'Attacking', description: 'Spiking power, shot variety.' },
+    { key: 'blocking', label: 'Blocking', description: 'Timing, positioning.' },
+    { key: 'defense', label: 'Defense', description: 'Digging, coverage, reflexes.' },
+    { key: 'volleyball_iq', label: 'Volleyball IQ', description: 'Rotations, tactical awareness, communication.' },
+  ],
+  Badminton: [
+    { key: 'serving', label: 'Serving', description: 'Short, flick, drive.' },
+    { key: 'footwork', label: 'Footwork', description: 'Speed, agility, recovery.' },
+    { key: 'attacking', label: 'Attacking', description: 'Smash power, placement.' },
+    { key: 'defensive', label: 'Defensive', description: 'Blocks, lifts, counter-smashes.' },
+    { key: 'net_play', label: 'Net Play', description: 'Drops, tumbles, kills.' },
+    { key: 'shot_variety', label: 'Shot Variety', description: 'Clears, drives, cross-court.' },
+    { key: 'badminton_iq', label: 'Badminton IQ', description: 'Tactics, anticipation, positioning.' },
+  ],
+  Pickleball: [
+    { key: 'serving_return', label: 'Serving & Return', description: 'Accuracy, depth, consistency.' },
+    { key: 'dinking', label: 'Dinking', description: 'Control, patience, placement.' },
+    { key: 'third_shot', label: 'Third-Shot Drop/Drive', description: 'Execution, decision-making.' },
+    { key: 'volleys_net_play', label: 'Volleys & Net Play', description: 'Reaction time, dominance at the kitchen line.' },
+    { key: 'defense', label: 'Defense', description: 'Resets, blocks, counter-attacks.' },
+    { key: 'footwork_positioning', label: 'Footwork & Positioning', description: 'Court coverage, recovery.' },
+    { key: 'pickleball_iq', label: 'Pickleball IQ', description: 'Strategy, anticipation, teamwork.' },
+  ],
+  Tennis: [
+    { key: 'serve', label: 'Serve', description: 'Power, spin, accuracy.' },
+    { key: 'forehand_backhand', label: 'Forehand & Backhand', description: 'Consistency, variety, placement.' },
+    { key: 'volleys_net_play', label: 'Volleys & Net Play', description: 'Reflexes, control, positioning.' },
+    { key: 'footwork_movement', label: 'Footwork & Movement', description: 'Speed, recovery, agility.' },
+    { key: 'defense', label: 'Defense', description: 'Counter-punching, lobs, passing shots.' },
+    { key: 'tactical_iq', label: 'Tactical IQ', description: 'Shot selection, strategy, anticipation.' },
+    { key: 'mental_game', label: 'Mental Game', description: 'Focus, resilience, composure.' },
+  ],
+  'Table Tennis': [
+    { key: 'serving', label: 'Serving', description: 'Spin, placement, deception.' },
+    { key: 'forehand_backhand', label: 'Forehand & Backhand', description: 'Drive, loop, smash, consistency.' },
+    { key: 'blocking_defense', label: 'Blocking & Defense', description: 'Timing, control, anticipation.' },
+    { key: 'footwork_positioning', label: 'Footwork & Positioning', description: 'Speed, recovery, agility.' },
+    { key: 'spin_control', label: 'Spin Control', description: 'Topspin, backspin, sidespin variation.' },
+    { key: 'tactical_iq', label: 'Tactical IQ', description: 'Shot selection, rally strategy, anticipation.' },
+    { key: 'mental_game', label: 'Mental Game', description: 'Focus, resilience, composure.' },
+  ],
+  Bowling: [
+    { key: 'release_accuracy', label: 'Release & Accuracy', description: 'Consistency, control, repeatability.' },
+    { key: 'hook_ball_motion', label: 'Hook & Ball Motion', description: 'Ability to adjust to lane conditions.' },
+    { key: 'spare_shooting', label: 'Spare Shooting', description: 'Conversion rate, reliability.' },
+    { key: 'lane_reading', label: 'Lane Reading', description: 'Oil pattern recognition, adjustments.' },
+    { key: 'mental_game', label: 'Mental Game', description: 'Focus, resilience, composure.' },
+    { key: 'physical_conditioning', label: 'Physical Conditioning', description: 'Stamina, injury prevention.' },
+  ],
+}
 
 export type StatFieldDef = { key: string; label: string; unit?: string }
 
@@ -151,7 +187,7 @@ export const SPORT_COMPUTED_FIELDS: Record<string, ComputedStatDef[]> = {
 }
 
 export type EvaluationCriteria = {
-  general?: Partial<Record<GeneralCriterionKey, number>>
+  attributes?: Partial<Record<string, number>>
   sport_stats?: {
     raw?: Record<string, number>
     computed?: Record<string, number>

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../../lib/AuthContext'
+import { buttonPrimary, fieldGroup, input, label } from '../../lib/formStyles'
 
 export function LoginForm({
   onSuccess,
@@ -29,35 +30,39 @@ export function LoginForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-      <input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className="rounded border px-3 py-2"
-        required
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className="rounded border px-3 py-2"
-        required
-      />
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div className={fieldGroup}>
+        <label className={label} htmlFor="login-email">Email</label>
+        <input
+          id="login-email"
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className={input}
+          required
+        />
+      </div>
+      <div className={fieldGroup}>
+        <label className={label} htmlFor="login-password">Password</label>
+        <input
+          id="login-password"
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className={input}
+          required
+        />
+      </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="rounded bg-indigo-600 px-3 py-2 text-white disabled:opacity-50"
-      >
+      <button type="submit" disabled={isSubmitting} className={`${buttonPrimary} justify-center py-2.5`}>
         {isSubmitting ? 'Logging in...' : 'Log in'}
       </button>
       {onSwitchToRegister && (
         <p className="text-center text-sm text-slate-600">
           No account?{' '}
-          <button type="button" onClick={onSwitchToRegister} className="text-indigo-600 hover:underline">
+          <button type="button" onClick={onSwitchToRegister} className="font-medium text-teal-600 hover:underline">
             Register
           </button>
         </p>

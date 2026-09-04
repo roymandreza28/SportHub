@@ -7,9 +7,9 @@ export function LoginPage() {
   return (
     <div className="mx-auto flex max-w-sm flex-col gap-4 p-8">
       <h1 className="text-2xl font-semibold">Log in</h1>
-      <LoginForm onSuccess={() => navigate('/dashboard')} />
+      <LoginForm onSuccess={() => navigate('/dashboard', { replace: true })} />
       <p className="text-sm">
-        No account? <Link to="/register" className="text-indigo-600">Register</Link>
+        No account? <Link to="/register" className="text-teal-600">Register</Link>
       </p>
     </div>
   )

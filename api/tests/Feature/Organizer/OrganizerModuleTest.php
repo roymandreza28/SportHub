@@ -112,6 +112,9 @@ it('creates a tournament, generates a bracket, and plays it through to completio
     $this->actingAs($organizer)->postJson("/api/tournaments/{$tournamentId}/generate-bracket")->assertStatus(422);
 
     $bracket = $this->actingAs($organizer)->getJson("/api/tournaments/{$tournamentId}/bracket")->assertOk();
+    // The frontend's portrait "pyramid" bracket layout keys off this — see
+    // BracketView.tsx.
+    expect($bracket->json('format'))->toBe('single_elimination');
     $round1 = $bracket->json('structure.0');
     expect($round1)->toHaveCount(2);
 
@@ -498,7 +501,7 @@ it('denies a venue organizer from scoring a match on a tournament they were not 
     ])->assertForbidden();
 });
 
-it('denies a venue organizer from creating tournaments or managing news', function () {
+it('denies a venue organizer from creating tournaments, but still lets them post news', function () {
     $venueOrganizer = userWithRole('venue_organizer');
     $sport = Sport::create(['name' => 'Table Tennis']);
 
@@ -506,7 +509,9 @@ it('denies a venue organizer from creating tournaments or managing news', functi
         'sport_id' => $sport->id, 'name' => 'x', 'format' => 'round_robin', 'starts_at' => now()->addWeek(),
     ])->assertForbidden();
 
-    $this->actingAs($venueOrganizer)->postJson('/api/news', ['title' => 'x', 'body' => 'y'])->assertForbidden();
+    // Newsfeed posting is deliberately open to the whole organizer family
+    // (see NewsAccessTest) — only tournament management stays main-organizer-only.
+    $this->actingAs($venueOrganizer)->postJson('/api/news', ['title' => 'x', 'body' => 'y'])->assertCreated();
 });
 
 it('lets a livestream organizer create a livestream for the tournament they were assigned to', function () {

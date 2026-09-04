@@ -3,16 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Events\VenueRegistrationUpdated;
-use App\Models\Conversation;
 use App\Models\Court;
 use App\Models\Venue;
 use App\Models\VenueRegistration;
 use App\Services\BookingConversationCleanupService;
 use App\Services\NotificationService;
+use App\Services\VenueBookingService;
 use App\Support\Broadcasting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class VenueRegistrationController extends Controller
@@ -44,7 +43,7 @@ class VenueRegistrationController extends Controller
             'court_id' => ['nullable', 'exists:courts,id'],
             'starts_at' => ['required', 'date', 'after:now'],
             'ends_at' => ['required', 'date', 'after:starts_at'],
-            'purpose' => ['nullable', 'string', 'max:255'],
+            'purpose' => ['required', 'string', 'max:255'],
         ]);
 
         $venue = Venue::findOrFail($data['venue_id']);
@@ -65,10 +64,32 @@ class VenueRegistrationController extends Controller
             }
         }
 
+        $court = null;
+
         if (! empty($data['court_id'])) {
             $court = Court::findOrFail($data['court_id']);
             if ($court->venue_id !== (int) $data['venue_id']) {
                 throw ValidationException::withMessages(['court_id' => ['This court does not belong to the selected venue.']]);
+            }
+        }
+
+        $hours = Carbon::parse($data['starts_at'])->diffInMinutes(Carbon::parse($data['ends_at']), true) / 60;
+
+        // Some courts (e.g. BRCC's badminton gymnasium) aren't rented by the
+        // hour at all — they're sold in a fixed-length, fixed-price block
+        // (₱1,500 for exactly 3 hours). A booking that isn't an exact
+        // multiple of that block length has no valid price under this
+        // court's real rate sheet, so it's rejected outright rather than
+        // silently rounded or charged pro-rata.
+        if ($court?->block_hours) {
+            // Guard against float drift (e.g. 2.9999999997 hours from a
+            // sub-second-off selection) with a small epsilon before the
+            // modulo check.
+            $remainder = fmod(round($hours, 4), $court->block_hours);
+            if ($remainder > 0.001 && $remainder < $court->block_hours - 0.001) {
+                throw ValidationException::withMessages([
+                    'ends_at' => ["Bookings for {$court->name} must be in {$court->block_hours}-hour blocks (e.g. {$court->block_hours}, ".(2 * $court->block_hours).", ".(3 * $court->block_hours).' hours).'],
+                ]);
             }
         }
 
@@ -83,7 +104,29 @@ class VenueRegistrationController extends Controller
 
         Broadcasting::safely(fn () => VenueRegistrationUpdated::dispatch($registration));
 
-        return response()->json($registration->load('venue:id,name', 'court:id,name'), 201);
+        // Same principle as the matchmaking auto-reservation flow: the
+        // conversation exists the instant a request is made, not only once
+        // the facilitator approves it, so the booker can coordinate (and
+        // send a down-payment screenshot) with the facilitator right away.
+        // BookingConversationCleanupService sweeps it once the booking's
+        // day has passed, regardless of whether it was ever approved.
+        $conversation = VenueBookingService::ensureBookingConversation($registration);
+
+        $venue->loadMissing('facilitator:id,name,phone');
+
+        $totalAmount = match (true) {
+            $court?->block_hours && $court->block_price !== null => round(($hours / $court->block_hours) * $court->block_price, 2),
+            (bool) $venue->price_per_hour => round($hours * $venue->price_per_hour, 2),
+            default => null,
+        };
+
+        $registration->load('venue:id,name', 'court:id,name');
+        $registration->setAttribute('total_amount', $totalAmount);
+        $registration->setAttribute('facilitator_name', $venue->facilitator->name);
+        $registration->setAttribute('facilitator_phone', $venue->facilitator->phone);
+        $registration->setAttribute('conversation_id', $conversation->id);
+
+        return response()->json($registration, 201);
     }
 
     // A facilitator logging a walk-in customer who isn't using the app —
@@ -157,7 +200,7 @@ class VenueRegistrationController extends Controller
         // A manual/walk-in booking is created already-approved and has no
         // linked user — nothing to message or notify.
         if ($data['status'] === 'approved' && $venueRegistration->user_id !== null) {
-            $this->ensureBookingConversation($venueRegistration);
+            VenueBookingService::ensureBookingConversation($venueRegistration);
 
             NotificationService::send($venueRegistration->user_id, 'booking_approved', [
                 'venue_registration_id' => $venueRegistration->id,
@@ -170,24 +213,5 @@ class VenueRegistrationController extends Controller
         Broadcasting::safely(fn () => VenueRegistrationUpdated::dispatch($venueRegistration->fresh()));
 
         return $venueRegistration->load('user:id,name,email', 'court:id,name', 'conversation:id,venue_registration_id');
-    }
-
-    // The player/coach who booked and the venue's facilitator can only talk
-    // once a booking is approved, and this conversation is created directly
-    // (not through Social\ConversationController::store()) precisely because
-    // that endpoint requires the two users to already be friends — a
-    // facilitator and a one-off booker usually aren't.
-    private function ensureBookingConversation(VenueRegistration $registration): void
-    {
-        DB::transaction(function () use ($registration) {
-            $conversation = Conversation::firstOrCreate(
-                ['venue_registration_id' => $registration->id],
-                ['type' => 'direct', 'created_by' => $registration->venue->facilitator_id]
-            );
-
-            if ($conversation->wasRecentlyCreated) {
-                $conversation->participants()->attach([$registration->user_id, $registration->venue->facilitator_id]);
-            }
-        });
     }
 }

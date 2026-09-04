@@ -22,12 +22,20 @@ class ConversationMessageController extends Controller
         $this->authorize('sendMessage', $conversation);
 
         $data = $request->validate([
-            'body' => ['required', 'string', 'max:2000'],
+            // Either a caption or a photo (e.g. a GCash down-payment
+            // screenshot for a booking conversation) is enough on its own —
+            // the old text-only requirement would otherwise force typing
+            // something just to attach an image.
+            'body' => ['required_without:attachment', 'nullable', 'string', 'max:2000'],
+            'attachment' => ['required_without:body', 'nullable', 'image', 'max:5120'],
         ]);
 
         $message = $conversation->messages()->create([
             'user_id' => $request->user()->id,
-            'body' => $data['body'],
+            'body' => $data['body'] ?? '',
+            'attachment_path' => $request->hasFile('attachment')
+                ? $request->file('attachment')->store('conversations/'.$conversation->id, 'public')
+                : null,
         ]);
 
         $message->load('user:id,name');

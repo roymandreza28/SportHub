@@ -31,6 +31,12 @@ class NotificationService
         // committed successfully. A missed live push isn't worth failing on.
         Broadcasting::safely(fn () => NotificationCreated::dispatch($notification));
 
+        // Same "never fail the real request over this" rationale as the
+        // Reverb broadcast above — a push service outage or a malformed
+        // subscription must not take down whatever action just triggered
+        // this notification.
+        Broadcasting::safely(fn () => WebPushService::sendToUser($notification->user, $notification));
+
         return $notification;
     }
 }

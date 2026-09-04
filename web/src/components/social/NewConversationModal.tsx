@@ -64,7 +64,7 @@ export function NewConversationModal({
   // header's own (short) box instead of the viewport, squeezing the dialog
   // into a thin strip at the top instead of centering it on the page.
   return createPortal(
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/60 p-4">
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/60 p-4">
       <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
         <h3 className="text-base font-bold text-slate-900">{title}</h3>
         {helperText && <p className="mt-1 text-sm text-slate-500">{helperText}</p>}

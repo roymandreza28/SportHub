@@ -68,7 +68,7 @@ export function LivestreamChat({ livestreamId }: { livestreamId: number }) {
           onChange={(e) => setBody(e.target.value)}
           className={`${input} flex-1`}
         />
-        <button type="submit" disabled={mutation.isPending} className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
+        <button type="submit" disabled={mutation.isPending} className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-pure-white hover:bg-teal-700 disabled:opacity-50">
           Send
         </button>
       </form>

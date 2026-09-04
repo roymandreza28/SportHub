@@ -232,6 +232,7 @@ it('rejects a booking outside the venues operating hours and accepts one inside 
         'venue_id' => $venue->id,
         'starts_at' => Carbon::parse('tomorrow 10:00', 'Asia/Manila')->toIso8601String(),
         'ends_at' => Carbon::parse('tomorrow 11:00', 'Asia/Manila')->toIso8601String(),
+        'purpose' => 'Practice session',
     ]);
     $withinHours->assertCreated();
 });
@@ -363,6 +364,7 @@ it('rejects a booking that overlaps an existing pending or approved booking on t
         'court_id' => $court->id,
         'starts_at' => now()->addDays(2)->toIso8601String(),
         'ends_at' => now()->addDays(2)->addHour()->toIso8601String(),
+        'purpose' => 'Practice session',
     ]);
 
     $nonOverlapping->assertCreated();

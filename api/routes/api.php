@@ -17,6 +17,8 @@ use App\Http\Controllers\NewsController;
 use App\Http\Controllers\NewsReactionController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PlayerProfileController;
+use App\Http\Controllers\PublicInquiryController;
+use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\SkillLevelController;
 use App\Http\Controllers\Social\ConversationController;
 use App\Http\Controllers\Social\ConversationMessageController;
@@ -38,6 +40,9 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::get('/sports', fn () => Sport::orderBy('name')->get());
+// The VAPID public key isn't sensitive (it's handed to every browser as
+// part of pushManager.subscribe() by design) — no auth needed to read it.
+Route::get('/push/public-key', fn () => ['key' => config('services.webpush.public_key')]);
 Route::get('/sport-formats', function (Request $request) {
     return \App\Models\SportFormat::when($request->string('sport_id')->toString(), fn ($q, $sportId) => $q->where('sport_id', $sportId))
         ->orderBy('players_per_side')
@@ -70,6 +75,10 @@ Route::get('/livestreams/{livestream}/messages', [ChatMessageController::class, 
 // a livestream that's actually live and published).
 Route::post('/livestreams/{livestream}/public-signal', [LivestreamController::class, 'publicSignal']);
 
+// The landing page's "FAQ" contact section — see PublicInquiryController's
+// own class comment for why this stays outside auth:sanctum entirely.
+Route::post('/public-inquiries', [PublicInquiryController::class, 'store']);
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::patch('/user/password', [AuthController::class, 'updatePassword']);
@@ -84,6 +93,19 @@ Route::middleware('auth:sanctum')->group(function () {
         ];
     });
 
+    // Every role can receive a Notification (see NotificationService::send()
+    // call sites — organizer, venue_facilitator, and admin all do, not just
+    // player/coach), so these — like push-subscriptions below — belong here
+    // in the unrestricted group rather than gated by role. Device push
+    // subscriptions specifically aren't tied to any one role either: it's
+    // just "this device belongs to this logged-in user."
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+
+    Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store']);
+    Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy']);
+
     Route::middleware('role:admin')->prefix('admin')->group(function () {
         Route::get('/users', [AdminUserController::class, 'index']);
         Route::get('/users/pending-verifications', [AdminUserController::class, 'pendingVerifications']);
@@ -96,6 +118,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/organizers', [AdminUserController::class, 'createOrganizer']);
         Route::get('/dashboard/metrics', [AdminDashboardController::class, 'metrics']);
         Route::get('/audit-log', [AuditLogController::class, 'index']);
+        Route::get('/public-inquiries', [PublicInquiryController::class, 'index']);
     });
 
     Route::middleware('role:player|coach')->prefix('social')->group(function () {
@@ -119,16 +142,40 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/conversations/{conversation}/participants', [ConversationController::class, 'addParticipant']);
     });
 
-    // A venue facilitator can't start or join a conversation on their own —
-    // only view/read/send within one they were auto-attached to when a
-    // booking at their venue got approved (see VenueRegistrationController)
-    // — so this group is broader than the player|coach one above.
-    Route::middleware('role:player|coach|venue_facilitator')->prefix('social')->group(function () {
-        Route::get('/conversations', [ConversationController::class, 'index']);
-        Route::post('/conversations/{conversation}/read', [ConversationController::class, 'markRead']);
-        Route::get('/conversations/{conversation}/messages', [ConversationMessageController::class, 'index']);
-        Route::post('/conversations/{conversation}/messages', [ConversationMessageController::class, 'store']);
+    // A venue facilitator (or organizer/venue_organizer/livestream_organizer)
+    // can't start or join an ordinary conversation on their own — only
+    // view/read/send within one they were auto-attached to (a
+    // booking-approval thread, see VenueRegistrationController, or their own
+    // "Contact admin" support thread below) — so this group is broader than
+    // the player|coach one above.
+    Route::middleware('role:player|coach|venue_facilitator|organizer|venue_organizer|livestream_organizer')
+        ->prefix('social')->group(function () {
+            Route::post('/conversations/contact-admin', [ConversationController::class, 'contactAdmin']);
+        });
+
+    // Peer messaging within the organizer family — the main organizer
+    // reaching a venue/livestream organizer (or either of those reaching the
+    // main organizer back) shouldn't need them to already be friends, and
+    // none of these three roles hold the 'manage friendships' permission
+    // store() requires anyway.
+    Route::middleware('role:organizer|venue_organizer|livestream_organizer')->prefix('social')->group(function () {
+        Route::get('/organizer-directory', [ConversationController::class, 'organizerDirectory']);
+        Route::post('/conversations/contact-colleague', [ConversationController::class, 'contactColleague']);
     });
+
+    // Read/reply access, further widened to admin and the organizer family —
+    // an admin never starts a conversation (no route here does that for
+    // them), but must be able to see and answer the "FAQ" support threads
+    // contactAdmin() creates. ConversationPolicy::view()/sendMessage()
+    // already scope every one of these to the requester's own participant
+    // rows, so this is purely about which roles even reach that check.
+    Route::middleware('role:player|coach|venue_facilitator|admin|organizer|venue_organizer|livestream_organizer')
+        ->prefix('social')->group(function () {
+            Route::get('/conversations', [ConversationController::class, 'index']);
+            Route::post('/conversations/{conversation}/read', [ConversationController::class, 'markRead']);
+            Route::get('/conversations/{conversation}/messages', [ConversationMessageController::class, 'index']);
+            Route::post('/conversations/{conversation}/messages', [ConversationMessageController::class, 'store']);
+        });
 
     Route::middleware('role:venue_facilitator|admin')->group(function () {
         Route::post('/venues', [VenueController::class, 'store']);
@@ -159,10 +206,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/news/{news}/comments', [NewsCommentController::class, 'store']);
         Route::delete('/news-comments/{newsComment}', [NewsCommentController::class, 'destroy']);
         Route::post('/news/{news}/react', [NewsReactionController::class, 'toggle']);
-
-        Route::get('/notifications', [NotificationController::class, 'index']);
-        Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
-        Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
     });
 
     Route::middleware('role:player')->group(function () {
@@ -221,7 +264,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/tournaments/{tournament}/proceed', [TournamentController::class, 'proceed']);
         Route::post('/tournaments/{tournament}/cancel', [TournamentController::class, 'cancel']);
         Route::patch('/matches/{match}/schedule', [MatchController::class, 'schedule']);
+    });
 
+    // Posting news is wider than tournament management — every member of the
+    // organizer family plus venue facilitators can publish a community
+    // update, not just the main organizer. NewsPolicy still gates edit/delete
+    // to the post's own author regardless of role.
+    Route::middleware('role:organizer|venue_organizer|livestream_organizer|venue_facilitator|admin')->group(function () {
         Route::post('/news', [NewsController::class, 'store']);
         Route::patch('/news/{news}', [NewsController::class, 'update']);
         Route::delete('/news/{news}', [NewsController::class, 'destroy']);

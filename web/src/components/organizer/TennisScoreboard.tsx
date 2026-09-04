@@ -89,7 +89,7 @@ function PlayerPickerModal({
   onCancel: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/70 p-4">
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/70 p-4">
       <div className={`w-full max-w-sm rounded-xl p-5 shadow-2xl ${isDark ? 'bg-slate-800 text-slate-100' : 'bg-white text-slate-900'}`}>
         <h4 className="text-sm font-bold">{title}</h4>
         <p className={`mt-0.5 text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{team?.name ?? ''}</p>
@@ -484,22 +484,22 @@ export function TennisScoreboard({
   })
 
   const isDark = theme === 'dark'
-  const panelClass = isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'
+  const panelClass = isDark ? 'bg-slate-950 text-pure-white' : 'bg-pure-white text-[#241e17]'
   const cardClass = isDark ? 'border-slate-700 bg-slate-800/60' : 'border-slate-100 bg-white'
   const subtleText = isDark ? 'text-slate-400' : 'text-slate-500'
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/60 p-4">
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4">
       <div ref={containerRef} className={`flex w-full max-w-7xl flex-col gap-4 overflow-y-auto rounded-xl p-6 shadow-2xl ${panelClass}`} style={{ maxHeight: '92vh' }}>
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/20 pb-3">
           <h3 className="text-base font-bold">🎾 Tennis Scoreboard</h3>
           <div className="flex flex-wrap items-center gap-2">
             <div className={`flex rounded-full border p-0.5 text-xs font-semibold ${isDark ? 'border-slate-600' : 'border-slate-200'}`}>
-              <button onClick={() => setTheme('light')} className={`rounded-full px-3 py-1 ${!isDark ? 'bg-teal-600 text-white' : subtleText}`}>
+              <button onClick={() => setTheme('light')} className={`rounded-full px-3 py-1 ${!isDark ? 'bg-teal-600 text-pure-white' : subtleText}`}>
                 Light
               </button>
-              <button onClick={() => setTheme('dark')} className={`rounded-full px-3 py-1 ${isDark ? 'bg-teal-600 text-white' : subtleText}`}>
+              <button onClick={() => setTheme('dark')} className={`rounded-full px-3 py-1 ${isDark ? 'bg-teal-600 text-pure-white' : subtleText}`}>
                 Dark
               </button>
             </div>
@@ -564,7 +564,7 @@ export function TennisScoreboard({
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className={`w-full rounded-lg border px-3 py-2 text-center text-3xl font-semibold ${isDark ? 'border-slate-600 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900'}`}
+                  className={`w-full rounded-lg border px-3 py-2 text-center text-3xl font-semibold ${isDark ? 'border-slate-600 bg-slate-950 text-pure-white' : 'border-slate-200 bg-pure-white text-[#241e17]'}`}
                 />
                 <p className={`text-sm font-semibold uppercase tracking-wide ${subtleText}`}>
                   {side === 'a' ? setsWonA : setsWonB} set{(side === 'a' ? setsWonA : setsWonB) === 1 ? '' : 's'} won ·{' '}
@@ -673,7 +673,7 @@ export function TennisScoreboard({
                             value={jerseys[m.id] ?? ''}
                             onChange={(e) => setJersey(m.id, e.target.value)}
                             placeholder="#"
-                            className={`w-10 shrink-0 rounded-md border px-1 py-1 text-center ${isDark ? 'border-slate-600 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white'}`}
+                            className={`w-10 shrink-0 rounded-md border px-1 py-1 text-center ${isDark ? 'border-slate-600 bg-slate-950 text-pure-white' : 'border-slate-200 bg-pure-white'}`}
                           />
                           <span className="flex-1 truncate font-medium">{m.name}</span>
                           <span className={subtleText}>{stat?.points_won ?? 0} pts</span>

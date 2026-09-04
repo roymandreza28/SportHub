@@ -144,7 +144,7 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
         </span>
       </div>
 
-      <video ref={videoRef} autoPlay muted playsInline className="aspect-video w-full rounded-lg border border-slate-200 bg-slate-900" />
+      <video ref={videoRef} autoPlay muted playsInline className="aspect-video w-full rounded-lg border border-slate-200 bg-slate-950" />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

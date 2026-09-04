@@ -2,32 +2,34 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchEvaluations, type EvaluationEntry } from '../../lib/coachApi'
 import { SKILL_LEVEL_LABELS, type SkillLevelTier } from '../../lib/skillLevels'
-import { GENERAL_CRITERIA, SPORT_COMPUTED_FIELDS } from '../../lib/evaluationCriteria'
+import { SPORT_ATTRIBUTE_CRITERIA, SPORT_COMPUTED_FIELDS } from '../../lib/evaluationCriteria'
 
 const LEVEL_HEIGHT: Record<SkillLevelTier, string> = {
-  beginner: '25%',
-  casual_player: '50%',
-  developing_athlete: '75%',
-  competitive_athlete: '100%',
+  beginner: '20%',
+  casual_player: '40%',
+  developing_athlete: '60%',
+  competitive_athlete: '80%',
+  professional: '100%',
 }
 
 function EvaluationDetail({ evaluation }: { evaluation: EvaluationEntry }) {
   const criteria = evaluation.criteria
-  const general = criteria?.general
+  const attributes = criteria?.attributes
   const rawStats = criteria?.sport_stats?.raw
   const computedStats = criteria?.sport_stats?.computed
   const sportName = evaluation.skill_level.sport.name
   const computedFields = SPORT_COMPUTED_FIELDS[sportName]
+  const attributeFields = SPORT_ATTRIBUTE_CRITERIA[sportName]
 
-  if (!general && !rawStats) return null
+  if (!attributes && !rawStats) return null
 
   return (
     <div className="mt-2 flex flex-col gap-2 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
-      {general && (
+      {attributes && attributeFields && (
         <div className="flex flex-wrap gap-x-4 gap-y-1">
-          {GENERAL_CRITERIA.filter((c) => general[c.key] !== undefined).map((c) => (
+          {attributeFields.filter((c) => attributes[c.key] !== undefined).map((c) => (
             <span key={c.key} className="text-xs text-slate-600">
-              {c.label}: <strong className="font-semibold text-slate-800">{general[c.key]}/10</strong>
+              {c.label}: <strong className="font-semibold text-slate-800">{attributes[c.key]}/10</strong>
             </span>
           ))}
         </div>
@@ -76,7 +78,7 @@ export function PlayerSkillHistoryChart({ playerId }: { playerId: number }) {
       </div>
       <ul className="flex flex-col divide-y divide-slate-100 text-xs text-slate-600">
         {evaluations.map((evaluation) => {
-          const hasDetail = !!(evaluation.criteria?.general || evaluation.criteria?.sport_stats?.raw)
+          const hasDetail = !!(evaluation.criteria?.attributes || evaluation.criteria?.sport_stats?.raw)
           return (
             <li key={evaluation.id} className="py-1.5">
               <div className="flex items-start justify-between gap-2">

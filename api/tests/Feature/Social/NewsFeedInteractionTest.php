@@ -11,7 +11,7 @@ function makePublishedNews(): News
     return News::create([
         'author_id' => $organizer->id,
         'title' => 'Court Renovation Complete',
-        'body' => 'The Morong covered court is now open for bookings again.',
+        'body' => 'The Binangonan covered court is now open for bookings again.',
         'published_at' => now(),
     ]);
 }

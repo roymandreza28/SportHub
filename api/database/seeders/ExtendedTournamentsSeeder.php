@@ -38,8 +38,8 @@ class ExtendedTournamentsSeeder extends Seeder
     ];
 
     private const TEAM_NAMES = [
-        'Riverside Hawks', 'Poblacion Titans', 'San Guillermo Gladiators', 'Maybancal Marksmen',
-        'Sampaloc Sharks', 'Bombongan Blazers', 'Lagundi Lions', 'Cardona Crushers',
+        'Layunan Hawks', 'Poblacion Titans', 'Bilibiran Gladiators', 'Calumpang Marksmen',
+        'Macamot Sharks', 'Bombong Blazers', 'Tagpos Lions', 'Pantok Crushers',
     ];
 
     public function run(): void
@@ -47,9 +47,9 @@ class ExtendedTournamentsSeeder extends Seeder
         $organizer = User::where('email', 'organizer@sporthub.test')->first();
         $venueOrganizer = User::where('email', 'venue_organizer@sporthub.test')->first();
         $livestreamOrganizer = User::where('email', 'livestream_organizer@sporthub.test')->first();
-        $gymnasium = Venue::where('name', 'Morong Gymnasium')->first();
-        $badmintonCenter = Venue::where('name', "Tapal's Badminton Center")->first();
-        $tennisCourts = Venue::where('name', 'Morong Tennis Courts')->first();
+        $gymnasium = Venue::where('name', 'Binangonan Recreation and Conference Center (BRCC)')->first();
+        $badmintonCenter = Venue::where('name', 'JBTC Binangonan Badminton and Pickleball Courts')->first();
+        $tennisCourts = Venue::where('name', 'Eastridge Athletic Park')->first();
 
         if (! $organizer || ! $venueOrganizer || ! $livestreamOrganizer || ! $gymnasium) {
             return;
@@ -387,7 +387,7 @@ class ExtendedTournamentsSeeder extends Seeder
     ): void {
         $tournament = Tournament::create([
             'organizer_id' => $organizer->id,
-            'name' => 'Morong Interbarangay Basketball Championship',
+            'name' => 'Binangonan Interbarangay Basketball Championship',
             'sport_id' => $sport->id,
             'sport_format_id' => $format->id,
             'format' => 'single_elimination',
@@ -436,7 +436,7 @@ class ExtendedTournamentsSeeder extends Seeder
     ): void {
         $tournament = Tournament::create([
             'organizer_id' => $organizer->id,
-            'name' => 'Morong Rizal Day 3x3 Cup',
+            'name' => 'Binangonan Rizal Day 3x3 Cup',
             'sport_id' => $sport->id,
             'sport_format_id' => $format->id,
             'format' => 'single_elimination',
@@ -471,7 +471,7 @@ class ExtendedTournamentsSeeder extends Seeder
     ): Tournament {
         $tournament = Tournament::create([
             'organizer_id' => $organizer->id,
-            'name' => 'Morong Volleyball Championship Cup',
+            'name' => 'Binangonan Volleyball Championship Cup',
             'sport_id' => $sport->id,
             'sport_format_id' => $format->id,
             'format' => 'single_elimination',
@@ -484,7 +484,7 @@ class ExtendedTournamentsSeeder extends Seeder
             'sets_to_win' => 3,
         ]);
 
-        $teamNames = ['Coastal Spikers', 'Highland Blockers', 'River Aces', 'Summit Diggers'];
+        $teamNames = ['Talim Spikers', 'Kalawaan Blockers', 'Libid Aces', 'Tatala Diggers'];
         foreach ($teamNames as $i => $teamName) {
             $roster = $players->slice($i * 6, 6)->values();
             $team = $this->makeTeam($sport, $format, $coaches[$i % $coaches->count()], $teamName, $roster);
@@ -514,7 +514,7 @@ class ExtendedTournamentsSeeder extends Seeder
     ): Tournament {
         $tournament = Tournament::create([
             'organizer_id' => $organizer->id,
-            'name' => 'Morong Badminton Doubles Championship',
+            'name' => 'Binangonan Badminton Doubles Championship',
             'sport_id' => $sport->id,
             'sport_format_id' => $format->id,
             'format' => 'single_elimination',
@@ -557,7 +557,7 @@ class ExtendedTournamentsSeeder extends Seeder
     ): Tournament {
         $tournament = Tournament::create([
             'organizer_id' => $organizer->id,
-            'name' => 'Morong Tennis Singles Championship',
+            'name' => 'Binangonan Tennis Singles Championship',
             'sport_id' => $sport->id,
             'format' => 'single_elimination',
             'starts_at' => now()->subDays(4),
@@ -603,7 +603,7 @@ class ExtendedTournamentsSeeder extends Seeder
     ): Tournament {
         $tournament = Tournament::create([
             'organizer_id' => $organizer->id,
-            'name' => 'Morong Table Tennis Doubles Championship',
+            'name' => 'Binangonan Table Tennis Doubles Championship',
             'sport_id' => $sport->id,
             'sport_format_id' => SportFormat::where('sport_id', $sport->id)->where('name', 'Doubles')->value('id'),
             'format' => 'single_elimination',
@@ -646,7 +646,7 @@ class ExtendedTournamentsSeeder extends Seeder
 
         Tournament::create([
             'organizer_id' => $organizer->id,
-            'name' => 'Morong Volleyball Rookie League',
+            'name' => 'Binangonan Volleyball Rookie League',
             'sport_id' => $sport->id,
             'sport_format_id' => $sixVSix?->id,
             'format' => 'round_robin',
@@ -667,7 +667,7 @@ class ExtendedTournamentsSeeder extends Seeder
     ): void {
         $tournament = Tournament::create([
             'organizer_id' => $organizer->id,
-            'name' => "Tapal's Badminton Barangay Open",
+            'name' => 'JBTC Badminton Open',
             'sport_id' => $sport->id,
             'sport_format_id' => $format->id,
             'format' => 'single_elimination',
@@ -693,7 +693,7 @@ class ExtendedTournamentsSeeder extends Seeder
     ): void {
         $tournament = Tournament::create([
             'organizer_id' => $organizer->id,
-            'name' => 'Morong Table Tennis Singles Invitational',
+            'name' => 'Binangonan Table Tennis Singles Invitational',
             'sport_id' => $sport->id,
             'format' => 'single_elimination',
             'starts_at' => now()->addDays(4),
@@ -728,7 +728,7 @@ class ExtendedTournamentsSeeder extends Seeder
     ): void {
         $tournament = Tournament::create([
             'organizer_id' => $organizer->id,
-            'name' => 'Morong Rainy Season Pickleball Meet',
+            'name' => 'Binangonan Rainy Season Pickleball Meet',
             'sport_id' => $sport->id,
             'format' => 'single_elimination',
             'starts_at' => now()->subDays(2),

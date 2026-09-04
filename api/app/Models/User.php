@@ -155,6 +155,11 @@ class User extends Authenticatable
         return $this->hasMany(Notification::class);
     }
 
+    public function pushSubscriptions(): HasMany
+    {
+        return $this->hasMany(PushSubscription::class);
+    }
+
     public function friendshipsAsRequester(): HasMany
     {
         return $this->hasMany(Friendship::class, 'requester_id');

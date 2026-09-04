@@ -54,7 +54,7 @@ test('two players requesting the same sport and format get paired live over the 
     await pageA.getByRole('button', { name: 'Join Match', exact: true }).click()
     await pageB.getByRole('button', { name: 'Join Match', exact: true }).click()
 
-    // Badminton Singles is the only solo (no-team) format among Morong's
+    // Badminton Singles is the only solo (no-team) format among Binangonan's
     // supported sports — no team is required, so both players can go
     // straight to matchmaking. Note: because the dev DB persists across
     // E2E runs (no reset between them — see other specs' comments), an
@@ -95,14 +95,16 @@ test('creating a match only offers venues that have a court for the chosen sport
   // Badminton Singles matchmaking pool that the real-time pairing test above
   // also draws from, causing it to occasionally match against this test's
   // leftover instead of its own intended opponent.
-  await page.getByTestId('mm-sport').selectOption({ label: 'Badminton' })
+  await page.getByTestId('mm-sport').selectOption({ label: 'Pickleball' })
   await page.getByTestId('mm-format').selectOption({ label: 'Singles' })
 
   const venueSelect = page.getByTestId('mm-venue')
-  // Seeded data: only Tapal's Badminton Center has a Badminton court —
-  // Morong Gymnasium (Basketball + Volleyball only) must not appear.
-  await expect(venueSelect.locator('option', { hasText: "Tapal's Badminton Center" })).toHaveCount(1)
-  await expect(venueSelect.locator('option', { hasText: 'Morong Gymnasium' })).toHaveCount(0)
+  // Seeded data: only JBTC Binangonan Badminton and Pickleball Courts has a
+  // Pickleball court — the Binangonan Recreation and Conference Center
+  // (Basketball + Volleyball + Table Tennis + Badminton, but no Pickleball,
+  // in this seed) must not appear.
+  await expect(venueSelect.locator('option', { hasText: 'JBTC Binangonan Badminton and Pickleball Courts' })).toHaveCount(1)
+  await expect(venueSelect.locator('option', { hasText: 'Binangonan Recreation and Conference Center' })).toHaveCount(0)
 })
 
 test('a doubles match requires a full team, formed by inviting a friend', async ({ browser }) => {

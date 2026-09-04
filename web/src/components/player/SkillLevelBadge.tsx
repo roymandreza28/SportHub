@@ -2,10 +2,11 @@ import type { SkillLevel } from '../../lib/playerApi'
 import { SKILL_LEVEL_LABELS } from '../../lib/skillLevels'
 
 const LEVEL_COLORS: Record<SkillLevel['level'], string> = {
-  beginner: 'bg-gray-100 text-gray-800',
+  beginner: 'bg-slate-100 text-slate-800',
   casual_player: 'bg-blue-100 text-blue-800',
   developing_athlete: 'bg-purple-100 text-purple-800',
   competitive_athlete: 'bg-amber-100 text-amber-900',
+  professional: 'bg-teal-100 text-teal-900',
 }
 
 export function SkillLevelBadge({ skillLevel }: { skillLevel: SkillLevel }) {

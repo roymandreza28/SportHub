@@ -63,6 +63,7 @@ export type Bracket = {
   // the bracket row exists but was never populated.
   structure: BracketMatch[][] | null
   matches: BracketMatch[]
+  format: TournamentFormat
 }
 
 export type NewsMediaItem = {

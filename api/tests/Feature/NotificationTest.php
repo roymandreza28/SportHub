@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Notification;
+use App\Models\PushSubscription;
 use App\Models\Sport;
 use App\Models\SportFormat;
 use App\Models\Tournament;
@@ -131,6 +132,44 @@ it('notifies every registrant when a bracket is generated and when a round advan
     }
 });
 
+it('notifies the venue and livestream organizer when a tournament is created assigning them, and again if reassigned', function () {
+    $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
+    $sport = Sport::create(['name' => 'Volleyball']);
+
+    $tournament = $this->actingAs($organizer)->postJson('/api/tournaments', [
+        'sport_id' => $sport->id, 'name' => 'Assignment Cup', 'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(), 'venue_organizer_id' => $venueOrganizer->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
+    ])->assertCreated()->json();
+
+    $venueNotifications = $this->actingAs($venueOrganizer)->getJson('/api/notifications')->assertOk();
+    expect($venueNotifications->json('0.type'))->toBe('tournament_assigned');
+    expect($venueNotifications->json('0.data.tournament_name'))->toBe('Assignment Cup');
+    expect($venueNotifications->json('0.data.role'))->toBe('venue_organizer');
+
+    $livestreamNotifications = $this->actingAs($livestreamOrganizer)->getJson('/api/notifications')->assertOk();
+    expect($livestreamNotifications->json('0.type'))->toBe('tournament_assigned');
+    expect($livestreamNotifications->json('0.data.role'))->toBe('livestream_organizer');
+
+    // Re-saving the same assignee must not spam another notification.
+    $this->actingAs($organizer)->patchJson("/api/tournaments/{$tournament['id']}", [
+        'venue_organizer_id' => $venueOrganizer->id,
+    ])->assertOk();
+    expect($this->actingAs($venueOrganizer)->getJson('/api/notifications')->json())->toHaveCount(1);
+
+    // Reassigning to a new venue organizer notifies the new one, and only them.
+    $newVenueOrganizer = userWithRole('venue_organizer');
+    $this->actingAs($organizer)->patchJson("/api/tournaments/{$tournament['id']}", [
+        'venue_organizer_id' => $newVenueOrganizer->id,
+    ])->assertOk();
+
+    expect($this->actingAs($venueOrganizer)->getJson('/api/notifications')->json())->toHaveCount(1);
+    $newVenueNotifications = $this->actingAs($newVenueOrganizer)->getJson('/api/notifications')->assertOk();
+    expect($newVenueNotifications->json('0.type'))->toBe('tournament_assigned');
+});
+
 it('lets a user mark a single notification read, or all of them at once, but only their own', function () {
     $player = userWithRole('player');
     $other = userWithRole('player');
@@ -146,4 +185,49 @@ it('lets a user mark a single notification read, or all of them at once, but onl
 
     $this->actingAs($player)->postJson('/api/notifications/read-all')->assertNoContent();
     expect($n2->fresh()->read_at)->not->toBeNull();
+});
+
+it('lets every role fetch and mark read their own notifications, not just player/coach', function () {
+    $organizer = userWithRole('organizer');
+    Notification::create(['user_id' => $organizer->id, 'type' => 'tournament_champion_crowned', 'data' => ['tournament_name' => 'Cup']]);
+
+    $this->actingAs($organizer)->getJson('/api/notifications')->assertOk()->assertJsonCount(1);
+    $this->actingAs($organizer)->postJson('/api/notifications/read-all')->assertNoContent();
+});
+
+it('registers a device push subscription for the current user, reassigning an existing endpoint rather than duplicating it', function () {
+    $player = userWithRole('player');
+    $otherPlayer = userWithRole('player');
+
+    $payload = [
+        'endpoint' => 'https://push.example.com/abc123',
+        'keys' => ['p256dh' => 'public-key-value', 'auth' => 'auth-token-value'],
+    ];
+
+    $this->actingAs($player)->postJson('/api/push-subscriptions', $payload)->assertNoContent();
+    expect(PushSubscription::where('endpoint', $payload['endpoint'])->count())->toBe(1);
+    expect(PushSubscription::where('endpoint', $payload['endpoint'])->value('user_id'))->toBe($player->id);
+
+    // Same endpoint (same browser/device) re-subscribing as a different
+    // user — a shared-device login — reassigns the row instead of erroring
+    // on the unique constraint or leaving a stale duplicate.
+    $this->actingAs($otherPlayer)->postJson('/api/push-subscriptions', $payload)->assertNoContent();
+    expect(PushSubscription::where('endpoint', $payload['endpoint'])->count())->toBe(1);
+    expect(PushSubscription::where('endpoint', $payload['endpoint'])->value('user_id'))->toBe($otherPlayer->id);
+});
+
+it('lets a user remove their own device push subscription, and only their own', function () {
+    $player = userWithRole('player');
+    $subscription = PushSubscription::create([
+        'user_id' => $player->id,
+        'endpoint' => 'https://push.example.com/xyz789',
+        'public_key' => 'k', 'auth_token' => 'a',
+    ]);
+
+    $other = userWithRole('player');
+    $this->actingAs($other)->deleteJson('/api/push-subscriptions', ['endpoint' => $subscription->endpoint])->assertNoContent();
+    expect(PushSubscription::find($subscription->id))->not->toBeNull();
+
+    $this->actingAs($player)->deleteJson('/api/push-subscriptions', ['endpoint' => $subscription->endpoint])->assertNoContent();
+    expect(PushSubscription::find($subscription->id))->toBeNull();
 });

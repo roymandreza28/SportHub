@@ -44,7 +44,7 @@ export function ManualBookingForm({ venue, onClose }: { venue: Venue; onClose: (
   }
 
   return (
-    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-slate-900/60 p-4" data-testid="manual-booking-modal">
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/60 p-4" data-testid="manual-booking-modal">
       <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
           <div>

@@ -34,102 +34,23 @@ class SampleDataSeeder extends Seeder
         $tableTennis = Sport::where('name', 'Table Tennis')->first();
         $tennis = Sport::where('name', 'Tennis')->first();
 
-        // Real, named facility in Morong proper — a multi-purpose covered
-        // gymnasium, the standard Philippine barangay/municipal venue for
-        // both basketball and volleyball.
-        $gymnasium = Venue::firstOrCreate(
-            ['facilitator_id' => $facilitator->id, 'name' => 'Morong Gymnasium'],
-            [
-                'address' => 'Brgy. Poblacion, Morong, Rizal',
-                'latitude' => 14.5192,
-                'longitude' => 121.2331,
-                'description' => 'Municipal gymnasium in Morong proper — basketball and volleyball.',
-                'amenities' => ['parking', 'lockers', 'restrooms'],
-            ]
-        );
+        // Real Binangonan venues — seeded by VenueSeeder (which runs before
+        // this seeder), sourced from a client-supplied venue/rate research
+        // dataset rather than invented here. Looked up by name rather than
+        // created, so this seeder never risks drifting out of sync with the
+        // actual venue directory.
+        $gymnasium = Venue::where('name', 'Binangonan Recreation and Conference Center (BRCC)')->first();
+        $badmintonCenter = Venue::where('name', 'JBTC Binangonan Badminton and Pickleball Courts')->first();
+        $tennisCourts = Venue::where('name', 'Eastridge Athletic Park')->first();
 
-        $mainCourt = $gymnasium->courts()->firstOrCreate(
-            ['name' => 'Main Court'],
-            ['type' => 'court', 'capacity' => 30, 'status' => 'active']
-        );
-        if ($basketball) {
-            $mainCourt->sports()->syncWithoutDetaching([$basketball->id]);
-        }
-
-        $volleyballCourt = $gymnasium->courts()->firstOrCreate(
-            ['name' => 'Volleyball Court'],
-            ['type' => 'court', 'capacity' => 24, 'status' => 'active']
-        );
-        if ($volleyball) {
-            $volleyballCourt->sports()->syncWithoutDetaching([$volleyball->id]);
+        if (! $gymnasium || ! $badmintonCenter || ! $tennisCourts) {
+            return;
         }
 
         $gymnasium->equipment()->firstOrCreate(
             ['name' => 'Basketballs'],
             ['quantity_total' => 20, 'quantity_available' => 20]
         );
-
-        // Table tennis gets a table set up in a corner of the same
-        // multi-purpose gymnasium rather than its own venue.
-        $tableTennisCourt = $gymnasium->courts()->firstOrCreate(
-            ['name' => 'Table Tennis Corner'],
-            ['type' => 'court', 'capacity' => 8, 'status' => 'active']
-        );
-        if ($tableTennis) {
-            $tableTennisCourt->sports()->syncWithoutDetaching([$tableTennis->id]);
-        }
-
-        // Real, named badminton facility in Barangay Maybancal.
-        $badmintonCenter = Venue::firstOrCreate(
-            ['facilitator_id' => $facilitator->id, 'name' => "Tapal's Badminton Center"],
-            [
-                'address' => 'Brgy. Maybancal, Morong, Rizal',
-                'latitude' => 14.5170,
-                'longitude' => 121.2450,
-                'description' => 'Dedicated badminton courts in Barangay Maybancal.',
-                'amenities' => ['parking'],
-            ]
-        );
-
-        $badmintonCourt = $badmintonCenter->courts()->firstOrCreate(
-            ['name' => 'Court 1'],
-            ['type' => 'court', 'capacity' => 8, 'status' => 'active']
-        );
-        if ($badminton) {
-            $badmintonCourt->sports()->syncWithoutDetaching([$badminton->id]);
-        }
-
-        // Pickleball shares the racket-sports facility rather than getting
-        // its own venue — a second, dedicated court there.
-        $pickleballCourt = $badmintonCenter->courts()->firstOrCreate(
-            ['name' => 'Court 2'],
-            ['type' => 'court', 'capacity' => 8, 'status' => 'active']
-        );
-        if ($pickleball) {
-            $pickleballCourt->sports()->syncWithoutDetaching([$pickleball->id]);
-        }
-
-        // Tennis gets its own outdoor hard-court venue — unlike the other
-        // racket sports here, it's not something you'd share a badminton
-        // hall or gym corner with.
-        $tennisCourts = Venue::firstOrCreate(
-            ['facilitator_id' => $facilitator->id, 'name' => 'Morong Tennis Courts'],
-            [
-                'address' => 'Brgy. San Guillermo, Morong, Rizal',
-                'latitude' => 14.5210,
-                'longitude' => 121.2295,
-                'description' => 'Outdoor hard courts in Morong.',
-                'amenities' => ['parking', 'restrooms'],
-            ]
-        );
-
-        $tennisCourt = $tennisCourts->courts()->firstOrCreate(
-            ['name' => 'Court 1'],
-            ['type' => 'court', 'capacity' => 8, 'status' => 'active']
-        );
-        if ($tennis) {
-            $tennisCourt->sports()->syncWithoutDetaching([$tennis->id]);
-        }
 
         PlayerProfile::firstOrCreate(
             ['user_id' => $player->id],
@@ -200,7 +121,7 @@ class SampleDataSeeder extends Seeder
                     sport: $basketball,
                     format: $fiveVFive,
                     venue: $gymnasium,
-                    name: 'Morong Barangay Basketball 5v5 Cup',
+                    name: 'Binangonan Barangay Basketball 5v5 Cup',
                     teams: [
                         ['Riverside Ballers', $extraPlayers->slice(0, 5)->values()],
                         ['Poblacion Hoopers', $extraPlayers->slice(5, 4)->push($player)->values()],
@@ -218,7 +139,7 @@ class SampleDataSeeder extends Seeder
                     sport: $basketball,
                     format: $threeVThree,
                     venue: $gymnasium,
-                    name: 'Morong 3x3 Streetball Cup',
+                    name: 'Binangonan 3x3 Streetball Cup',
                     teams: [
                         ['Court Kings', $extraPlayers->slice(0, 3)->values()],
                         ['Street Ballers', $extraPlayers->slice(3, 3)->values()],
@@ -237,7 +158,7 @@ class SampleDataSeeder extends Seeder
                         sport: $volleyball,
                         format: $sixVSix,
                         venue: $gymnasium,
-                        name: 'Morong Barangay Volleyball 6v6 Cup',
+                        name: 'Binangonan Barangay Volleyball 6v6 Cup',
                         teams: [
                             ['Net Ninjas', $extraPlayers->slice(0, 6)->values()],
                             ['Spike Force', $extraPlayers->slice(6, 5)->push($player)->values()],
@@ -256,7 +177,7 @@ class SampleDataSeeder extends Seeder
                     venueOrganizer: $venueOrganizer,
                     sport: $badminton,
                     venue: $badmintonCenter,
-                    name: 'Tapal\'s Badminton Singles Open',
+                    name: 'JBTC Badminton Singles Open',
                     players: [$extraPlayers[6], $extraPlayers[7]],
                     scoringType: 'best_of_sets',
                     setsToWin: 2,
@@ -272,7 +193,7 @@ class SampleDataSeeder extends Seeder
                         sport: $badminton,
                         format: $doubles,
                         venue: $badmintonCenter,
-                        name: "Tapal's Badminton Doubles Cup",
+                        name: 'JBTC Badminton Doubles Cup',
                         teams: [
                             ['Shuttle Smashers', $extraPlayers->slice(8, 2)->values()],
                             ['Net Dominators', $extraPlayers->slice(10, 1)->push($player)->values()],
@@ -289,7 +210,7 @@ class SampleDataSeeder extends Seeder
                     venueOrganizer: $venueOrganizer,
                     sport: $pickleball,
                     venue: $badmintonCenter,
-                    name: "Tapal's Pickleball Singles Open",
+                    name: 'JBTC Pickleball Singles Open',
                     players: [$extraPlayers[0], $extraPlayers[1]],
                     scoringType: 'best_of_sets',
                     setsToWin: 2,
@@ -305,7 +226,7 @@ class SampleDataSeeder extends Seeder
                         sport: $pickleball,
                         format: $pickleballDoubles,
                         venue: $badmintonCenter,
-                        name: "Tapal's Pickleball Doubles Cup",
+                        name: 'JBTC Pickleball Doubles Cup',
                         teams: [
                             ['Dink Dynasty', $extraPlayers->slice(2, 2)->values()],
                             ['Kitchen Crashers', $extraPlayers->slice(4, 2)->values()],
@@ -322,7 +243,7 @@ class SampleDataSeeder extends Seeder
                     venueOrganizer: $venueOrganizer,
                     sport: $tableTennis,
                     venue: $gymnasium,
-                    name: 'Morong Table Tennis Singles Open',
+                    name: 'Binangonan Table Tennis Singles Open',
                     players: [$extraPlayers[9], $extraPlayers[10]],
                     scoringType: 'best_of_sets',
                     setsToWin: 3,
@@ -338,7 +259,7 @@ class SampleDataSeeder extends Seeder
                         sport: $tableTennis,
                         format: $tableTennisDoubles,
                         venue: $gymnasium,
-                        name: 'Morong Table Tennis Doubles Cup',
+                        name: 'Binangonan Table Tennis Doubles Cup',
                         teams: [
                             ['Paddle Masters', $extraPlayers->slice(0, 2)->values()],
                             ['Spin Doctors', $extraPlayers->slice(2, 2)->values()],
@@ -355,7 +276,7 @@ class SampleDataSeeder extends Seeder
                     venueOrganizer: $venueOrganizer,
                     sport: $tennis,
                     venue: $tennisCourts,
-                    name: 'Morong Tennis Singles Open',
+                    name: 'Binangonan Tennis Singles Open',
                     players: [$extraPlayers[7], $extraPlayers[8]],
                     scoringType: 'best_of_sets',
                     setsToWin: 2,
@@ -371,7 +292,7 @@ class SampleDataSeeder extends Seeder
                         sport: $tennis,
                         format: $tennisDoubles,
                         venue: $tennisCourts,
-                        name: 'Morong Tennis Doubles Cup',
+                        name: 'Binangonan Tennis Doubles Cup',
                         teams: [
                             ['Baseline Bandits', $extraPlayers->slice(8, 2)->values()],
                             ['Ace Attorneys', $extraPlayers->slice(10, 1)->push($player)->values()],

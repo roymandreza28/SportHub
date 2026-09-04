@@ -7,6 +7,7 @@ use App\Models\SportFormat;
 use App\Models\Tournament;
 use App\Models\User;
 use App\Services\BracketService;
+use App\Services\NotificationService;
 use App\Support\NewsMediaStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -103,6 +104,9 @@ class TournamentController extends Controller
             return $tournament;
         });
 
+        $this->notifyAssignment($tournament, 'venue_organizer_id', $tournament->venue_organizer_id);
+        $this->notifyAssignment($tournament, 'livestream_organizer_id', $tournament->livestream_organizer_id);
+
         return response()->json(
             $tournament->load(
                 'sport:id,name', 'venue:id,name', 'venueOrganizer:id,name',
@@ -110,6 +114,24 @@ class TournamentController extends Controller
             ),
             201
         );
+    }
+
+    // Fires only for the user actually landing the assignment — both at
+    // creation (required fields, so always fires there) and when update()
+    // hands the role to someone new. Re-saving the same assignee (or an
+    // update that doesn't touch these fields at all) intentionally stays
+    // silent so accepting/re-editing a tournament doesn't re-notify.
+    private function notifyAssignment(Tournament $tournament, string $field, ?int $newUserId): void
+    {
+        if (! $newUserId) {
+            return;
+        }
+
+        NotificationService::send($newUserId, 'tournament_assigned', [
+            'tournament_id' => $tournament->id,
+            'tournament_name' => $tournament->name,
+            'role' => $field === 'venue_organizer_id' ? 'venue_organizer' : 'livestream_organizer',
+        ]);
     }
 
     // A sport flagged category='team' (Basketball, Volleyball) can only ever
@@ -163,7 +185,17 @@ class TournamentController extends Controller
             'livestream_organizer_id' => ['nullable', 'exists:users,id', $this->hasRoleRule('livestream_organizer')],
         ]);
 
+        $previousVenueOrganizerId = $tournament->venue_organizer_id;
+        $previousLivestreamOrganizerId = $tournament->livestream_organizer_id;
+
         $tournament->update($data);
+
+        if (array_key_exists('venue_organizer_id', $data) && $data['venue_organizer_id'] !== $previousVenueOrganizerId) {
+            $this->notifyAssignment($tournament, 'venue_organizer_id', $data['venue_organizer_id']);
+        }
+        if (array_key_exists('livestream_organizer_id', $data) && $data['livestream_organizer_id'] !== $previousLivestreamOrganizerId) {
+            $this->notifyAssignment($tournament, 'livestream_organizer_id', $data['livestream_organizer_id']);
+        }
 
         if (($data['status'] ?? null) === 'registration') {
             $tournament->news()->whereNull('published_at')->update(['published_at' => now()]);
@@ -253,10 +285,19 @@ class TournamentController extends Controller
             return response()->json(['message' => 'No bracket generated yet.'], 404);
         }
 
-        return $bracket->load(
+        $bracket->load(
             'matches.participantA:id,name', 'matches.participantB:id,name', 'matches.winner:id,name',
             'matches.participantATeam:id,name', 'matches.participantBTeam:id,name', 'matches.winnerTeam:id,name',
             'matches.court:id,venue_id,name', 'matches.court.venue:id,name'
         );
+
+        // The frontend's portrait/"pyramid upward" bracket layout only makes
+        // sense for single_elimination — it's the one format that's a
+        // single clean tree narrowing to one final. Everything else
+        // (double_elimination's two trees, round_robin/swiss's flat
+        // rounds, group_stage's pre-knockout group play) keeps the
+        // existing left-to-right layout, so the frontend needs the format
+        // to decide, not just the match structure.
+        return [...$bracket->toArray(), 'format' => $tournament->format];
     }
 }

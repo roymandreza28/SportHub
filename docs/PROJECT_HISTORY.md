@@ -10,13 +10,52 @@ that lost commit-message trail as far as *why* things are the way they are.
 ## 1. What this is
 
 SportHub is a municipal sports platform (originally scoped for Morong,
-Rizal, Philippines) — tournament management, live scoreboards, venue
-booking, matchmaking, and social features across six sports: Basketball,
-Volleyball, Badminton, Pickleball, Tennis, Table Tennis.
+Rizal, Philippines; the target municipality was changed to Binangonan,
+Rizal on 2026-09-03 — every seeded venue, tournament, and team name was
+updated to reference real Binangonan facilities and barangays) —
+tournament management, live scoreboards, venue booking, matchmaking, and
+social features across six sports: Basketball, Volleyball, Badminton,
+Pickleball, Tennis, Table Tennis.
+
+The venue directory itself (17 venues, seeded by `VenueSeeder`) is sourced
+from a client-supplied research dataset, not invented — see
+`VenueSeeder`'s class doc comment for the coverage caveats (most Binangonan
+venues don't publish a rate card anywhere, so most `price_per_hour` /
+`opens_at` / `closes_at` fields are deliberately left null rather than
+guessed at zero or 24-hour). The three venues `ExtendedTournamentsSeeder`
+actually schedules demo tournaments at are BRCC (basketball, volleyball,
+table tennis, and its own badminton courts), JBTC Binangonan Badminton and
+Pickleball Courts (badminton + the only confirmed Pickleball venue in
+town), and Eastridge Athletic Park (dedicated tennis court) — the other 14
+barangay/commercial venues are real but only appear in the general venue
+directory, not in any seeded tournament.
 
 **Stack**: Laravel 12 + PostgreSQL (`api/`), React 19 + TypeScript + Tailwind
 v4 (`web/`), Laravel Reverb for WebSockets. Deployed: Render (API + Reverb +
 Postgres, free tier) and Vercel (frontend).
+
+There is no native mobile app — "mobile" means the same React site running
+in a phone browser. Device-level notifications (the OS notification
+tray/lock screen, not just the in-app bell) are delivered via **Web Push**
+(added 2026-09-03): `NotificationService::send()` now fires both the
+existing Reverb broadcast and a Web Push send (`WebPushService`, wrapping
+`minishlink/web-push`) to every device the user has subscribed
+(`push_subscriptions` table). Opt-in is user-initiated from
+`AccountSettingsModal` (`web/src/lib/pushNotifications.ts`) — browsers block
+permission prompts not triggered by a click, so this is never requested
+automatically except a silent re-subscribe on login for someone who already
+granted permission (`PushNotificationsBootstrap`). Needs `VAPID_PUBLIC_KEY`
+/ `VAPID_PRIVATE_KEY` set (generate via
+`Minishlink\WebPush\VAPID::createVapidKeys()`) — without them
+`WebPushService::sendToUser()` silently no-ops. **iOS caveat**: Safari only
+grants push permission to a site added to the Home Screen first (an Apple
+platform restriction) — `web/public/manifest.webmanifest` and the
+`apple-mobile-web-app-capable` meta tag in `index.html` exist to make that
+installable; `needsHomeScreenInstallOnIOS()` shows the install instructions
+inline when relevant. Also fixed in the same pass: `/api/notifications` was
+gated to `role:player|coach` even though organizer/venue_facilitator/admin
+all receive notifications too (see `NotificationService::send()` call
+sites) — moved to the unrestricted `auth:sanctum` group.
 
 **Roles**: admin, organizer, venue_organizer, livestream_organizer,
 venue_facilitator, coach, player — via Spatie `laravel-permission`.

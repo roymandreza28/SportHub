@@ -1,5 +1,12 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { isAxiosError } from 'axios'
 import { api, clearStoredToken, getStoredToken, setStoredToken } from './api'
+
+// Retry delays for a transient failure fetching /api/user on startup (network
+// hiccup, or Render's free-tier API waking from sleep, which can take 30-60s).
+// Spans ~31s of retries so a cold start doesn't get misread as an invalid
+// session — see fetchUser() below for why only a real 401/403 clears the token.
+const AUTH_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000]
 
 export type Role =
   | 'admin'
@@ -53,15 +60,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false)
       return
     }
-    try {
-      const { data } = await api.get<User>('/api/user')
-      if (authAction.current === gen) setUser(data)
-    } catch {
-      if (authAction.current === gen) setUser(null)
-      clearStoredToken()
-    } finally {
-      setIsLoading(false)
+
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const { data } = await api.get<User>('/api/user')
+        if (authAction.current === gen) setUser(data)
+        break
+      } catch (error) {
+        // A newer login/register/logout already ran while this request was
+        // in flight — this attempt's result (success or failure) is stale.
+        if (authAction.current !== gen) return
+
+        const status = isAxiosError(error) ? error.response?.status : undefined
+        // Only a genuine rejection from the server (invalid/expired token,
+        // or a deactivated account) means the session is actually over.
+        // Anything else — a network error, a timeout, a 5xx — is transient
+        // (most commonly Render's free-tier API waking up from sleep) and
+        // must never silently sign the user out just because one request
+        // couldn't reach the server; the token they logged in with is still
+        // good, so retry instead of clearing it.
+        if (status === 401 || status === 403) {
+          setUser(null)
+          clearStoredToken()
+          break
+        }
+
+        if (attempt >= AUTH_RETRY_DELAYS_MS.length) {
+          // Stop showing a loading state, but deliberately leave the token
+          // in storage — the user never clicked logout, the API was just
+          // unreachable. Reloading the page (with the still-valid token)
+          // can restore the session without asking for a password again.
+          break
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, AUTH_RETRY_DELAYS_MS[attempt]))
+      }
     }
+
+    if (authAction.current === gen) setIsLoading(false)
   }
 
   useEffect(() => {

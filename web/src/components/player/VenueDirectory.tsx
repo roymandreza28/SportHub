@@ -31,7 +31,7 @@ export function VenueDirectory({ onSelect, selectedId }: { onSelect: (venue: Ven
               onClick={() => onSelect(venue)}
               className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
                 selectedId === venue.id
-                  ? 'bg-teal-600 font-medium text-white shadow-sm'
+                  ? 'bg-teal-600 font-medium text-pure-white shadow-sm'
                   : 'text-slate-700 hover:bg-slate-100'
               }`}
             >

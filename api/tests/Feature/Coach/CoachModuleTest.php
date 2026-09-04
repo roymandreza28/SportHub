@@ -26,6 +26,32 @@ it('lets a coach register a player for an open tournament and rejects duplicate 
         ->assertStatus(422);
 });
 
+it('rejects a coach registering a second, different player for a tournament they already registered someone for', function () {
+    $coach = userWithRole('coach');
+    $playerA = userWithRole('player');
+    $playerB = userWithRole('player');
+    $organizer = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Table Tennis']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $organizer->id,
+        'sport_id' => $sport->id,
+        'name' => 'Singles Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(),
+        'status' => 'registration',
+    ]);
+
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $playerA->id])
+        ->assertCreated();
+
+    $response = $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $playerB->id]);
+    $response->assertStatus(422);
+    expect($response->json('message'))->toContain('already registered a player');
+
+    $this->assertDatabaseMissing('tournament_registrations', ['tournament_id' => $tournament->id, 'user_id' => $playerB->id]);
+});
+
 it('makes a freshly-created tournament visible to coaches only after the organizer opens it for registration', function () {
     $coach = userWithRole('coach');
     $player = userWithRole('player');
@@ -170,6 +196,24 @@ it('creates an evaluation that upserts the current skill level and keeps prior e
         'player_profile_id' => $player->fresh()->playerProfile->id,
         'level' => 'casual_player',
         'score' => 55,
+    ]);
+});
+
+it('accepts the professional tier, added for Bowling\'s PBA/international-tour level', function () {
+    $coach = userWithRole('coach');
+    $player = userWithRole('player');
+    $sport = Sport::create(['name' => 'Bowling']);
+
+    $this->actingAs($coach)->postJson('/api/evaluations', [
+        'player_id' => $player->id,
+        'sport_id' => $sport->id,
+        'level' => 'professional',
+        'score' => 98,
+    ])->assertCreated();
+
+    $this->assertDatabaseHas('skill_levels', [
+        'player_profile_id' => $player->fresh()->playerProfile->id,
+        'level' => 'professional',
     ]);
 });
 

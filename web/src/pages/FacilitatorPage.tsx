@@ -11,7 +11,7 @@ import {
   StatusBadge,
   type NavItem,
 } from '../components/layout/DashboardShell'
-import { IconCalendar, IconClipboard, IconHome, IconMapPin } from '../components/layout/icons'
+import { IconCalendar, IconClipboard, IconFileText, IconHome, IconMapPin } from '../components/layout/icons'
 import { VenueMap } from '../components/venue/VenueMap'
 import { VenueList } from '../components/venue/VenueList'
 import { CreateVenueModal } from '../components/venue/CreateVenueModal'
@@ -20,6 +20,8 @@ import { VenueScheduleCalendar } from '../components/venue/VenueScheduleCalendar
 import { RegistrationApprovalQueue } from '../components/venue/RegistrationApprovalQueue'
 import { VenueBookingsList } from '../components/venue/VenueBookingsList'
 import { ManualBookingForm } from '../components/venue/ManualBookingForm'
+import { NewsEditor } from '../components/organizer/NewsEditor'
+import { NewsFeed } from '../components/organizer/NewsFeed'
 import { buttonGhost, buttonPrimary, select } from '../lib/formStyles'
 
 const NAV_ITEMS: NavItem[] = [
@@ -27,6 +29,10 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'venues', label: 'Venues', icon: IconMapPin },
   { id: 'bookings', label: 'Bookings', icon: IconClipboard },
   { id: 'schedule', label: 'Schedule', icon: IconCalendar },
+  // Reuses the organizer's own NewsEditor/NewsFeed — backend grants
+  // 'manage news' to venue_facilitator too (see RolesAndPermissionsSeeder),
+  // and neither component assumes the organizer role.
+  { id: 'news', label: 'News', icon: IconFileText },
 ]
 
 export function FacilitatorPage() {
@@ -204,6 +210,15 @@ export function FacilitatorPage() {
           ) : (
             <p className="text-sm text-slate-500">No venues yet.</p>
           )}
+        </Section>
+      )}
+
+      {active === 'news' && (
+        <Section title="News" description="Publish an update for the community.">
+          <NewsEditor />
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <NewsFeed />
+          </div>
         </Section>
       )}
     </DashboardShell>

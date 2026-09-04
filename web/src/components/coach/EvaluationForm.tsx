@@ -2,14 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createEvaluation, type PlayerSearchResult } from '../../lib/coachApi'
 import { fetchSports } from '../../lib/venueApi'
-import { SKILL_LEVELS, SKILL_LEVEL_LABELS, type SkillLevelTier } from '../../lib/skillLevels'
-import {
-  GENERAL_CRITERIA,
-  SPORT_STAT_FIELDS,
-  SPORT_COMPUTED_FIELDS,
-  computeSportStats,
-  type GeneralCriterionKey,
-} from '../../lib/evaluationCriteria'
+import { SKILL_LEVEL_LABELS, tiersFor, criteriaFor, type SkillLevelTier } from '../../lib/skillLevels'
+import { SPORT_ATTRIBUTE_CRITERIA, SPORT_STAT_FIELDS, SPORT_COMPUTED_FIELDS, computeSportStats } from '../../lib/evaluationCriteria'
 import { PlayerSearchPicker } from './PlayerSearchPicker'
 import { PlayerSkillHistoryChart } from './PlayerSkillHistoryChart'
 import { buttonPrimary, fieldGroup, input, label, select, textarea } from '../../lib/formStyles'
@@ -42,12 +36,15 @@ export function EvaluationForm() {
   const [level, setLevel] = useState<SkillLevelTier>('beginner')
   const [score, setScore] = useState('')
   const [notes, setNotes] = useState('')
-  const [general, setGeneral] = useState<Partial<Record<GeneralCriterionKey, number>>>({})
+  const [attributes, setAttributes] = useState<Partial<Record<string, number>>>({})
   const [rawStats, setRawStats] = useState<Record<string, string>>({})
 
   const sportName = sports?.find((s) => s.id === sportId)?.name
   const statFields = sportName ? SPORT_STAT_FIELDS[sportName] : undefined
   const computedFields = sportName ? SPORT_COMPUTED_FIELDS[sportName] : undefined
+  const attributeFields = sportName ? SPORT_ATTRIBUTE_CRITERIA[sportName] : undefined
+  const availableTiers = tiersFor(sportName)
+  const tierCriteria = criteriaFor(sportName, level)
 
   const rawStatsNumeric = Object.fromEntries(
     Object.entries(rawStats)
@@ -65,7 +62,7 @@ export function EvaluationForm() {
         score: score ? Number(score) : undefined,
         notes: notes || undefined,
         criteria: {
-          general: Object.keys(general).length > 0 ? general : undefined,
+          attributes: Object.keys(attributes).length > 0 ? attributes : undefined,
           sport_stats:
             Object.keys(rawStatsNumeric).length > 0 ? { raw: rawStatsNumeric, computed: computedStats } : undefined,
         },
@@ -73,7 +70,7 @@ export function EvaluationForm() {
     onSuccess: () => {
       setNotes('')
       setScore('')
-      setGeneral({})
+      setAttributes({})
       setRawStats({})
       queryClient.invalidateQueries({ queryKey: ['coach', 'evaluations', player?.id] })
     },
@@ -94,8 +91,12 @@ export function EvaluationForm() {
               <select
                 value={sportId}
                 onChange={(e) => {
-                  setSportId(e.target.value ? Number(e.target.value) : '')
+                  const nextSportId = e.target.value ? Number(e.target.value) : ''
+                  setSportId(nextSportId)
                   setRawStats({})
+                  setAttributes({})
+                  const nextTiers = tiersFor(sports?.find((s) => s.id === nextSportId)?.name)
+                  if (!nextTiers.includes(level)) setLevel(nextTiers[0])
                 }}
                 className={select}
               >
@@ -114,12 +115,28 @@ export function EvaluationForm() {
                 onChange={(e) => setLevel(e.target.value as SkillLevelTier)}
                 className={select}
               >
-                {SKILL_LEVELS.map((l) => (
+                {availableTiers.map((l) => (
                   <option key={l} value={l}>
                     {SKILL_LEVEL_LABELS[l]}
                   </option>
                 ))}
               </select>
+              {tierCriteria && (
+                <div className="mt-1 rounded-lg border border-slate-100 bg-slate-50/60 p-2.5 text-xs text-slate-600">
+                  {tierCriteria.range && (
+                    <p className="mb-1 font-semibold text-teal-700">{tierCriteria.range}</p>
+                  )}
+                  <p>
+                    <span className="font-medium text-slate-700">Profile:</span> {tierCriteria.profile}
+                  </p>
+                  <p>
+                    <span className="font-medium text-slate-700">Skills:</span> {tierCriteria.skills}
+                  </p>
+                  <p>
+                    <span className="font-medium text-slate-700">Focus:</span> {tierCriteria.focus}
+                  </p>
+                </div>
+              )}
             </div>
             <div className={fieldGroup}>
               <label className={label}>Score (optional)</label>
@@ -143,27 +160,31 @@ export function EvaluationForm() {
             </div>
           </div>
 
-          <CollapsibleSection title="General Criteria">
-            <div className="flex flex-col gap-4">
-              {GENERAL_CRITERIA.map((c) => (
-                <div key={c.key} className={fieldGroup}>
-                  <div className="flex items-baseline justify-between gap-2">
-                    <label className="text-sm font-medium text-slate-700">{c.label}</label>
-                    <span className="text-sm font-semibold tabular-nums text-teal-700">{general[c.key] ?? '—'}</span>
+          {attributeFields && (
+            <CollapsibleSection title={`${sportName} Attribute Ratings`}>
+              <div className="flex flex-col gap-4">
+                {attributeFields.map((c) => (
+                  <div key={c.key} className={fieldGroup}>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <label className="text-sm font-medium text-slate-700">{c.label}</label>
+                      <span className="text-sm font-semibold tabular-nums text-teal-700">
+                        {attributes[c.key] ?? '—'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">{c.description}</p>
+                    <input
+                      type="range"
+                      min={1}
+                      max={10}
+                      value={attributes[c.key] ?? 5}
+                      onChange={(e) => setAttributes((a) => ({ ...a, [c.key]: Number(e.target.value) }))}
+                      className="w-full accent-teal-600"
+                    />
                   </div>
-                  <p className="text-xs text-slate-500">{c.description}</p>
-                  <input
-                    type="range"
-                    min={1}
-                    max={10}
-                    value={general[c.key] ?? 5}
-                    onChange={(e) => setGeneral((g) => ({ ...g, [c.key]: Number(e.target.value) }))}
-                    className="w-full accent-teal-600"
-                  />
-                </div>
-              ))}
-            </div>
-          </CollapsibleSection>
+                ))}
+              </div>
+            </CollapsibleSection>
+          )}
 
           {statFields && (
             <CollapsibleSection title={`${sportName} Stats`}>

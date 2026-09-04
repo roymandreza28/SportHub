@@ -26,24 +26,71 @@ it('lets a coach book a venue now that the permission has been granted', functio
         'venue_id' => $venue->id,
         'starts_at' => now()->addDay()->toIso8601String(),
         'ends_at' => now()->addDay()->addHour()->toIso8601String(),
+        'purpose' => 'Team practice',
     ])->assertCreated();
 });
 
-it('does not create a conversation while a booking is still pending', function () {
+it('rejects a booking request with no purpose', function () {
     $player = userWithRole('player');
     $facilitator = userWithRole('venue_facilitator');
     $venue = makeBookingVenue($facilitator);
 
-    $registration = VenueRegistration::create([
+    $this->actingAs($player)->postJson('/api/venue-registrations', [
         'venue_id' => $venue->id,
-        'user_id' => $player->id,
-        'starts_at' => now()->addDay(),
-        'ends_at' => now()->addDay()->addHour(),
-        'status' => 'pending',
-    ]);
+        'starts_at' => now()->addDay()->toIso8601String(),
+        'ends_at' => now()->addDay()->addHour()->toIso8601String(),
+    ])->assertStatus(422)->assertJsonValidationErrors('purpose');
+});
 
-    $this->assertDatabaseCount('conversations', 0);
-    expect($registration->fresh()->conversation)->toBeNull();
+it('creates a conversation the instant a booking is requested, before any facilitator response, and returns the total amount and facilitator contact', function () {
+    $player = userWithRole('player');
+    $facilitator = userWithRole('venue_facilitator');
+    $facilitator->update(['phone' => '0917-123-4567']);
+    $venue = makeBookingVenue($facilitator);
+    $venue->update(['price_per_hour' => 200]);
+
+    $response = $this->actingAs($player)->postJson('/api/venue-registrations', [
+        'venue_id' => $venue->id,
+        'starts_at' => now()->addDay()->toIso8601String(),
+        'ends_at' => now()->addDay()->addHours(2)->toIso8601String(),
+        'purpose' => 'Barangay league practice',
+    ])->assertCreated();
+
+    expect($response->json('status'))->toBe('pending');
+    expect((float) $response->json('total_amount'))->toBe(400.0);
+    expect($response->json('facilitator_name'))->toBe($facilitator->name);
+    expect($response->json('facilitator_phone'))->toBe('0917-123-4567');
+
+    $conversationId = $response->json('conversation_id');
+    expect($conversationId)->not->toBeNull();
+
+    $conversation = Conversation::findOrFail($conversationId);
+    expect($conversation->participants->pluck('id')->sort()->values()->all())
+        ->toBe(collect([$player->id, $facilitator->id])->sort()->values()->all());
+
+    // Both parties can already message each other, well before approval.
+    $this->actingAs($player)->postJson("/api/social/conversations/{$conversationId}/messages", [
+        'body' => 'Requesting this slot, thanks!',
+    ])->assertCreated();
+
+    $this->actingAs($facilitator)->postJson("/api/social/conversations/{$conversationId}/messages", [
+        'body' => 'Got it, reviewing now.',
+    ])->assertCreated();
+});
+
+it('reports no total amount when the venue has not published a rate', function () {
+    $player = userWithRole('player');
+    $facilitator = userWithRole('venue_facilitator');
+    $venue = makeBookingVenue($facilitator);
+
+    $response = $this->actingAs($player)->postJson('/api/venue-registrations', [
+        'venue_id' => $venue->id,
+        'starts_at' => now()->addDay()->toIso8601String(),
+        'ends_at' => now()->addDay()->addHour()->toIso8601String(),
+        'purpose' => 'Pickup game',
+    ])->assertCreated();
+
+    expect($response->json('total_amount'))->toBeNull();
 });
 
 it('creates a direct conversation between booker and facilitator once a booking is approved, bypassing the friends-only rule', function () {

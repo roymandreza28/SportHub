@@ -95,7 +95,7 @@ export function StatSheetModal({ matchId, onClose }: { matchId: number; onClose:
   const isBasketball = sheet?.sport_name === 'Basketball'
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/60 p-4">
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/60 p-4">
       <div
         ref={containerRef}
         className="flex w-full max-w-6xl flex-col gap-4 overflow-y-auto rounded-xl bg-white p-6 shadow-2xl"

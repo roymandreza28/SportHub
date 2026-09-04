@@ -32,6 +32,22 @@ export function DashboardShell({
   // the logo/other icons hidden instead of squeezing in beside them.
   const [searchExpanded, setSearchExpanded] = useState(false)
   const showSocialHeader = hasRole('player', 'coach')
+  // Broader than showSocialHeader: messages/notifications aren't a
+  // player/coach-only concept (a venue facilitator gets dropped into a
+  // booking-approval thread, an organizer gets a champion-crowned
+  // notification, and every one of these roles can reach an admin via the
+  // "FAQ" button in UserMenu; an admin needs to see and reply to those
+  // same threads) — only the friend/player search bar below stays
+  // player/coach-only, since none of the other roles has friends.
+  const showMessagesHeader = hasRole(
+    'player',
+    'coach',
+    'venue_facilitator',
+    'admin',
+    'organizer',
+    'venue_organizer',
+    'livestream_organizer'
+  )
   // Facilitators/organizers/admins are never self-registered through the
   // public form, so this only ever applies to player/coach accounts.
   const showVerificationBanner =
@@ -107,7 +123,7 @@ export function DashboardShell({
                 collapsed ? 'justify-center' : ''
               } ${
                 activeId === item.id
-                  ? 'bg-teal-600 text-white'
+                  ? 'bg-teal-600 text-pure-white'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
@@ -159,8 +175,8 @@ export function DashboardShell({
               menu (and the logo above) hide so it can take the full width. */}
           <div className={`flex flex-1 items-center gap-1 ${searchExpanded ? '' : 'justify-end'}`}>
             {showSocialHeader && <UserSearchBar onExpandedChange={setSearchExpanded} />}
-            {!searchExpanded && showSocialHeader && <HeaderMessagesMenu />}
-            {!searchExpanded && showSocialHeader && <HeaderNotificationsMenu />}
+            {!searchExpanded && showMessagesHeader && <HeaderMessagesMenu />}
+            {!searchExpanded && showMessagesHeader && <HeaderNotificationsMenu />}
             {!searchExpanded && <UserMenu />}
           </div>
         </header>
@@ -186,13 +202,21 @@ export function DashboardShell({
                 aria-label={item.label}
                 className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition ${
                   activeId === item.id
-                    ? 'bg-teal-600 text-white'
+                    ? 'bg-teal-600 text-pure-white'
                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
                 <item.icon className="h-5 w-5" />
               </button>
-              <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+              {/* bg-slate-950 (not slate-900) deliberately — slate-900 is
+                  part of the theme-reactive ramp and would flip to
+                  near-white under Night Game Lights, but a hover tooltip
+                  should stay a dark bubble with light text regardless of
+                  page theme, the same way an OS-level tooltip does.
+                  slate-950 is untouched by the palette override, so it's
+                  always dark; pure-white keeps the label always legible on
+                  it. */}
+              <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-[11px] font-medium text-pure-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
                 {item.label}
               </span>
             </div>

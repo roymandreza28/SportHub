@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\Team;
 use App\Models\Tournament;
 use App\Models\TournamentRegistration;
+use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,12 +61,22 @@ class TournamentRegistrationController extends Controller
             throw ValidationException::withMessages(['tournament' => ['Registration is closed for this tournament.']]);
         }
 
+        // A coach registers one entrant per tournament, full stop — never a
+        // second player once they've already used their one slot here.
+        $coachAlreadyRegistered = TournamentRegistration::where('tournament_id', $tournament->id)
+            ->where('registered_by', $request->user()->id)
+            ->exists();
+
+        if ($coachAlreadyRegistered) {
+            throw ValidationException::withMessages(['tournament' => ['You have already registered a player for this tournament.']]);
+        }
+
         $alreadyRegistered = TournamentRegistration::where('tournament_id', $tournament->id)
             ->where('user_id', $data['user_id'])
             ->exists();
 
         if ($alreadyRegistered) {
-            throw ValidationException::withMessages(['user_id' => ['This player is already registered for this tournament.']]);
+            throw ValidationException::withMessages(['user_id' => ['Your player is already registered in this tournament.']]);
         }
 
         $registration = TournamentRegistration::create([
@@ -119,12 +130,47 @@ class TournamentRegistrationController extends Controller
         );
         abort_if($team->status !== 'ready', 422, 'This team is not full yet.');
 
+        // A coach registers one entrant per tournament, full stop — never a
+        // second team (even one they also captain) once they've already
+        // used their one slot here.
+        $coachAlreadyRegistered = TournamentRegistration::where('tournament_id', $tournament->id)
+            ->where('registered_by', $request->user()->id)
+            ->exists();
+
+        if ($coachAlreadyRegistered) {
+            throw ValidationException::withMessages(['tournament' => ['You have already registered a team for this tournament.']]);
+        }
+
         $alreadyRegistered = TournamentRegistration::where('tournament_id', $tournament->id)
             ->where('team_id', $team->id)
             ->exists();
 
         if ($alreadyRegistered) {
             throw ValidationException::withMessages(['team_id' => ['This team is already registered for this tournament.']]);
+        }
+
+        // A player can't be pulled into two different rosters that both
+        // show up at the same tournament — find the first name on this
+        // team's roster that's already spoken for by some other
+        // registration (whether that other registration is itself
+        // individual or team-based) already sitting on this tournament.
+        $rosterUserIds = $team->members()->where('status', 'accepted')->pluck('user_id');
+
+        $existingRegistrations = TournamentRegistration::where('tournament_id', $tournament->id)
+            ->with(['team.members' => fn ($q) => $q->where('status', 'accepted')])
+            ->get();
+
+        $alreadyRegisteredUserIds = $existingRegistrations->flatMap(
+            fn (TournamentRegistration $reg) => $reg->user_id ? [$reg->user_id] : $reg->team->members->pluck('user_id')
+        );
+
+        $conflictingUserId = $rosterUserIds->first(fn ($id) => $alreadyRegisteredUserIds->contains($id));
+
+        if ($conflictingUserId) {
+            $conflictingName = User::find($conflictingUserId)?->name ?? 'A player';
+            throw ValidationException::withMessages([
+                'team_id' => ["A player on your team is already registered for this tournament: {$conflictingName}."],
+            ]);
         }
 
         $registration = TournamentRegistration::create([

@@ -5,11 +5,17 @@ export type ConversationParticipant = {
   id: number
   name: string
   avatar_url: string | null
+  // True only for the admin account on a FAQ/support thread (see
+  // ConversationController::flagAdminParticipants()) — drives masking their
+  // real name behind "admin-name" and picking the email-style composer vs.
+  // the normal chat thread (see ConversationWindow.tsx).
+  is_admin: boolean
 }
 
 export type ConversationMessageItem = {
   id: number
   body: string
+  attachment_url: string | null
   conversation_id: number
   user: { id: number; name: string }
   created_at: string
@@ -34,6 +40,39 @@ export async function fetchConversations() {
 export async function startDirectConversation(userId: number) {
   const { data } = await api.post<ConversationSummary>('/api/social/conversations', {
     type: 'direct',
+    user_id: userId,
+  })
+  return data
+}
+
+// Powers the "FAQ" button in the player/coach/venue_facilitator settings
+// dropdown — opens (or reopens) a direct line to an admin. Unlike
+// startDirectConversation() above, this doesn't require being friends with
+// the recipient first.
+export async function contactAdmin() {
+  const { data } = await api.post<ConversationSummary>('/api/social/conversations/contact-admin')
+  return data
+}
+
+export type OrganizerDirectoryEntry = {
+  id: number
+  name: string
+  email: string
+  avatar_url: string | null
+  role: 'organizer' | 'venue_organizer' | 'livestream_organizer'
+}
+
+// The organizer/venue_organizer/livestream_organizer "staff directory" —
+// every member of that family except the caller, so the main organizer can
+// message a venue/livestream organizer (or either of those message the main
+// organizer back) without a friends list, which none of these roles have.
+export async function fetchOrganizerDirectory() {
+  const { data } = await api.get<OrganizerDirectoryEntry[]>('/api/social/organizer-directory')
+  return data
+}
+
+export async function contactColleague(userId: number) {
+  const { data } = await api.post<ConversationSummary>('/api/social/conversations/contact-colleague', {
     user_id: userId,
   })
   return data
@@ -66,10 +105,23 @@ export async function fetchMessages(conversationId: number) {
   return data
 }
 
-export async function sendMessage(conversationId: number, body: string) {
+export async function sendMessage(conversationId: number, body: string, attachment?: File) {
+  if (!attachment) {
+    const { data } = await api.post<ConversationMessageItem>(
+      `/api/social/conversations/${conversationId}/messages`,
+      { body }
+    )
+    return data
+  }
+
+  const formData = new FormData()
+  if (body) formData.append('body', body)
+  formData.append('attachment', attachment)
+
   const { data } = await api.post<ConversationMessageItem>(
     `/api/social/conversations/${conversationId}/messages`,
-    { body }
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
   )
   return data
 }

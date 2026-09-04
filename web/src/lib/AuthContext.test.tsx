@@ -69,7 +69,7 @@ describe('AuthProvider', () => {
 
   it('shows not-logged-in and clears the token when the stored token is rejected (401)', async () => {
     vi.mocked(getStoredToken).mockReturnValue('stale-token')
-    vi.mocked(api.get).mockRejectedValue(new Error('401'))
+    vi.mocked(api.get).mockRejectedValue({ isAxiosError: true, response: { status: 401 } })
 
     render(
       <AuthProvider>
@@ -79,6 +79,43 @@ describe('AuthProvider', () => {
 
     await waitFor(() => expect(screen.getByText('Not logged in')).toBeInTheDocument())
     expect(clearStoredToken).toHaveBeenCalled()
+  })
+
+  it('shows not-logged-in and clears the token when the account is deactivated (403)', async () => {
+    vi.mocked(getStoredToken).mockReturnValue('existing-token')
+    vi.mocked(api.get).mockRejectedValue({ isAxiosError: true, response: { status: 403 } })
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>
+    )
+
+    await waitFor(() => expect(screen.getByText('Not logged in')).toBeInTheDocument())
+    expect(clearStoredToken).toHaveBeenCalled()
+  })
+
+  it('keeps retrying without clearing the token when /api/user fails with a transient error (not a real rejection)', async () => {
+    // No `response` at all — exactly what a network error, a timeout, or
+    // Render's free-tier API waking from sleep looks like. This must never
+    // be treated the same as the server actually rejecting the token, or
+    // reopening the app after it's been closed for a while (long enough for
+    // the free-tier API to sleep) would silently sign the user out.
+    vi.mocked(getStoredToken).mockReturnValue('existing-token')
+    vi.mocked(api.get).mockRejectedValue({ isAxiosError: true, message: 'Network Error' })
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>
+    )
+
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/api/user'))
+
+    // Still retrying (the first retry delay hasn't elapsed yet) — the token
+    // must be left untouched and the user must not be bounced to "logged out".
+    expect(screen.getByText('Loading...')).toBeInTheDocument()
+    expect(clearStoredToken).not.toHaveBeenCalled()
   })
 
   it('logs in via POST /api/login, stores the returned token, and updates user state', async () => {

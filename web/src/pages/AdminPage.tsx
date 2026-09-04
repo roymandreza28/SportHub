@@ -1,18 +1,21 @@
 import { useState } from 'react'
 import { DashboardShell, Section, StatCard, StatCardGrid, type NavItem } from '../components/layout/DashboardShell'
-import { IconFileText, IconHome, IconShieldCheck, IconUserCog, IconUsers } from '../components/layout/icons'
+import { IconFileText, IconHelpCircle, IconHome, IconShieldCheck, IconUserCog, IconUsers } from '../components/layout/icons'
 import { useAdminMetrics } from '../components/admin/useAdminMetrics'
 import { FacilitatorCreateForm } from '../components/admin/FacilitatorCreateForm'
 import { OrganizerCreateForm } from '../components/admin/OrganizerCreateForm'
 import { UserManagementTable } from '../components/admin/UserManagementTable'
 import { VerificationQueue } from '../components/admin/VerificationQueue'
 import { AuditLogTable } from '../components/admin/AuditLogTable'
+import { PublicInquiriesTable } from '../components/admin/PublicInquiriesTable'
+import { AdminSupportThreads } from '../components/admin/AdminSupportThreads'
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'overview', label: 'Dashboard', icon: IconHome },
   { id: 'users', label: 'Users Management', icon: IconUsers },
   { id: 'verification', label: 'Verification', icon: IconShieldCheck },
   { id: 'facilitators', label: 'Facilitators & Organizers', icon: IconUserCog },
+  { id: 'inquiries', label: 'Inquiries & Support', icon: IconHelpCircle },
   { id: 'audit-log', label: 'Audit Log', icon: IconFileText },
 ]
 
@@ -80,6 +83,23 @@ export function AdminPage() {
         <Section title="Verification" description="Review player and coach accounts awaiting verification.">
           <VerificationQueue />
         </Section>
+      )}
+
+      {active === 'inquiries' && (
+        <>
+          <Section
+            title="Public Inquiries"
+            description="Anonymous messages submitted from the landing page's FAQ form — reply directly to the sender's email."
+          >
+            <PublicInquiriesTable />
+          </Section>
+
+          <div className="mt-8">
+            <Section title="Support Conversations" description="Every FAQ thread reaching you from a logged-in user.">
+              <AdminSupportThreads />
+            </Section>
+          </div>
+        </>
       )}
 
       {active === 'audit-log' && (

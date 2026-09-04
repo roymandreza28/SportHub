@@ -1,10 +1,143 @@
 @import "tailwindcss";
 
-/* Counter-rotating ring for LoadingScreen — spins opposite to the built-in
-   animate-spin utility so the two rings around the logo visibly turn
-   against each other rather than together. */
+/* Enables `dark:` utilities keyed off <html data-theme="dark">, set by
+   ThemeContext — not prefers-color-scheme, since the profile-menu switch
+   (UserMenu.tsx) is a manual override the user can pick regardless of their
+   OS setting. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* SportHub's whole-app palette. Rather than inventing new class names and
+   sweeping every file that already uses Tailwind's stock teal/slate/red/
+   green/amber/blue utilities, this redeclares those SAME scale names with
+   brand values — Tailwind compiles every `bg-teal-600`/`text-slate-900`/etc.
+   utility to `var(--color-teal-600)` etc., so overriding the variable here
+   (and again under [data-theme="dark"] below) repaints every existing
+   utility class app-wide with zero per-component edits. Two palettes:
+   Championship Spirit (default) below, Night Game Lights under
+   [data-theme="dark"] further down.
+   Counter-rotating ring for LoadingScreen (--animate-spin-reverse) spins
+   opposite to the built-in animate-spin utility so the two rings around the
+   logo visibly turn against each other rather than together. */
 @theme {
+  /* teal -> brand primary/accent. Orange Red at 600 (buttonPrimary's solid
+     fill today), Gold reserved as the 100/50 tint family. */
+  --color-teal-50: #fff4ef;
+  --color-teal-100: #ffe4d8;
+  --color-teal-200: #ffc7ab;
+  --color-teal-300: #ffa274;
+  --color-teal-400: #ff7440;
+  --color-teal-500: #ff5714;
+  --color-teal-600: #ff4500;
+  --color-teal-700: #e03d00;
+  --color-teal-800: #b83200;
+  --color-teal-900: #942a08;
+
+  /* slate -> neutral chrome, warm-biased (espresso/ivory/taupe) rather than
+     a cold gray, per Championship Spirit's medal palette. */
+  --color-slate-50: #fbf7ef;
+  --color-slate-100: #f5efe0;
+  --color-slate-200: #ebe1cc;
+  --color-slate-300: #d8cbb0;
+  --color-slate-400: #b3a289;
+  --color-slate-500: #8a7a63;
+  --color-slate-600: #6b5d49;
+  --color-slate-700: #4a4033;
+  --color-slate-800: #332b21;
+  --color-slate-900: #241e17;
+
+  /* red -> danger/error, tuned to sit alongside the orange-red primary
+     without reading as the same color. */
+  --color-red-50: #fdf2f0;
+  --color-red-100: #fbdfd9;
+  --color-red-200: #f5b8ac;
+  --color-red-500: #e06b5c;
+  --color-red-600: #d64545;
+  --color-red-700: #b93636;
+  --color-red-800: #8f2929;
+
+  /* green -> success, a sea green distinct from every warm brand hue. */
+  --color-green-50: #f0f9f4;
+  --color-green-100: #d7f0e1;
+  --color-green-600: #2e8b57;
+  --color-green-700: #256f45;
+
+  /* fixed alias — always literal white, for text on a solid semantic fill
+     (buttonSuccess, badge dots) that must never invert with the surface
+     color the way --color-white does under dark mode below. */
+  --color-pure-white: #ffffff;
+
   --animate-spin-reverse: spin-reverse 1.6s linear infinite;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+/* Night Game Lights — same token names, dark values. A plain CSS override
+   (not another @theme block) is enough: Tailwind's generated utilities
+   already read through var(--color-teal-600) etc., so redeclaring the
+   variable here is all it takes for every existing utility class to
+   repaint. Ramps invert direction on purpose — low numbers (50/100, used
+   for subtle tinted backgrounds) become dark tints of the surface instead
+   of pale ones; high numbers (600/700, used for solid fills and prominent
+   text) become the bright glow. */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-teal-50: #081221;
+  --color-teal-100: #0b1b32;
+  --color-teal-200: #0e294e;
+  --color-teal-300: #0e3771;
+  --color-teal-400: #094190;
+  --color-teal-500: #04459f;
+  --color-teal-600: #0047ab;
+  --color-teal-700: #0b62da;
+  --color-teal-800: #478beb;
+  --color-teal-900: #96b8e9;
+
+  --color-slate-50: #1a1a1a;
+  --color-slate-100: #222222;
+  --color-slate-200: #2b2b2b;
+  --color-slate-300: #3f3f3f;
+  --color-slate-400: #6b6b6b;
+  --color-slate-500: #8f8f8f;
+  --color-slate-600: #b3b3b3;
+  --color-slate-700: #cfcfcf;
+  --color-slate-800: #e2e2e2;
+  --color-slate-900: #ededed;
+
+  --color-red-50: #3d1414;
+  --color-red-100: #4a1818;
+  --color-red-200: #632020;
+  --color-red-500: #d14848;
+  --color-red-600: #e85c5c;
+  --color-red-700: #ef8080;
+  --color-red-800: #f4a3a3;
+
+  --color-green-50: #123322;
+  --color-green-100: #163d29;
+  --color-green-600: #6fcf97;
+  --color-green-700: #8fdaad;
+
+  --color-amber-50: #3d2e05;
+  --color-amber-100: #4a3808;
+  --color-amber-200: #6b4f0c;
+  --color-amber-600: #f2b705;
+  --color-amber-700: #ffce33;
+  --color-amber-800: #ffdb66;
+  --color-amber-900: #ffe89c;
+
+  --color-blue-100: #16324a;
+  --color-blue-700: #7ec8f0;
+
+  --color-purple-100: #2e1f42;
+  --color-purple-800: #cfa9f0;
+
+  /* Every `bg-white` panel/card/dropdown in the app becomes this dark
+     surface tone. The few spots where text must stay literally white
+     regardless of theme (buttonSuccess, unread-count badges) use
+     --color-pure-white instead, which is never overridden here. */
+  --color-white: #1e1e1e;
 }
 
 @keyframes spin-reverse {
@@ -20,8 +153,112 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Leaflet (VenueMap) ships z-index values up to 1000 for its own tiles/
+   markers/popups/controls, on the assumption that it's the only widget on
+   the page. This app isn't — dropdowns, modals, and floating chat windows
+   all need to render above a map wherever one appears on the same page, but
+   with the library's defaults its zoom controls (z-index: 1000) sat above
+   every one of them. Rather than hunting down every dropdown/modal in the
+   app and pushing each one's z-index past Leaflet's, every Leaflet stacking
+   layer is compressed here into single digits instead — low enough that
+   this app's lowest ordinary overlay z-index (z-10, e.g. a sticky header)
+   already clears it, while preserving Leaflet's own required paint order
+   (tiles below overlays below markers below tooltips below popups below
+   controls) so the map itself still renders correctly. `!important` because
+   Vite doesn't guarantee this file loads after leaflet.css, which is
+   imported per-component (see VenueMap.tsx) rather than globally. */
+.leaflet-map-pane canvas,
+.leaflet-map-pane svg,
+.leaflet-tile-pane {
+  z-index: 1 !important;
+}
+.leaflet-pane,
+.leaflet-overlay-pane {
+  z-index: 2 !important;
+}
+.leaflet-shadow-pane {
+  z-index: 3 !important;
+}
+.leaflet-marker-pane {
+  z-index: 4 !important;
+}
+.leaflet-tooltip-pane {
+  z-index: 5 !important;
+}
+.leaflet-popup-pane {
+  z-index: 6 !important;
+}
+.leaflet-control,
+.leaflet-zoom-box {
+  z-index: 7 !important;
+}
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 8 !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+}
+
+/* Every native <dialog> in the app (AuthModal, PublicNewsModal, ...) shares
+   this entrance/exit — @starting-style rather than a mount/unmount
+   transition, since showModal()/close() don't remount the React tree (the
+   dialog element itself just toggles [open]). allow-discrete lets the
+   transition span display:none <-> block, which is normally a
+   non-animatable jump. Unsupported browsers (pre-Safari 17.4, older
+   Firefox) just skip straight to the end state — never a stuck or
+   invisible modal, only a missing animation. */
+dialog.modal-dialog {
+  transition:
+    opacity 0.25s ease,
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    overlay 0.25s ease allow-discrete,
+    display 0.25s ease allow-discrete;
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+dialog.modal-dialog::backdrop {
+  transition:
+    opacity 0.25s ease,
+    overlay 0.25s ease allow-discrete,
+    display 0.25s ease allow-discrete;
+  opacity: 1;
+}
+@starting-style {
+  dialog.modal-dialog[open] {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+  dialog.modal-dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+/* Replays whenever the element carrying this class remounts (e.g. keyed by
+   AuthModal's login/register `mode`) — a quiet cue that the content
+   underneath actually changed, not just an on-load flourish. */
+@keyframes modal-content-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.modal-content-fade {
+  animation: modal-content-fade 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog.modal-dialog,
+  dialog.modal-dialog::backdrop,
+  .modal-content-fade {
+    transition: none;
+    animation: none;
   }
 }

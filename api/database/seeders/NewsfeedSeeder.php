@@ -38,34 +38,34 @@ class NewsfeedSeeder extends Seeder
     // crowned) rather than covering every status, since none of these five
     // are ever draft/registration/preparation/cancelled.
     private const FLAGSHIP_STORIES = [
-        'Morong Interbarangay Basketball Championship' => [
+        'Binangonan Interbarangay Basketball Championship' => [
             'ongoing' => [
                 'title' => 'Final four down, one game to go: Basketball Championship heads to the finals!',
-                'body' => "Eight barangay teams. Four brutal quarterfinal matchups. Two semifinal thrillers. Now it's down to this: the Morong Interbarangay Basketball Championship has its finalists, and the whole gymnasium is buzzing.\n\nEvery quarterfinal and semifinal has been logged with a full player-by-player box score — points, rebounds, assists, steals, and blocks for every athlete who stepped on the court. Scroll through the bracket in the app to relive every possession, or check any player's profile to see how their stat line is stacking up this tournament.\n\nThe championship game tips off soon at Morong Gymnasium's Main Court. Two barangays, one trophy — who's got next?",
+                'body' => "Eight barangay teams. Four brutal quarterfinal matchups. Two semifinal thrillers. Now it's down to this: the Binangonan Interbarangay Basketball Championship has its finalists, and the whole gymnasium is buzzing.\n\nEvery quarterfinal and semifinal has been logged with a full player-by-player box score — points, rebounds, assists, steals, and blocks for every athlete who stepped on the court. Scroll through the bracket in the app to relive every possession, or check any player's profile to see how their stat line is stacking up this tournament.\n\nThe championship game tips off soon at the Binangonan Recreation and Conference Center's Main Court. Two barangays, one trophy — who's got next?",
             ],
         ],
-        'Morong Volleyball Championship Cup' => [
+        'Binangonan Volleyball Championship Cup' => [
             'ongoing' => [
                 'title' => "Spikes, blocks, and dig after dig: Volleyball Championship Cup finalists are set!",
-                'body' => "Four squads registered for the inaugural Morong Volleyball Championship Cup, and after two hard-fought, best-of-five semifinal battles, we're down to the final two.\n\nBoth semifinals went the distance in sets, with kills, blocks, aces, and digs tracked for every player on the court — the kind of detail that turns a rally into a real stat line on each athlete's profile. Rotations were tested, momentum swung set to set, and the two teams left standing have earned their spot in the final.\n\nThe championship match is set for the Volleyball Court at Morong Gymnasium. Bring your voice — this one's going the distance.",
+                'body' => "Four squads registered for the inaugural Binangonan Volleyball Championship Cup, and after two hard-fought, best-of-five semifinal battles, we're down to the final two.\n\nBoth semifinals went the distance in sets, with kills, blocks, aces, and digs tracked for every player on the court — the kind of detail that turns a rally into a real stat line on each athlete's profile. Rotations were tested, momentum swung set to set, and the two teams left standing have earned their spot in the final.\n\nThe championship match is set for the Volleyball Court at the Binangonan Recreation and Conference Center. Bring your voice — this one's going the distance.",
             ],
         ],
-        'Morong Badminton Doubles Championship' => [
+        'Binangonan Badminton Doubles Championship' => [
             'ongoing' => [
                 'title' => "Smashes and net play all week: Badminton Doubles Championship reaches its final pairing",
-                'body' => "Four doubles pairs entered the Morong Badminton Doubles Championship at Tapal's Badminton Center, and the semifinals delivered exactly the kind of tight, tactical rallies this format is known for — smash winners, net kills, and aces recorded point-by-point for every pair.\n\nBoth semifinal ties were decided in sets, and the two pairings advancing to the final have shown they can handle the pressure of a best-of-three finish. Check the bracket for the full set-by-set breakdown of how each pair got here.\n\nThe final is coming up soon on Court 1 — expect a fast, physical finish.",
+                'body' => "Four doubles pairs entered the Binangonan Badminton Doubles Championship at JBTC Binangonan Badminton and Pickleball Courts, and the semifinals delivered exactly the kind of tight, tactical rallies this format is known for — smash winners, net kills, and aces recorded point-by-point for every pair.\n\nBoth semifinal ties were decided in sets, and the two pairings advancing to the final have shown they can handle the pressure of a best-of-three finish. Check the bracket for the full set-by-set breakdown of how each pair got here.\n\nThe final is coming up soon on Court 1 — expect a fast, physical finish.",
             ],
         ],
-        'Morong Tennis Singles Championship' => [
+        'Binangonan Tennis Singles Championship' => [
             'completed' => [
-                'title' => 'A champion has been crowned at the Morong Tennis Singles Championship!',
-                'body' => "The Morong Tennis Singles Championship is complete. Four singles competitors battled through the semifinals and into a final that went the distance in sets, with aces, winners, and unforced errors tracked point-by-point for every match.\n\nFrom the first semifinal serve at Morong Tennis Courts to the final's closing point, every match is now on record — check the bracket for the complete set-by-set history, or head to a competitor's profile to see their full tournament stat line.\n\nCongratulations to everyone who stepped on the court this tournament.",
+                'title' => 'A champion has been crowned at the Binangonan Tennis Singles Championship!',
+                'body' => "The Binangonan Tennis Singles Championship is complete. Four singles competitors battled through the semifinals and into a final that went the distance in sets, with aces, winners, and unforced errors tracked point-by-point for every match.\n\nFrom the first semifinal serve at Eastridge Athletic Park to the final's closing point, every match is now on record — check the bracket for the complete set-by-set history, or head to a competitor's profile to see their full tournament stat line.\n\nCongratulations to everyone who stepped on the court this tournament.",
             ],
         ],
-        'Morong Table Tennis Doubles Championship' => [
+        'Binangonan Table Tennis Doubles Championship' => [
             'completed' => [
-                'title' => 'Champions crowned at the Morong Table Tennis Doubles Championship!',
-                'body' => "The Morong Table Tennis Doubles Championship has concluded at Morong Gymnasium's Table Tennis Corner. Four doubles teams competed through the semifinals into a best-of-seven final, with every point-winning rally, service point, and unforced error logged for both sides of the table.\n\nIt was fast, it was close, and it's now fully on record — the complete set-by-set results are in the bracket, and each player's stat line has been added to their career totals.\n\nCongratulations to the newest doubles champions in Morong!",
+                'title' => 'Champions crowned at the Binangonan Table Tennis Doubles Championship!',
+                'body' => "The Binangonan Table Tennis Doubles Championship has concluded at the Recreation and Conference Center's Table Tennis Corner. Four doubles teams competed through the semifinals into a best-of-seven final, with every point-winning rally, service point, and unforced error logged for both sides of the table.\n\nIt was fast, it was close, and it's now fully on record — the complete set-by-set results are in the bracket, and each player's stat line has been added to their career totals.\n\nCongratulations to the newest doubles champions in Binangonan!",
             ],
         ],
     ];
@@ -103,7 +103,7 @@ class NewsfeedSeeder extends Seeder
 
         $this->post(
             $organizer, null,
-            'Welcome to SportHub Morong! 🎉',
+            'Welcome to SportHub Binangonan! 🎉',
             "SportHub is now live for the whole municipality — browse open tournaments, book a court, or register your team in just a few taps. Say hello in the comments and let us know what sport you're most excited to see!",
             now()->subDays(10),
             $engagementPool,
@@ -112,8 +112,8 @@ class NewsfeedSeeder extends Seeder
 
         $this->post(
             $organizer, null,
-            'Facility Update: New equipment at Morong Gymnasium',
-            'A fresh set of basketballs and volleyball equipment just arrived at Morong Gymnasium, courtesy of our venue facilitator. Ballers, expect better grip and bounce consistency starting this week!',
+            'Facility Update: New equipment at the Binangonan Recreation and Conference Center',
+            'A fresh set of basketballs and volleyball equipment just arrived at the Binangonan Recreation and Conference Center, courtesy of our venue facilitator. Ballers, expect better grip and bounce consistency starting this week!',
             now()->subDays(8),
             $engagementPool,
             'gym,philippines'

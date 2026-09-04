@@ -17,7 +17,7 @@ export function RegisterPage() {
           <h1 className="text-2xl font-bold text-slate-900">Create your account</h1>
           <p className="mt-1 text-sm text-slate-500">Join Sporthub as a player or a coach.</p>
         </div>
-        <RegisterForm onSuccess={() => navigate('/dashboard')} />
+        <RegisterForm onSuccess={() => navigate('/dashboard', { replace: true })} />
         <p className="mt-6 text-center text-sm text-slate-600">
           Already have an account?{' '}
           <Link to="/login" className="font-medium text-teal-600 hover:underline">

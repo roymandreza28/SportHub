@@ -10,6 +10,7 @@ import { BadmintonScoreboard } from './BadmintonScoreboard'
 import { PickleballScoreboard } from './PickleballScoreboard'
 import { TableTennisScoreboard } from './TableTennisScoreboard'
 import { TennisScoreboard } from './TennisScoreboard'
+import { BowlingScoreboard } from './BowlingScoreboard'
 
 type LiveUpdate = { score_a: number; score_b: number; status?: string }
 
@@ -61,7 +62,7 @@ function SetsScoreboard({
   }
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/60 p-4">
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4">
       <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
         <h3 className="text-base font-bold text-slate-900">Scoreboard — Match #{match.id}</h3>
         <p className="mt-0.5 text-xs text-slate-500">Best of {setsToWin * 2 - 1} sets — first to {setsToWin} wins.</p>
@@ -184,7 +185,7 @@ function SingleScoreScoreboard({
   })
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/60 p-4">
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4">
       <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
         <h3 className="text-base font-bold text-slate-900">Scoreboard — Match #{match.id}</h3>
 
@@ -284,6 +285,10 @@ export function ScoreboardLive({
 
   if (tournament?.sport.name === 'Tennis') {
     return <TennisScoreboard match={match} tournament={tournament} tournamentId={tournamentId} onClose={onClose} />
+  }
+
+  if (tournament?.sport.name === 'Bowling') {
+    return <BowlingScoreboard match={match} tournament={tournament} tournamentId={tournamentId} onClose={onClose} />
   }
 
   if (tournament?.scoring_type === 'best_of_sets') {

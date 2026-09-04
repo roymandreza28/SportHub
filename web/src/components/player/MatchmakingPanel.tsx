@@ -1,20 +1,23 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { cancelMatchmakingRequest, createMatchmakingRequest, fetchMyMatchmakingRequests } from '../../lib/playerApi'
-import { fetchSports, fetchSportFormats, fetchVenues } from '../../lib/venueApi'
+import { fetchSports, fetchSportFormats, fetchVenues, calculateVenueRent, formatPeso } from '../../lib/venueApi'
 import { fetchMyTeams } from '../../lib/teamsApi'
 import { useAuth } from '../../lib/AuthContext'
 import { echo } from '../../lib/echo'
-import { buttonGhost, buttonPrimary, chip, fieldGroup, input, label, select } from '../../lib/formStyles'
+import { buttonGhost, buttonPrimary, chip, fieldGroup, label, select } from '../../lib/formStyles'
 import { IconChevronDown } from '../layout/icons'
 import { MatchmakingLoader } from './MatchmakingLoader'
+import { MatchVenueScheduler } from './MatchVenueScheduler'
 import { TeamPanel } from './TeamPanel'
+import { DownPaymentPrompt } from './DownPaymentPrompt'
 
 const STATUS_LABEL: Record<string, string> = {
   open: 'Looking for a match...',
   matched: 'Matched!',
   expired: 'Expired',
   cancelled: 'Cancelled',
+  failed: 'Reservation not confirmed in time',
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -22,6 +25,7 @@ const STATUS_STYLE: Record<string, string> = {
   matched: 'bg-green-100 text-green-700',
   expired: 'bg-slate-100 text-slate-500',
   cancelled: 'bg-slate-100 text-slate-500',
+  failed: 'bg-red-100 text-red-700',
 }
 
 type Mode = 'join' | 'create'
@@ -47,6 +51,7 @@ export function MatchmakingPanel() {
   const [teamId, setTeamId] = useState<number | ''>('')
   const [venueId, setVenueId] = useState<number | ''>('')
   const [startAt, setStartAt] = useState('')
+  const [endAt, setEndAt] = useState('')
 
   // Every sport has at least one format (a solo sport still gets a
   // players_per_side=1 "Individual"/"Singles" row) — this is how a player
@@ -70,6 +75,11 @@ export function MatchmakingPanel() {
     queryFn: () => fetchVenues(sportId ? Number(sportId) : undefined),
     enabled: mode === 'create' && !!sportId,
   })
+  const selectedVenue = venues?.find((v) => v.id === venueId)
+  const estimatedRent =
+    selectedVenue && startAt && endAt ? calculateVenueRent(selectedVenue, startAt, endAt) : null
+  const rentHours =
+    startAt && endAt ? Math.round(((new Date(endAt).getTime() - new Date(startAt).getTime()) / (1000 * 60 * 60)) * 100) / 100 : 0
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['player', 'matchmaking'] })
   const invalidateTeams = () => queryClient.invalidateQueries({ queryKey: ['player', 'teams'] })
@@ -100,13 +110,15 @@ export function MatchmakingPanel() {
               sport_format_id: Number(formatId),
               team_id: needsTeam ? Number(teamId) : undefined,
               venue_id: venueId ? Number(venueId) : undefined,
-              preferred_start_at: startAt ? new Date(startAt).toISOString() : undefined,
+              preferred_start_at: startAt || undefined,
+              preferred_end_at: endAt || undefined,
             }
       ),
     onSuccess: () => {
       invalidate()
       setVenueId('')
       setStartAt('')
+      setEndAt('')
     },
   })
 
@@ -118,6 +130,8 @@ export function MatchmakingPanel() {
   const switchMode = (next: Mode) => {
     setMode(next)
     setVenueId('')
+    setStartAt('')
+    setEndAt('')
   }
 
   const changeSport = (value: string) => {
@@ -125,6 +139,8 @@ export function MatchmakingPanel() {
     setFormatId('')
     setTeamId('')
     setVenueId('')
+    setStartAt('')
+    setEndAt('')
   }
 
   const changeFormat = (value: string) => {
@@ -133,7 +149,13 @@ export function MatchmakingPanel() {
   }
 
   const isVerified = user?.verification_status === 'verified'
-  const canSubmit = isVerified && !!sportId && !!formatId && (!needsTeam || !!teamId) && !request.isPending
+  // Venue is optional in "create" mode — but the instant one is picked, a
+  // slot must actually be selected on the scheduler too, since the backend
+  // requires both preferred_start_at and preferred_end_at whenever venue_id
+  // is present (it needs a real range to reserve, not just a venue name).
+  const venueTimeReady = !venueId || (!!startAt && !!endAt)
+  const canSubmit =
+    isVerified && !!sportId && !!formatId && (!needsTeam || !!teamId) && venueTimeReady && !request.isPending
 
   // A player/coach can have more than one sport queued at once, so this is
   // "every still-searching request", not just the one just submitted — each
@@ -142,6 +164,12 @@ export function MatchmakingPanel() {
   // instead, so it isn't shown twice.
   const openRequests = (requests ?? []).filter((r) => r.status === 'open')
   const resolvedRequests = (requests ?? []).filter((r) => r.status !== 'open')
+  // Surfaced above everything else, not buried in "Match history" — this is
+  // the down-payment prompt itself, and a player shouldn't have to go
+  // looking for it. Once a facilitator resolves the reservation
+  // (approved/rejected) it stays visible for one more glance, then the
+  // normal history list below is the record of it going forward.
+  const matchedWithReservation = (requests ?? []).filter((r) => r.status === 'matched' && r.venue_registration)
 
   return (
     <div className="flex flex-col gap-4">
@@ -162,6 +190,14 @@ export function MatchmakingPanel() {
       {showTeams && (
         <div className="rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
           <TeamPanel />
+        </div>
+      )}
+
+      {matchedWithReservation.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {matchedWithReservation.map((req) => (
+            <DownPaymentPrompt key={req.id} req={req} />
+          ))}
         </div>
       )}
 
@@ -238,17 +274,19 @@ export function MatchmakingPanel() {
 
         {mode === 'create' && (
           <>
-            <div className={fieldGroup}>
-              <label className={label}>Start time</label>
-              <input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} className={input} />
-            </div>
-
+            {/* Venue first, date/time second — the time picker below needs
+                to know which venue's schedule to check availability
+                against, so there's nothing useful to show until this is set. */}
             <div className={fieldGroup}>
               <label className={label}>Venue</label>
               <select
                 data-testid="mm-venue"
                 value={venueId}
-                onChange={(e) => setVenueId(e.target.value ? Number(e.target.value) : '')}
+                onChange={(e) => {
+                  setVenueId(e.target.value ? Number(e.target.value) : '')
+                  setStartAt('')
+                  setEndAt('')
+                }}
                 disabled={!sportId}
                 className={select}
               >
@@ -263,6 +301,36 @@ export function MatchmakingPanel() {
                 <p className="text-xs text-slate-400">No venues have a court for this sport yet.</p>
               )}
             </div>
+
+            {selectedVenue && (
+              <div className={fieldGroup}>
+                <label className={label}>Date &amp; time</label>
+                <MatchVenueScheduler
+                  venue={selectedVenue}
+                  onSelect={({ start, end }) => {
+                    setStartAt(start)
+                    setEndAt(end)
+                  }}
+                />
+                {startAt && endAt && (
+                  <div className="flex flex-col gap-0.5">
+                    <p className="text-xs font-medium text-teal-700">
+                      Selected: {new Date(startAt).toLocaleString()} – {new Date(endAt).toLocaleTimeString()}
+                    </p>
+                    {estimatedRent !== null ? (
+                      <p className="text-xs font-semibold text-slate-700">
+                        Estimated venue rent: {formatPeso(estimatedRent)}
+                        <span className="font-normal text-slate-400"> ({rentHours} hr × {formatPeso(Number(selectedVenue.price_per_hour))}/hr)</span>
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-400">
+                        This venue hasn't published an hourly rate — confirm the cost with the facilitator.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
 

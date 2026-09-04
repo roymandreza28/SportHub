@@ -43,7 +43,7 @@ function FloatingChatWindow({
           : 'flex h-96 w-80 flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl'
       }
     >
-      <div className="flex shrink-0 items-center justify-between gap-2 bg-teal-600 px-3 py-2 text-white">
+      <div className="flex shrink-0 items-center justify-between gap-2 bg-teal-600 px-3 py-2 text-pure-white">
         {otherParticipant ? (
           <Link to={`/profile/${otherParticipant.id}`} className="flex min-w-0 items-center gap-2 hover:opacity-90">
             <Avatar name={title} url={conversationAvatarUrl(conversation, user?.id)} size="sm" />
@@ -58,13 +58,13 @@ function FloatingChatWindow({
         <button
           onClick={onClose}
           aria-label={`Close chat with ${title}`}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-teal-100 transition hover:bg-teal-700 hover:text-white"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-pure-white/70 transition hover:bg-teal-700 hover:text-pure-white"
         >
           ×
         </button>
       </div>
       <div className="min-h-0 flex-1">
-        <ConversationWindow conversationId={conversation.id} />
+        <ConversationWindow conversation={conversation} />
       </div>
     </div>
   )
@@ -75,7 +75,12 @@ export function FloatingChatWindows() {
   const { openWindows, closeChatWindow } = useChatUI()
   // venue_facilitator included: they can't start chats, but can be dropped
   // into a booking-triggered conversation once a booking is approved.
-  const enabled = !!user && hasRole('player', 'coach', 'venue_facilitator')
+  // admin/organizer/venue_organizer/livestream_organizer included: none of
+  // them can start a chat on their own either, but all need to see/reply to
+  // the "FAQ" support threads reaching them (see ConversationController::
+  // contactAdmin()).
+  const enabled =
+    !!user && hasRole('player', 'coach', 'venue_facilitator', 'admin', 'organizer', 'venue_organizer', 'livestream_organizer')
 
   const { data: conversations } = useQuery({
     queryKey: ['social', 'conversations'],

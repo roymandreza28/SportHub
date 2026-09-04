@@ -80,7 +80,7 @@ export function NewsEditor() {
       <div className={fieldGroup}>
         <label className={label}>Body</label>
         <textarea
-          placeholder="Tell the community what's happening in Morong..."
+          placeholder="Tell the community what's happening in Binangonan..."
           value={body}
           onChange={(e) => setBody(e.target.value)}
           className={textarea}
@@ -107,7 +107,7 @@ export function NewsEditor() {
                 type="button"
                 onClick={() => removeAttachment(i)}
                 aria-label={`Remove ${a.file.name}`}
-                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-slate-900/70 text-white opacity-0 transition group-hover:opacity-100"
+                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-slate-950/70 text-pure-white opacity-0 transition group-hover:opacity-100"
               >
                 ×
               </button>

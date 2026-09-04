@@ -178,11 +178,33 @@ export function BracketView({
   const [schedulingMatch, setSchedulingMatch] = useState<BracketMatch | null>(null)
 
   const containerRef = useRef<HTMLDivElement>(null)
+  // The bracket's actual rounds/matches live in here, at their natural
+  // (unscaled) size — containerRef is the outer scrollable viewport,
+  // contentRef is what gets CSS-scaled down to fit it. Kept separate so the
+  // scale factor can be computed from contentRef's untransformed
+  // scrollWidth (a CSS transform never affects layout size, only paint),
+  // without the transform itself feeding back into the measurement.
+  const contentRef = useRef<HTMLDivElement>(null)
   const cardEls = useRef<Map<number, HTMLDivElement>>(new Map())
   const [lines, setLines] = useState<ConnectorLine[]>([])
   const [svgSize, setSvgSize] = useState({ width: 0, height: 0 })
+  // Fit-to-device-width: shrinks the whole bracket down via transform:scale
+  // so it's fully visible on a narrow phone screen instead of forcing
+  // horizontal scrolling to see later rounds — never scales UP past natural
+  // size on a roomy desktop, and never shrinks past a floor where match
+  // cards would become unreadable (falls back to the pre-existing
+  // overflow-auto scroll for a tournament too large even for that).
+  const MIN_SCALE = 0.45
+  const [scale, setScale] = useState(1)
+  const [scaledSize, setScaledSize] = useState({ width: 0, height: 0 })
 
   const isSwiss = bracket?.structure?.[0]?.[0]?.bracket_type === 'swiss'
+  // "Portrait" / pyramid-upward layout — only single_elimination is a
+  // single clean tree narrowing to one final; double_elimination is two
+  // trees (winners+losers) converging, and round_robin/swiss/group_stage's
+  // group phase have no such narrowing at all, so those keep the existing
+  // left-to-right layout.
+  const isPyramid = bracket?.format === 'single_elimination'
 
   // Public channel — spectators watching the bracket see round advances and
   // score-driven bracket changes live, without a manual refresh.
@@ -207,7 +229,23 @@ export function BracketView({
   useLayoutEffect(() => {
     function recompute() {
       const container = containerRef.current
-      if (!container) return
+      const content = contentRef.current
+      if (!container || !content) return
+
+      // scrollWidth/scrollHeight reflect real layout size regardless of any
+      // CSS transform already applied (transform only affects paint, never
+      // layout) — content itself is sized w-max (see render below) so it's
+      // always its own natural, unconstrained width here, never squeezed by
+      // the cropping wrapper around it.
+      const naturalWidth = content.scrollWidth
+      const naturalHeight = content.scrollHeight
+      // -32 for the container's own p-4 (16px each side) the content sits inside.
+      const availableWidth = container.clientWidth - 32
+      const nextScale =
+        naturalWidth > 0 ? Math.min(1, Math.max(MIN_SCALE, availableWidth / naturalWidth)) : 1
+
+      setScale(nextScale)
+      setScaledSize({ width: naturalWidth * nextScale, height: naturalHeight * nextScale })
 
       const containerRect = container.getBoundingClientRect()
       const next: ConnectorLine[] = []
@@ -228,13 +266,29 @@ export function BracketView({
           const fromRect = fromEl.getBoundingClientRect()
           const toRect = toEl.getBoundingClientRect()
 
-          next.push({
-            id: `${match.id}-${targetMatch.id}`,
-            x1: fromRect.right - containerRect.left + container.scrollLeft,
-            y1: fromRect.top + fromRect.height / 2 - containerRect.top + container.scrollTop,
-            x2: toRect.left - containerRect.left + container.scrollLeft,
-            y2: toRect.top + toRect.height / 2 - containerRect.top + container.scrollTop,
-          })
+          // Horizontal (default): flow is left→right, so a connector exits
+          // a match's right edge and enters the next one's left edge.
+          // Vertical (pyramid/portrait): flow is bottom→top instead (round
+          // 1 sits at the bottom, the final at the top — see the
+          // flex-col-reverse container below), so a connector exits a
+          // match's top edge and enters the next one's bottom edge.
+          next.push(
+            isPyramid
+              ? {
+                  id: `${match.id}-${targetMatch.id}`,
+                  x1: fromRect.left + fromRect.width / 2 - containerRect.left + container.scrollLeft,
+                  y1: fromRect.top - containerRect.top + container.scrollTop,
+                  x2: toRect.left + toRect.width / 2 - containerRect.left + container.scrollLeft,
+                  y2: toRect.bottom - containerRect.top + container.scrollTop,
+                }
+              : {
+                  id: `${match.id}-${targetMatch.id}`,
+                  x1: fromRect.right - containerRect.left + container.scrollLeft,
+                  y1: fromRect.top + fromRect.height / 2 - containerRect.top + container.scrollTop,
+                  x2: toRect.left - containerRect.left + container.scrollLeft,
+                  y2: toRect.top + toRect.height / 2 - containerRect.top + container.scrollTop,
+                }
+          )
         })
       }
 
@@ -255,8 +309,17 @@ export function BracketView({
       observer.disconnect()
       window.removeEventListener('resize', recompute)
     }
+    // scale is deliberately in this list despite being set inside
+    // recompute() itself: connector-line/svg positions are measured via
+    // getBoundingClientRect(), which only reflects the *previous* render's
+    // transform — so the first pass after a scale change computes lines
+    // against the stale (pre-change) DOM. Including scale here makes the
+    // effect re-run once the new transform has actually painted, self-
+    // correcting on that second pass. Safe from looping: the second pass
+    // recomputes the same scale from the same natural sizes, so setScale
+    // is a no-op and nothing triggers a third run.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [structure])
+  }, [structure, isPyramid, scale])
 
   if (isLoading) return <p className="text-sm text-slate-500">Loading bracket...</p>
   // A bracket row can exist with no structure yet if generation failed
@@ -281,7 +344,10 @@ export function BracketView({
 
       {isSwiss && <SwissStandings matches={structure.flat()} />}
 
-      <div ref={containerRef} className="relative flex gap-8 overflow-x-auto rounded-lg border border-slate-100 bg-slate-50/60 p-4">
+      <div
+        ref={containerRef}
+        className="relative overflow-auto rounded-lg border border-slate-100 bg-slate-50/60 p-4"
+      >
         <svg
           className="pointer-events-none absolute left-0 top-0"
           width={svgSize.width}
@@ -294,11 +360,24 @@ export function BracketView({
             </marker>
           </defs>
           {lines.map((line) => {
-            const midX = (line.x1 + line.x2) / 2
+            // Horizontal: elbow meets halfway across (midX), arrowhead
+            // backs off along x. Vertical (pyramid): elbow meets halfway up
+            // (midY) instead, arrowhead backs off along y — see the
+            // recompute() comment above for why the coordinates themselves
+            // already point the right way round.
+            const d = isPyramid
+              ? (() => {
+                  const midY = (line.y1 + line.y2) / 2
+                  return `M ${line.x1} ${line.y1} L ${line.x1} ${midY} L ${line.x2} ${midY} L ${line.x2} ${line.y2 + 8}`
+                })()
+              : (() => {
+                  const midX = (line.x1 + line.x2) / 2
+                  return `M ${line.x1} ${line.y1} L ${midX} ${line.y1} L ${midX} ${line.y2} L ${line.x2 - 8} ${line.y2}`
+                })()
             return (
               <path
                 key={line.id}
-                d={`M ${line.x1} ${line.y1} L ${midX} ${line.y1} L ${midX} ${line.y2} L ${line.x2 - 8} ${line.y2}`}
+                d={d}
                 fill="none"
                 className="stroke-teal-300"
                 strokeWidth={1.5}
@@ -308,25 +387,58 @@ export function BracketView({
           })}
         </svg>
 
-        {structure.map((round, i) => (
-          <div key={i} className="relative flex flex-col justify-around gap-4">
-            <h4 className="text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {i === structure.length - 1 ? 'Final' : `Round ${i + 1}`}
-            </h4>
-            {round.map((match) => (
-              <MatchCard
-                key={match.id}
-                match={match}
-                onClick={onSelectMatch ? () => onSelectMatch(match) : undefined}
-                onSchedule={canScheduleMatches ? () => setSchedulingMatch(match) : undefined}
-                cardRef={(el) => {
-                  if (el) cardEls.current.set(match.id, el)
-                  else cardEls.current.delete(match.id)
-                }}
-              />
+        {/* Crop wrapper: sized to exactly the scaled-down visual footprint
+            of the content below, so the container's own layout (and its
+            scrollbars) reflect the shrunk size — a CSS transform alone
+            doesn't change how much space an element reserves in normal
+            flow, only how it paints, so without this the container would
+            still show whitespace/scrollbars sized for the un-shrunk content. */}
+        <div style={{ width: scaledSize.width || undefined, height: scaledSize.height || undefined, overflow: 'hidden' }}>
+          <div
+            ref={contentRef}
+            className={`flex w-max ${
+              // items-center on the cross axis: each round-row is a different
+              // width (round 1 widest, the final narrowest), so without this
+              // they'd left-align against each other instead of narrowing
+              // symmetrically toward the center — the actual pyramid shape.
+              isPyramid ? 'flex-col-reverse items-center gap-10' : 'gap-8'
+            }`}
+            style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
+          >
+            {structure.map((round, i) => (
+              <div
+                key={i}
+                className={
+                  isPyramid
+                    ? 'relative flex flex-row items-center justify-center gap-6'
+                    : 'relative flex flex-col justify-around gap-4'
+                }
+              >
+                <h4
+                  className={
+                    isPyramid
+                      ? 'absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-slate-500'
+                      : 'text-center text-xs font-semibold uppercase tracking-wide text-slate-500'
+                  }
+                >
+                  {i === structure.length - 1 ? 'Final' : `Round ${i + 1}`}
+                </h4>
+                {round.map((match) => (
+                  <MatchCard
+                    key={match.id}
+                    match={match}
+                    onClick={onSelectMatch ? () => onSelectMatch(match) : undefined}
+                    onSchedule={canScheduleMatches ? () => setSchedulingMatch(match) : undefined}
+                    cardRef={(el) => {
+                      if (el) cardEls.current.set(match.id, el)
+                      else cardEls.current.delete(match.id)
+                    }}
+                  />
+                ))}
+              </div>
             ))}
           </div>
-        ))}
+        </div>
       </div>
 
       {schedulingMatch && (

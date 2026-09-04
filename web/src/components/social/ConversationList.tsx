@@ -7,7 +7,10 @@ import { Avatar } from '../layout/Avatar'
 export function conversationTitle(conversation: ConversationSummary, viewerId?: number): string {
   if (conversation.type === 'group') return conversation.name ?? 'Group'
   const other = conversation.participants.find((p) => p.id !== viewerId)
-  return other?.name ?? 'Conversation'
+  if (!other) return 'Conversation'
+  // A FAQ/support thread's admin never shows their real name to the user
+  // they're helping — see ConversationParticipant.is_admin.
+  return other.is_admin ? 'admin-name' : other.name
 }
 
 export function conversationAvatarUrl(conversation: ConversationSummary, viewerId?: number): string | null {

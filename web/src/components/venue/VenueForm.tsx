@@ -4,10 +4,10 @@ import { createVenue, fetchSports, type Sport } from '../../lib/venueApi'
 import { LocationPicker } from './LocationPicker'
 import { buttonPrimary, buttonSecondary, chip, fieldGroup, input, label, textarea } from '../../lib/formStyles'
 
-// Centered on Morong, Rizal — new venues default here until the facilitator
-// clicks the map to set the real location.
-const DEFAULT_LAT = 14.5192
-const DEFAULT_LNG = 121.2331
+// Centered on Binangonan, Rizal — new venues default here until the
+// facilitator clicks the map to set the real location.
+const DEFAULT_LAT = 14.4651
+const DEFAULT_LNG = 121.1921
 
 type CourtDraft = { name: string; sportIds: number[] }
 type EquipmentDraft = { name: string; quantity: number }
@@ -142,7 +142,7 @@ export function VenueForm({ onCreated }: { onCreated?: () => void }) {
           <input
             id="venue-name"
             type="text"
-            placeholder="e.g. Morong Gymnasium"
+            placeholder="e.g. Binangonan Recreation and Conference Center"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className={input}
@@ -154,7 +154,7 @@ export function VenueForm({ onCreated }: { onCreated?: () => void }) {
           <input
             id="venue-address"
             type="text"
-            placeholder="Barangay, Morong, Rizal"
+            placeholder="Barangay, Binangonan, Rizal"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             className={input}

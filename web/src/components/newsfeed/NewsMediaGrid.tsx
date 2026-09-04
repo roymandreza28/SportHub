@@ -46,7 +46,7 @@ export function NewsMediaGrid({ media }: { media: MediaItem[] }) {
 
       {lightbox && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/90 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4"
           onClick={() => setLightbox(null)}
         >
           <img src={lightbox} alt="" className="max-h-[85vh] max-w-full rounded-lg object-contain" />

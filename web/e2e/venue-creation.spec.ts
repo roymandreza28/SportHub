@@ -11,7 +11,7 @@ test('a facilitator adds a single court with a sport and sets operating hours', 
   await page.getByRole('button', { name: '+ Create Venue', exact: true }).click()
 
   await page.getByLabel('Name').fill(venueName)
-  await page.getByLabel('Address / Location').fill('Brgy. San Juan, Morong, Rizal')
+  await page.getByLabel('Address / Location').fill('Brgy. San Carlos, Binangonan, Rizal')
 
   // "Add a single court": name + sport chips, one court at a time.
   await page.getByPlaceholder('Court name (optional)').fill('Main Court')
@@ -47,7 +47,7 @@ test('a facilitator adds multiple courts that all share the same two sports in o
 
   await page.getByRole('button', { name: '+ Create Venue', exact: true }).click()
   await page.getByLabel('Name').fill(venueName)
-  await page.getByLabel('Address / Location').fill('Brgy. San Juan, Morong, Rizal')
+  await page.getByLabel('Address / Location').fill('Brgy. San Carlos, Binangonan, Rizal')
 
   // "Add multiple courts that share sports": pick Tennis + Pickleball (a
   // real-world combo — pickleball is commonly played on lined tennis
@@ -104,7 +104,7 @@ test('a facilitator can deactivate a venue, hiding it from the player directory'
 
   await page.getByRole('button', { name: '+ Create Venue', exact: true }).click()
   await page.getByLabel('Name').fill(venueName)
-  await page.getByLabel('Address / Location').fill('Brgy. San Juan, Morong, Rizal')
+  await page.getByLabel('Address / Location').fill('Brgy. San Carlos, Binangonan, Rizal')
   await page.getByRole('button', { name: 'Create venue', exact: true }).click()
 
   const venueRow = page.locator('li', { hasText: venueName })
@@ -132,7 +132,7 @@ test('a facilitator can delete a venue, removing it from their own list', async 
 
   await page.getByRole('button', { name: '+ Create Venue', exact: true }).click()
   await page.getByLabel('Name').fill(venueName)
-  await page.getByLabel('Address / Location').fill('Brgy. San Juan, Morong, Rizal')
+  await page.getByLabel('Address / Location').fill('Brgy. San Carlos, Binangonan, Rizal')
   await page.getByRole('button', { name: 'Create venue', exact: true }).click()
 
   const venueRow = page.locator('li', { hasText: venueName })

@@ -20,9 +20,9 @@ const defaultIcon = L.icon({
 })
 
 export function VenueMap<T extends MappableVenue = Venue>({ venues, onSelect }: { venues: T[]; onSelect?: (venue: T) => void }) {
-  // Falls back to Morong, Rizal when there are no venues yet.
+  // Falls back to Binangonan, Rizal when there are no venues yet.
   const center: [number, number] =
-    venues.length > 0 ? [Number(venues[0].latitude), Number(venues[0].longitude)] : [14.5192, 121.2331]
+    venues.length > 0 ? [Number(venues[0].latitude), Number(venues[0].longitude)] : [14.4651, 121.1921]
 
   return (
     <MapContainer center={center} zoom={12} className="h-80 w-full rounded" scrollWheelZoom={false}>

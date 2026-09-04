@@ -44,7 +44,7 @@ function EventDetailModal({ event, onClose }: { event: UpcomingEventCardData; on
   })
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/60 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/60 p-4" onClick={onClose}>
       <div
         // A bracket needs real horizontal room to lay out rounds side by
         // side — widen the modal for tournament events, where the booking

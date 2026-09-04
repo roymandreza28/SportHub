@@ -1,10 +1,18 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { useAuth } from '../../lib/AuthContext'
 import { updateOwnPassword } from '../../lib/accountApi'
 import { buttonPrimary, buttonSecondary, fieldGroup, input, label } from '../../lib/formStyles'
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getPushPermissionState,
+  hasActivePushSubscription,
+  needsHomeScreenInstallOnIOS,
+  type PushPermissionState,
+} from '../../lib/pushNotifications'
 
 function extractErrorMessage(error: unknown): string {
   if (isAxiosError(error)) {
@@ -20,6 +28,14 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
   const { user } = useAuth()
   const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
+  const [pushState, setPushState] = useState<PushPermissionState>('unsupported')
+  const [pushSubscribed, setPushSubscribed] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+
+  useEffect(() => {
+    setPushState(getPushPermissionState())
+    hasActivePushSubscription().then(setPushSubscribed)
+  }, [])
 
   const mutation = useMutation({
     mutationFn: () => updateOwnPassword(currentPassword, password),
@@ -29,6 +45,27 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
     },
   })
 
+  async function handleEnablePush() {
+    setPushBusy(true)
+    try {
+      const result = await enablePushNotifications()
+      setPushState(result)
+      setPushSubscribed(result === 'granted')
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
+  async function handleDisablePush() {
+    setPushBusy(true)
+    try {
+      await disablePushNotifications()
+      setPushSubscribed(false)
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
   // Portaled to <body> — this modal is opened from UserMenu, which lives
   // inside the header's backdrop-blur bar (DashboardShell/SocialShell), and
   // backdrop-filter establishes a new containing block for fixed-position
@@ -36,12 +73,44 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
   // own short box instead of the viewport, squeezing the dialog into a
   // strip near the top instead of centering it on the page.
   return createPortal(
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/60 p-4">
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/60 p-4">
       <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
         <h3 className="text-base font-bold text-slate-900">Account settings</h3>
         <p className="mt-1 text-xs text-slate-500">{user?.name} — {user?.email}</p>
 
         <div className="mt-4 flex flex-col gap-3">
+          <div className={fieldGroup}>
+            <label className={label}>Device notifications</label>
+            {pushState === 'unsupported' && (
+              <p className="text-xs text-slate-400">Not supported in this browser.</p>
+            )}
+            {pushState === 'denied' && (
+              <p className="text-xs text-slate-400">
+                Blocked — enable notifications for SportHub in your browser's site settings to turn this on.
+              </p>
+            )}
+            {pushState !== 'unsupported' && pushState !== 'denied' && pushSubscribed && (
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-teal-600">Enabled on this device.</p>
+                <button onClick={handleDisablePush} disabled={pushBusy} className={buttonSecondary}>
+                  {pushBusy ? 'Working...' : 'Disable'}
+                </button>
+              </div>
+            )}
+            {pushState !== 'unsupported' && pushState !== 'denied' && !pushSubscribed && (
+              <div className="flex flex-col gap-1.5">
+                <button onClick={handleEnablePush} disabled={pushBusy} className={buttonSecondary}>
+                  {pushBusy ? 'Working...' : 'Enable device notifications'}
+                </button>
+                {needsHomeScreenInstallOnIOS() && (
+                  <p className="text-xs text-slate-400">
+                    On iPhone, first add SportHub to your Home Screen (Share → Add to Home Screen), then open it
+                    from there and enable this.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
           <div className={fieldGroup}>
             <label className={label}>Current password</label>
             <input
