@@ -1,9 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
-import { sendWebRTCSignal, type LivestreamItem } from '../../lib/organizerApi'
+import { sendWebRTCSignal, uploadLivestreamRecording, type LivestreamItem } from '../../lib/organizerApi'
 import { useAuth } from '../../lib/AuthContext'
 import { echo } from '../../lib/echo'
 import { ICE_SERVERS } from '../../lib/webrtc'
 import { buttonDanger, buttonPrimary } from '../../lib/formStyles'
+
+// There's no server-side media pipeline anywhere in this app's WebRTC relay
+// (LivestreamBroadcast -> LivestreamViewer -> LiveRelayVideo is pure
+// browser-to-browser signaling) — the broadcaster's own device recording
+// its outgoing stream as it goes is the only way a "watch it later" copy
+// can exist at all. Picks the first format the browser actually supports
+// rather than hardcoding one, since exact codec support varies (Chrome:
+// vp9/vp8 webm; Safari: mp4).
+function pickRecorderMimeType(): string | undefined {
+  const candidates = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4']
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type))
+}
 
 type SignalMessage = {
   livestream_id: number
@@ -29,8 +41,11 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
   const streamRef = useRef<MediaStream | null>(null)
   const peersRef = useRef<Map<number, RTCPeerConnection>>(new Map())
   const isLiveRef = useRef(false)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const recordedChunksRef = useRef<Blob[]>([])
   const [isLive, setIsLive] = useState(livestream.status === 'live')
   const [error, setError] = useState<string | null>(null)
+  const [recordingStatus, setRecordingStatus] = useState<'idle' | 'uploading' | 'uploaded' | 'upload-failed'>('idle')
 
   useEffect(() => {
     isLiveRef.current = isLive
@@ -60,10 +75,36 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
 
   async function startBroadcast() {
     setError(null)
+    setRecordingStatus('idle')
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      // `ideal` (not `exact`) so this is a preference, not a requirement —
+      // a phone/tablet with a rear camera opens on it instead of the
+      // front-facing one (much more useful for broadcasting a game a
+      // livestream organizer is standing courtside for), while a laptop
+      // with a single front-facing webcam and no facingMode metadata at
+      // all just ignores the hint and opens normally.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: true,
+      })
       streamRef.current = stream
       if (videoRef.current) videoRef.current.srcObject = stream
+
+      // Records the exact same outgoing stream every viewer's peer
+      // connection is fed from — recording is best-effort: a browser with
+      // no MediaRecorder support (rare) still broadcasts live fine, it just
+      // won't have a replay afterward.
+      recordedChunksRef.current = []
+      if (typeof MediaRecorder !== 'undefined') {
+        const mimeType = pickRecorderMimeType()
+        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) recordedChunksRef.current.push(event.data)
+        }
+        recorder.start(1000)
+        recorderRef.current = recorder
+      }
+
       await sendWebRTCSignal(livestream.id, user!.id, 'broadcast-started', {})
       setIsLive(true)
     } catch {
@@ -74,11 +115,36 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
   async function stopBroadcast() {
     peersRef.current.forEach((pc) => pc.close())
     peersRef.current.clear()
+
+    const recorder = recorderRef.current
+    recorderRef.current = null
+    const recordingDone = new Promise<Blob | null>((resolve) => {
+      if (!recorder || recorder.state === 'inactive') {
+        resolve(null)
+        return
+      }
+      recorder.onstop = () => resolve(new Blob(recordedChunksRef.current, { type: recorder.mimeType || 'video/webm' }))
+      recorder.stop()
+    })
+
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
     await sendWebRTCSignal(livestream.id, user!.id, 'broadcast-ended', {})
     setIsLive(false)
+
+    const recording = await recordingDone
+    recordedChunksRef.current = []
+    if (!recording || recording.size === 0) return
+
+    setRecordingStatus('uploading')
+    try {
+      const extension = recording.type.includes('mp4') ? 'mp4' : 'webm'
+      await uploadLivestreamRecording(livestream.id, recording, `broadcast-${livestream.id}.${extension}`)
+      setRecordingStatus('uploaded')
+    } catch {
+      setRecordingStatus('upload-failed')
+    }
   }
 
   // Subscribes exactly once per (livestream, user) — deliberately excludes
@@ -147,13 +213,22 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
       <video ref={videoRef} autoPlay muted playsInline className="aspect-video w-full rounded-lg border border-slate-200 bg-slate-950" />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {recordingStatus === 'uploading' && (
+        <p className="text-xs text-slate-500">Saving the recording so viewers can rewatch it later...</p>
+      )}
+      {recordingStatus === 'uploaded' && (
+        <p className="text-xs text-teal-700">Recording saved — viewers can rewatch this broadcast once it's over.</p>
+      )}
+      {recordingStatus === 'upload-failed' && (
+        <p className="text-xs text-red-600">Couldn't save the recording — the live broadcast itself was unaffected.</p>
+      )}
 
       {isLive ? (
         <button onClick={stopBroadcast} className={`${buttonDanger} self-start`}>
           Stop broadcast
         </button>
       ) : (
-        <button onClick={startBroadcast} className={`${buttonPrimary} self-start`}>
+        <button onClick={startBroadcast} disabled={recordingStatus === 'uploading'} className={`${buttonPrimary} self-start`}>
           Start broadcast
         </button>
       )}

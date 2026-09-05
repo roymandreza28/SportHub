@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchNewsFeed, toggleNewsReaction, type NewsItem } from '../../lib/newsApi'
+import { fetchNewsFeed, toggleNewsReaction, updateNews, deleteNews, displayNewsTitle, type NewsItem } from '../../lib/newsApi'
 import { fetchTournament, type Tournament } from '../../lib/coachApi'
 import { sendMessage } from '../../lib/chatApi'
 import { useChatUI } from '../../lib/ChatUIContext'
@@ -11,21 +11,29 @@ import { Avatar } from '../layout/Avatar'
 import { NewsComments } from './NewsComments'
 import { NewsMediaGrid } from './NewsMediaGrid'
 import { LiveRelayVideo } from './LiveRelayVideo'
+import { LiveMatchScore } from './LiveMatchScore'
+import { buttonPrimary, buttonSecondary, input, textarea } from '../../lib/formStyles'
 import { IconHeart, IconMessageCircle, IconShare, IconShieldCheck } from '../layout/icons'
 
-// Read-only by design: player/coach can react, comment, and share an
-// organizer's article to a friend, but there is no create/edit/delete UI
-// anywhere in this component — that stays organizer-only (NewsEditor.tsx),
-// enforced server-side by the 'manage news' permission regardless.
+// Player/coach can react, comment, and share an organizer's article to a
+// friend, but never create/edit/delete one — creating a post still stays in
+// NewsEditor.tsx. The organizer (or any 'manage news' role) browses this
+// same feed and additionally gets Edit/Delete on posts they authored —
+// gated here by item.author.id matching the viewer, and enforced for real
+// server-side by NewsPolicy::update/delete (author-only, regardless of what
+// the frontend shows).
 export function Newsfeed() {
   const queryClient = useQueryClient()
   const { openChatWindow } = useChatUI()
-  const { hasRole } = useAuth()
+  const { hasRole, user } = useAuth()
   const { data: news, isLoading } = useQuery({ queryKey: ['newsfeed'], queryFn: fetchNewsFeed })
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [sharingItem, setSharingItem] = useState<NewsItem | null>(null)
   const [askCoachId, setAskCoachId] = useState<number | null>(null)
   const [registerTournament, setRegisterTournament] = useState<Tournament | null>(null)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editBody, setEditBody] = useState('')
 
   const isCoach = hasRole('coach')
   const isPlayer = hasRole('player')
@@ -48,6 +56,35 @@ export function Newsfeed() {
     },
   })
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, title, body }: { id: number; title: string; body: string }) => updateNews(id, { title, body }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<NewsItem[] | undefined>(['newsfeed'], (old) =>
+        old?.map((item) => (item.id === updated.id ? { ...item, title: updated.title, body: updated.body } : item))
+      )
+      setEditingId(null)
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteNews(id),
+    onSuccess: (_, id) => {
+      queryClient.setQueryData<NewsItem[] | undefined>(['newsfeed'], (old) => old?.filter((item) => item.id !== id))
+    },
+  })
+
+  function startEditing(item: NewsItem) {
+    setEditingId(item.id)
+    setEditTitle(displayNewsTitle(item))
+    setEditBody(item.body)
+  }
+
+  function confirmDelete(item: NewsItem) {
+    if (window.confirm(`Delete "${item.title}"? This can't be undone.`)) {
+      deleteMutation.mutate(item.id)
+    }
+  }
+
   if (isLoading) return <p className="text-sm text-slate-500">Loading newsfeed...</p>
 
   return (
@@ -59,7 +96,16 @@ export function Newsfeed() {
       )}
 
       {news?.map((item) => {
-        const liveStream = item.livestreams.find((l) => l.status === 'live')
+        // A still-live broadcast wins; failing that, fall back to an ended
+        // one that actually saved a recording, so the post keeps showing a
+        // playable video (as a plain VOD, not a live feed) instead of
+        // disappearing the moment the broadcast stops.
+        const liveStream =
+          item.livestreams.find((l) => l.status === 'live') ??
+          item.livestreams.find((l) => l.status === 'ended' && l.recording_url)
+        const isActuallyLive = liveStream?.status === 'live'
+        const isAuthor = !!user && item.author.id === user.id
+        const isEditing = editingId === item.id
 
         return (
         <article
@@ -85,38 +131,84 @@ export function Newsfeed() {
                   </p>
                 )}
               </div>
-              {liveStream && (
+              {isActuallyLive && (
                 <span className="flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">
                   <span className="h-1.5 w-1.5 rounded-full bg-red-600" /> LIVE
                 </span>
               )}
+              {isAuthor && !isEditing && (
+                <div className="flex shrink-0 items-center gap-3">
+                  <button
+                    onClick={() => startEditing(item)}
+                    className="text-xs font-medium text-slate-400 transition hover:text-teal-600"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => confirmDelete(item)}
+                    disabled={deleteMutation.isPending}
+                    className="text-xs font-medium text-slate-400 transition hover:text-red-600"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
 
-            {item.tournament ? (
-              <button
-                onClick={() => {
-                  if (isCoach) registerMutation.mutate(item.tournament!.id)
-                  else if (isPlayer) setAskCoachId((id) => (id === item.id ? null : item.id))
-                }}
-                className="mt-3.5 block text-left text-lg font-bold leading-snug text-slate-900 hover:text-teal-700 hover:underline"
-              >
-                {item.title}
-              </button>
+            {isEditing ? (
+              <div className="mt-3.5 flex flex-col gap-2">
+                <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className={input} />
+                <textarea value={editBody} onChange={(e) => setEditBody(e.target.value)} className={textarea} rows={3} />
+                {updateMutation.isError && <p className="text-xs text-red-600">Couldn't save that — try again.</p>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => updateMutation.mutate({ id: item.id, title: editTitle, body: editBody })}
+                    disabled={!editTitle || !editBody || updateMutation.isPending}
+                    className={buttonPrimary}
+                  >
+                    {updateMutation.isPending ? 'Saving...' : 'Save'}
+                  </button>
+                  <button onClick={() => setEditingId(null)} className={buttonSecondary}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
             ) : (
-              <h3 className="mt-3.5 text-lg font-bold leading-snug text-slate-900">{item.title}</h3>
+              <>
+                {item.tournament ? (
+                  <button
+                    onClick={() => {
+                      if (isCoach) registerMutation.mutate(item.tournament!.id)
+                      else if (isPlayer) setAskCoachId((id) => (id === item.id ? null : item.id))
+                    }}
+                    className="mt-3.5 block text-left text-lg font-bold leading-snug text-slate-900 hover:text-teal-700 hover:underline"
+                  >
+                    {displayNewsTitle(item)}
+                  </button>
+                ) : (
+                  <h3 className="mt-3.5 text-lg font-bold leading-snug text-slate-900">{displayNewsTitle(item)}</h3>
+                )}
+
+                {item.tournament && askCoachId === item.id && (
+                  <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    Ask your coach to join the tournament for you.
+                  </p>
+                )}
+
+                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700">{item.body}</p>
+              </>
             )}
 
-            {item.tournament && askCoachId === item.id && (
-              <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Ask your coach to join the tournament for you.
-              </p>
-            )}
-
-            <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700">{item.body}</p>
-
+            {/* Title, details, live scoreboard, then live stream — in that
+                order, matching how a shared live game is meant to read. */}
+            {item.match && <LiveMatchScore match={item.match} />}
             {liveStream && (
               <div className="mt-3">
-                <LiveRelayVideo livestreamId={liveStream.id} />
+                <LiveRelayVideo
+                  livestreamId={liveStream.id}
+                  status={liveStream.status}
+                  recordingUrl={liveStream.recording_url}
+                />
               </div>
             )}
             <NewsMediaGrid media={item.media} />

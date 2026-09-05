@@ -175,7 +175,7 @@ export function BowlingScoreboard({
   }
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/70 p-4">
+    <div className="scoreboard-palette fixed inset-0 z-20 flex items-center justify-center bg-slate-950/70 p-4">
       <div
         className="flex w-full max-w-5xl flex-col gap-4 overflow-y-auto rounded-2xl bg-slate-100 p-4 shadow-2xl dark:bg-slate-950"
         style={{ maxHeight: '92vh' }}

@@ -106,6 +106,19 @@ it('denies commenting to a role without the interact-with-news permission', func
         ->assertForbidden();
 });
 
+it('lets the main organizer comment and react on the newsfeed too, now that they browse it like a player or coach', function () {
+    $news = makePublishedNews();
+    $organizer = userWithRole('organizer');
+
+    $this->actingAs($organizer)->postJson("/api/news/{$news->id}/comments", ['body' => 'Great turnout!'])
+        ->assertCreated();
+
+    $this->actingAs($organizer)->postJson("/api/news/{$news->id}/react")
+        ->assertOk()
+        ->assertJsonPath('reacted', true)
+        ->assertJsonPath('reactions_count', 1);
+});
+
 it('lets only a comments own author delete it', function () {
     $news = makePublishedNews();
     $author = userWithRole('player');

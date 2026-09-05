@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchBracket, type BracketMatch } from '../../lib/organizerApi'
+import { fetchBracket, freshBracketMatch, type BracketMatch } from '../../lib/organizerApi'
 import { echo } from '../../lib/echo'
 import { MatchScheduleModal } from './MatchScheduleModal'
-import { IconCalendar } from '../layout/icons'
+import { ShareMatchModal } from './ShareMatchModal'
+import { IconCalendar, IconClipboard, IconShare } from '../layout/icons'
 
 const STATUS_STYLE: Record<string, string> = {
   scheduled: 'bg-slate-100 text-slate-500',
@@ -24,11 +25,15 @@ function MatchCard({
   onClick,
   cardRef,
   onSchedule,
+  onShare,
+  onStatSheet,
 }: {
   match: BracketMatch
   onClick?: () => void
   cardRef?: (el: HTMLDivElement | null) => void
   onSchedule?: () => void
+  onShare?: () => void
+  onStatSheet?: () => void
 }) {
   const aDetermined = !!match.participant_a
   const bDetermined = !!match.participant_b
@@ -38,6 +43,9 @@ function MatchCard({
   const trackLabel = match.bracket_type ? TRACK_LABEL[match.bracket_type] : null
   const groupLabel = match.group_number != null ? `Group ${match.group_number + 1}` : null
   const canSchedule = !!onSchedule && !isOpen && match.status !== 'completed'
+  // Nothing to share until the game is actually underway or decided — a
+  // still-open "awaiting players" slot has no score/result worth posting.
+  const canShare = !!onShare && (match.status === 'live' || match.status === 'completed')
 
   return (
     <div ref={cardRef}>
@@ -63,7 +71,7 @@ function MatchCard({
           }`}
         >
           <span className="truncate">{aName}</span>
-          {aDetermined && <span className="tabular-nums">{match.score_a}</span>}
+          {aDetermined && !match.won_by_default && <span className="tabular-nums">{match.score_a}</span>}
         </div>
         <div
           className={`mt-1 flex justify-between ${
@@ -75,14 +83,14 @@ function MatchCard({
           }`}
         >
           <span className="truncate">{bName}</span>
-          {bDetermined && <span className="tabular-nums">{match.score_b}</span>}
+          {bDetermined && !match.won_by_default && <span className="tabular-nums">{match.score_b}</span>}
         </div>
         <div
           className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
             isOpen ? 'bg-slate-100 text-slate-400' : STATUS_STYLE[match.status] ?? 'bg-slate-100 text-slate-500'
           }`}
         >
-          {isOpen ? 'awaiting players' : match.status}
+          {isOpen ? 'awaiting players' : match.won_by_default ? 'won by default' : match.status}
         </div>
         {match.scheduled_at && (
           <div className="mt-1.5 text-[10px] text-slate-500">
@@ -100,6 +108,24 @@ function MatchCard({
           {match.scheduled_at ? 'Reschedule' : 'Schedule'}
         </button>
       )}
+      {canShare && (
+        <button
+          onClick={onShare}
+          className="mt-1.5 flex w-52 items-center justify-center gap-1 rounded-lg border border-teal-200 bg-teal-50 px-2 py-1 text-[10px] font-medium text-teal-700 hover:bg-teal-100"
+        >
+          <IconShare className="h-3 w-3" />
+          Share to newsfeed
+        </button>
+      )}
+      {onStatSheet && (
+        <button
+          onClick={onStatSheet}
+          className="mt-1.5 flex w-52 items-center justify-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-700 hover:bg-amber-100"
+        >
+          <IconClipboard className="h-3 w-3" />
+          Stat Sheet
+        </button>
+      )}
     </div>
   )
 }
@@ -113,6 +139,29 @@ function MatchCard({
 // ones) — so no extra "format" prop is needed to know when arrows apply.
 function isTreeRound(round: BracketMatch[]): boolean {
   return round.length > 0 && round.every((m) => !m.bracket_type && m.group_number == null)
+}
+
+// A clean elimination round's own match count says exactly how many teams
+// are left standing (matchCount * 2) — 1 match is always the Final, 2 is
+// always the Semifinals, and so on — regardless of how many rounds came
+// before it (a bye-heavy earlier round doesn't shift this). Only meaningful
+// for a tree round (see isTreeRound) — round_robin/swiss/pre-knockout
+// group_stage rounds don't shrink this way, so those keep "Round N".
+function eliminationRoundLabel(matchCount: number, roundIndex: number): string {
+  switch (matchCount) {
+    case 1:
+      return 'Final'
+    case 2:
+      return 'Semifinals'
+    case 4:
+      return 'Quarterfinals'
+    case 8:
+      return 'Round of 16'
+    case 16:
+      return 'Round of 32'
+    default:
+      return `Round ${roundIndex + 1}`
+  }
 }
 
 function SwissStandings({ matches }: { matches: BracketMatch[] }) {
@@ -160,22 +209,48 @@ function SwissStandings({ matches }: { matches: BracketMatch[] }) {
 
 export function BracketView({
   tournamentId,
+  tournamentName,
   onSelectMatch,
   canScheduleMatches,
+  canShareMatches,
+  isStatSheetEligible,
+  onOpenStatSheet,
 }: {
   tournamentId: number
+  // Only needed when canShareMatches is set — used to prefill the shared
+  // post's text (e.g. "...in Round 2 of {tournamentName}").
+  tournamentName?: string
   onSelectMatch?: (match: BracketMatch) => void
   // Only the main organizer sets the date/time/court for a game — distinct
   // from onSelectMatch, which is the venue organizer's click-to-score path.
   canScheduleMatches?: boolean
+  // Lets the main organizer post an ongoing or just-finished game to the
+  // newsfeed/news page — same "main organizer only" scoping as scheduling.
+  canShareMatches?: boolean
+  // Coach-only: shows a "Stat Sheet" button on any match involving their own
+  // team/registered player (computed by the caller — MatchStatSheetPolicy's
+  // eligibility rule, re-derived client-side from data the coach already
+  // has, so an ineligible match never even renders the button rather than
+  // opening StatSheetModal and getting a 403). Not passed at all by the
+  // player-facing or organizer-family callers.
+  isStatSheetEligible?: (match: BracketMatch) => boolean
+  onOpenStatSheet?: (match: BracketMatch) => void
 }) {
   const queryClient = useQueryClient()
   const { data: bracket, isLoading } = useQuery({
     queryKey: ['organizer', 'bracket', tournamentId],
     queryFn: () => fetchBracket(tournamentId),
     retry: false,
+    // The tournament.{id} channel below only fires on a bracket-structure
+    // change (generation, round advance) — a match merely going scheduled
+    // -> live has no broadcast of its own, so a viewer who isn't the one
+    // scoring it (the main organizer watching, say) wouldn't otherwise see
+    // that transition (and thus the now-available Share/Stat Sheet buttons)
+    // without this safety-net poll.
+    refetchInterval: 20000,
   })
   const [schedulingMatch, setSchedulingMatch] = useState<BracketMatch | null>(null)
+  const [sharingMatch, setSharingMatch] = useState<BracketMatch | null>(null)
 
   const containerRef = useRef<HTMLDivElement>(null)
   // The bracket's actual rounds/matches live in here, at their natural
@@ -219,7 +294,15 @@ export function BracketView({
     }
   }, [tournamentId, queryClient])
 
-  const structure = bracket?.structure ?? []
+  // See freshBracketMatch's own doc comment (organizerApi.ts) for why this
+  // merge is needed at all — every match rendered here goes through it so
+  // the whole grid (and whatever gets passed to onSelectMatch/onShare/
+  // onOpenStatSheet from a click) reflects real, current data instead of
+  // bracket.structure's cached-at-generation-or-completion snapshot.
+  const structure = useMemo(
+    () => (bracket?.structure ?? []).map((round) => round.map((m) => freshBracketMatch(bracket, m.id) ?? m)),
+    [bracket]
+  )
 
   // Measures each visible match card relative to the scrollable bracket
   // container and draws an elbowed connector + arrowhead from every match
@@ -421,7 +504,7 @@ export function BracketView({
                       : 'text-center text-xs font-semibold uppercase tracking-wide text-slate-500'
                   }
                 >
-                  {i === structure.length - 1 ? 'Final' : `Round ${i + 1}`}
+                  {isTreeRound(round) ? eliminationRoundLabel(round.length, i) : `Round ${i + 1}`}
                 </h4>
                 {round.map((match) => (
                   <MatchCard
@@ -429,6 +512,10 @@ export function BracketView({
                     match={match}
                     onClick={onSelectMatch ? () => onSelectMatch(match) : undefined}
                     onSchedule={canScheduleMatches ? () => setSchedulingMatch(match) : undefined}
+                    onShare={canShareMatches ? () => setSharingMatch(match) : undefined}
+                    onStatSheet={
+                      isStatSheetEligible?.(match) && onOpenStatSheet ? () => onOpenStatSheet(match) : undefined
+                    }
                     cardRef={(el) => {
                       if (el) cardEls.current.set(match.id, el)
                       else cardEls.current.delete(match.id)
@@ -446,6 +533,15 @@ export function BracketView({
           match={schedulingMatch}
           tournamentId={tournamentId}
           onClose={() => setSchedulingMatch(null)}
+        />
+      )}
+
+      {sharingMatch && (
+        <ShareMatchModal
+          match={sharingMatch}
+          tournamentId={tournamentId}
+          tournamentName={tournamentName ?? 'this tournament'}
+          onClose={() => setSharingMatch(null)}
         />
       )}
     </div>

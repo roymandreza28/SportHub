@@ -60,7 +60,11 @@ export function NewsEditor() {
     mutationFn: () => createNews({ title, body, media: attachments.map((a) => a.file) }),
     onSuccess: () => {
       reset()
+      // ['news'] is the plain organizer/facilitator list (NewsFeed.tsx);
+      // ['newsfeed'] is the shared feed OrganizerPage now also renders below
+      // this editor — both need to pick up the freshly published post.
       queryClient.invalidateQueries({ queryKey: ['news'] })
+      queryClient.invalidateQueries({ queryKey: ['newsfeed'] })
     },
   })
 

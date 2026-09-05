@@ -13,7 +13,8 @@ class GameMatch extends Model
     protected $fillable = [
         'bracket_id', 'round', 'group_number', 'bracket_type', 'bracket_position', 'participant_a_id', 'participant_b_id',
         'participant_a_team_id', 'participant_b_team_id', 'score_a', 'score_b', 'sets', 'status', 'court_id',
-        'scheduled_at', 'winner_id', 'winner_team_id',
+        'scheduled_at', 'winner_id', 'winner_team_id', 'won_by_default',
+        'clock_seconds_remaining', 'clock_shot_seconds_remaining', 'clock_running', 'clock_period_label', 'clock_synced_at',
     ];
 
     protected function casts(): array
@@ -21,6 +22,9 @@ class GameMatch extends Model
         return [
             'scheduled_at' => 'datetime',
             'sets' => 'array',
+            'won_by_default' => 'boolean',
+            'clock_running' => 'boolean',
+            'clock_synced_at' => 'datetime',
         ];
     }
 

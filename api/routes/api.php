@@ -198,11 +198,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:player|coach')->group(function () {
         Route::get('/venue-registrations/mine', [VenueRegistrationController::class, 'mine']);
         Route::post('/venue-registrations', [VenueRegistrationController::class, 'store']);
+    });
 
-        // Read-only Newsfeed: player/coach can react, comment, and (via the
-        // existing friend-messaging system on the frontend) share an
-        // organizer's article, but never create/edit/delete one — that stays
-        // gated behind the 'manage news' permission below, organizer-only.
+    // Newsfeed interaction: player/coach can react, comment, and (via the
+    // existing friend-messaging system on the frontend) share an organizer's
+    // article, but never create/edit/delete one. The main organizer now
+    // browses this same feed too, so they get the same react/comment access
+    // — creating/editing/deleting a post still stays gated behind the
+    // 'manage news' permission below, and only over their own post.
+    Route::middleware('role:player|coach|organizer')->group(function () {
         Route::post('/news/{news}/comments', [NewsCommentController::class, 'store']);
         Route::delete('/news-comments/{newsComment}', [NewsCommentController::class, 'destroy']);
         Route::post('/news/{news}/react', [NewsReactionController::class, 'toggle']);
@@ -284,6 +288,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // by MatchPolicy::updateScore() to that specific tournament assignment.
     Route::middleware('role:organizer|venue_organizer|admin')->group(function () {
         Route::patch('/matches/{match}/score', [MatchController::class, 'updateScore']);
+        Route::patch('/matches/{match}/clock', [MatchController::class, 'updateClock']);
+        Route::post('/matches/{match}/forfeit', [MatchController::class, 'forfeit']);
         Route::get('/matches/{match}/roster', [MatchController::class, 'roster']);
     });
 
@@ -296,6 +302,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/livestreams/{livestream}', [LivestreamController::class, 'update']);
         Route::delete('/livestreams/{livestream}', [LivestreamController::class, 'destroy']);
         Route::post('/livestreams/{livestream}/publish', [LivestreamController::class, 'publish']);
+        Route::post('/livestreams/{livestream}/recording', [LivestreamController::class, 'uploadRecording']);
     });
 
     Route::post('/livestreams/{livestream}/messages', [ChatMessageController::class, 'store']);

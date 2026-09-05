@@ -10,6 +10,7 @@ use App\Models\Tournament;
 use App\Support\Broadcasting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class LivestreamController extends Controller
@@ -76,6 +77,35 @@ class LivestreamController extends Controller
         $livestream->update($data);
 
         return $livestream;
+    }
+
+    // The broadcaster's device uploads its own MediaRecorder capture right
+    // after stopBroadcast() — same "update this livestream" ability as
+    // status/title changes, since recording a copy of your own broadcast is
+    // just another thing the broadcaster (or the main organizer who owns
+    // the tournament it's tied to) can do to it. One recording per
+    // livestream: re-uploading (e.g. a retry after a dropped connection)
+    // replaces the old file rather than orphaning it on disk.
+    public function uploadRecording(Request $request, Livestream $livestream)
+    {
+        $this->authorize('update', $livestream);
+
+        $data = $request->validate([
+            // MediaRecorder's default output is webm; Safari's is mp4 —
+            // both accepted since the broadcaster's browser dictates this,
+            // not the viewer's. Capped well under a typical match's length
+            // at a modest bitrate, but generous enough for a full game.
+            'video' => ['required', 'file', 'mimetypes:video/webm,video/mp4', 'max:512000'],
+        ]);
+
+        if ($livestream->recording_path) {
+            Storage::disk('public')->delete($livestream->recording_path);
+        }
+
+        $path = $request->file('video')->store('livestreams/'.$livestream->id, 'public');
+        $livestream->update(['recording_path' => $path]);
+
+        return $livestream->fresh();
     }
 
     public function destroy(Livestream $livestream)

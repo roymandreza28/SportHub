@@ -70,7 +70,7 @@ function PlayerPickerModal({
   onCancel: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/70 p-4">
+    <div className="scoreboard-palette fixed inset-0 z-30 flex items-center justify-center bg-slate-950/70 p-4">
       <div className={`w-full max-w-sm rounded-xl p-5 shadow-2xl ${isDark ? 'bg-slate-800 text-slate-100' : 'bg-white text-slate-900'}`}>
         <h4 className="text-sm font-bold">{title}</h4>
         <p className={`mt-0.5 text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{team?.name ?? ''}</p>
@@ -394,7 +394,7 @@ export function PickleballScoreboard({
   const subtleText = isDark ? 'text-slate-400' : 'text-slate-500'
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4">
+    <div className="scoreboard-palette fixed inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4">
       <div ref={containerRef} className={`flex w-full max-w-7xl flex-col gap-4 overflow-y-auto rounded-xl p-6 shadow-2xl ${panelClass}`} style={{ maxHeight: '92vh' }}>
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/20 pb-3">

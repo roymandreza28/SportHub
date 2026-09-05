@@ -42,11 +42,18 @@ export type BracketMatch = {
   bracket_type?: 'winners' | 'losers' | 'final' | 'swiss' | null
   participant_a_id: number | null
   participant_b_id: number | null
+  // Already on the wire (GameMatch has no $hidden) — declared here so a
+  // coach's team-eligibility check (e.g. for the bracket's Stat Sheet
+  // button) can tell "my team" apart from "my registered player" without a
+  // type discriminator on the already-shaped participant_a/participant_b.
+  participant_a_team_id: number | null
+  participant_b_team_id: number | null
   score_a: number
   score_b: number
   sets?: SetScore[] | null
   status: 'scheduled' | 'live' | 'completed'
   winner_id: number | null
+  won_by_default: boolean
   participant_a?: { id: number; name: string } | null
   participant_b?: { id: number; name: string } | null
   winner?: { id: number; name: string } | null
@@ -64,6 +71,43 @@ export type Bracket = {
   structure: BracketMatch[][] | null
   matches: BracketMatch[]
   format: TournamentFormat
+}
+
+// bracket.structure is a cached JSON blob (BracketService::buildStructure())
+// only rebuilt when a match's bracket position changes (generation, or
+// advanceWinner() at completion) — a match going scheduled -> live, or
+// ticking score while live, updates the match row directly and never
+// touches it, so structure's copy of status/score/won_by_default can be
+// stale for as long as a game is in progress. bracket.matches is the same
+// matches, always freshly serialized straight from the DB — but its
+// participant_a/participant_b are the RAW participantA/participantB user
+// relations (null for a team match, since team matches use
+// participant_a_team_id instead), not the {id, name} shape MatchParticipants
+// ::shape() bakes into structure — so reading a name straight off
+// bracket.matches shows "TBD" for every team-tournament match regardless of
+// whether it's actually determined. This merges the two: structure's own
+// shaped participant_a/participant_b/winner (correct for either kind of
+// tournament), with the handful of fields that change during play pulled
+// fresh from bracket.matches instead of structure's frozen copy.
+export function freshBracketMatch(bracket: Bracket | undefined, matchId: number): BracketMatch | undefined {
+  const structureMatch = bracket?.structure?.flat().find((m) => m.id === matchId)
+  const fresh = bracket?.matches.find((m) => m.id === matchId)
+
+  if (!structureMatch) return fresh
+  if (!fresh) return structureMatch
+
+  return {
+    ...structureMatch,
+    status: fresh.status,
+    score_a: fresh.score_a,
+    score_b: fresh.score_b,
+    won_by_default: fresh.won_by_default,
+    participant_a_team_id: fresh.participant_a_team_id,
+    participant_b_team_id: fresh.participant_b_team_id,
+    scheduled_at: fresh.scheduled_at,
+    court_id: fresh.court_id,
+    court: fresh.court,
+  }
 }
 
 export type NewsMediaItem = {
@@ -88,6 +132,10 @@ export type LivestreamItem = {
   status: 'scheduled' | 'live' | 'ended'
   tournament_id: number | null
   news_id: number | null
+  // Set once the broadcaster's device has uploaded its MediaRecorder
+  // capture of the broadcast (see uploadLivestreamRecording) — lets a
+  // viewer replay an ended stream instead of just seeing "broadcast over."
+  recording_url: string | null
   broadcaster: { id: number; name: string } | null
   tournament: { id: number; organizer_id: number } | null
 }
@@ -205,6 +253,32 @@ export async function updateMatchSets(
   return data
 }
 
+// Basketball/3x3's game clock only — every other sport's scoreboard never
+// calls this. Fired on a real transition (start, pause, period/overtime
+// change, manual adjustment), never once per tick; the shared-post widget
+// extrapolates the running countdown locally between syncs. See
+// MatchController::updateClock().
+export async function updateMatchClock(
+  matchId: number,
+  input: {
+    clock_seconds_remaining: number | null
+    clock_shot_seconds_remaining: number | null
+    clock_running: boolean
+    clock_period_label: string | null
+  }
+) {
+  const { data } = await api.patch(`/api/matches/${matchId}/clock`, input)
+  return data
+}
+
+// The venue organizer's alternative to ever opening the scoreboard — one
+// side didn't show up, so the match is decided without a single point
+// played. See MatchController::forfeit() / GameMatch.won_by_default.
+export async function forfeitMatch(matchId: number, winnerSide: 'a' | 'b') {
+  const { data } = await api.post<BracketMatch>(`/api/matches/${matchId}/forfeit`, { winner_side: winnerSide })
+  return data
+}
+
 export type MatchRosterTeam = { id: number; name: string; members: { id: number; name: string }[] }
 
 export async function fetchMatchRoster(matchId: number) {
@@ -219,12 +293,30 @@ export async function fetchNews() {
   return data
 }
 
-export async function createNews(input: { title: string; body: string; media?: File[]; tournament_id?: number }) {
+export async function createNews(input: {
+  title: string
+  body: string
+  media?: File[]
+  tournament_id?: number
+  match_id?: number
+  // Explicit pick from ShareMatchModal's livestream picker — links this
+  // post to that broadcast (news_id) the same way LivestreamController::
+  // publish() does the other way around. Omitted entirely, the backend
+  // still auto-links a lone still-unlinked live stream on the match's
+  // tournament, so sharing works with zero clicks when there's only one.
+  livestream_id?: number
+}) {
   const form = new FormData()
   form.append('title', input.title)
   form.append('body', input.body)
   if (input.tournament_id !== undefined) {
     form.append('tournament_id', String(input.tournament_id))
+  }
+  if (input.match_id !== undefined) {
+    form.append('match_id', String(input.match_id))
+  }
+  if (input.livestream_id !== undefined) {
+    form.append('livestream_id', String(input.livestream_id))
   }
   for (const file of input.media ?? []) {
     form.append('media[]', file)
@@ -263,6 +355,17 @@ export async function publishLivestreamToNews(livestreamId: number, input: { tit
     `/api/livestreams/${livestreamId}/publish`,
     input
   )
+  return data
+}
+
+// Uploaded once the broadcaster stops (LivestreamBroadcast.tsx's
+// MediaRecorder capture of their own outgoing stream) — there's no server-
+// side media pipeline in this app's WebRTC relay, so this direct-from-
+// browser upload is the only way a recording ever exists at all.
+export async function uploadLivestreamRecording(livestreamId: number, video: Blob, filename: string) {
+  const form = new FormData()
+  form.append('video', video, filename)
+  const { data } = await api.post<LivestreamItem>(`/api/livestreams/${livestreamId}/recording`, form)
   return data
 }
 

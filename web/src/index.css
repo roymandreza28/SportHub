@@ -140,6 +140,61 @@ html {
   --color-white: #1e1e1e;
 }
 
+/* The 7 sport scoreboards (+ Bowling) each already ship their OWN
+   deliberately-designed light/dark toggle, built against real Tailwind
+   teal/slate/red/green — plain `bg-slate-800`/`text-teal-600` etc., not the
+   `dark:` variant, switched via each component's own local `isDark` state.
+   Championship Spirit/Night Game Lights above repaints those same utility
+   names app-wide for everything else, which also (unintentionally) bled
+   into every scoreboard's own color scheme. Pinning the scale names back to
+   their genuine Tailwind values, scoped to `.scoreboard-palette` and
+   everything inside it, restores exactly the scoreboards' original look
+   regardless of which app-wide theme is active — every other part of the
+   app keeps the branded palette untouched. Declared after both blocks
+   above so it wins on source order at equal specificity (a direct
+   declaration on the scoreboard's own elements, not an inherited one, so it
+   isn't actually competing with [data-theme="dark"] for the same element —
+   but keeping it last/lowest-specificity here matches this file's existing
+   convention rather than relying on that alone). */
+:where(.scoreboard-palette, .scoreboard-palette *) {
+  --color-teal-50: #f0fdfa;
+  --color-teal-100: #ccfbf1;
+  --color-teal-200: #99f6e4;
+  --color-teal-300: #5eead4;
+  --color-teal-400: #2dd4bf;
+  --color-teal-500: #14b8a6;
+  --color-teal-600: #0d9488;
+  --color-teal-700: #0f766e;
+  --color-teal-800: #115e59;
+  --color-teal-900: #134e4a;
+
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+
+  --color-red-50: #fef2f2;
+  --color-red-100: #fee2e2;
+  --color-red-200: #fecaca;
+  --color-red-500: #ef4444;
+  --color-red-600: #dc2626;
+  --color-red-700: #b91c1c;
+  --color-red-800: #991b1b;
+
+  --color-green-50: #f0fdf4;
+  --color-green-100: #dcfce7;
+  --color-green-600: #16a34a;
+  --color-green-700: #15803d;
+
+  --color-white: #ffffff;
+}
+
 @keyframes spin-reverse {
   from {
     transform: rotate(360deg);

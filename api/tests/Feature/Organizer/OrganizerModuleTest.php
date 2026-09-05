@@ -501,6 +501,110 @@ it('denies a venue organizer from scoring a match on a tournament they were not 
     ])->assertForbidden();
 });
 
+it('lets the assigned venue organizer declare a match won by default, completing it without a score and advancing the bracket', function () {
+    $owner = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $sport = Sport::create(['name' => 'Squash']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id,
+        'sport_id' => $sport->id,
+        'name' => 'Forfeit Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(),
+        'status' => 'registration',
+        'venue_organizer_id' => $venueOrganizer->id,
+    ]);
+
+    $players = [];
+    foreach (range(1, 4) as $i) {
+        $player = userWithRole('player');
+        $players[] = $player;
+        TournamentRegistration::create(['tournament_id' => $tournament->id, 'user_id' => $player->id, 'status' => 'pending']);
+    }
+
+    $this->actingAs($owner)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
+    $match = $tournament->fresh()->bracket->matches->sortBy('id')->first();
+
+    $response = $this->actingAs($venueOrganizer)->postJson("/api/matches/{$match->id}/forfeit", [
+        'winner_side' => 'a',
+    ])->assertOk();
+
+    expect($response->json('status'))->toBe('completed');
+    expect($response->json('won_by_default'))->toBeTrue();
+    expect($response->json('winner_id'))->toBe($match->participant_a_id);
+    expect($response->json('score_a'))->toBe(0);
+    expect($response->json('score_b'))->toBe(0);
+
+    // Round 2 has been seeded with the winner, same as a normally-scored completion.
+    $round2 = $tournament->fresh()->bracket->matches->where('round', 2)->first();
+    expect($round2)->not->toBeNull();
+    expect([$round2->participant_a_id, $round2->participant_b_id])->toContain($match->participant_a_id);
+});
+
+it('denies declaring a match won by default to anyone other than the assigned venue organizer', function () {
+    $owner = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $sport = Sport::create(['name' => 'Squash']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id,
+        'sport_id' => $sport->id,
+        'name' => 'No Forfeit Cup',
+        'format' => 'round_robin',
+        'starts_at' => now()->addWeek(),
+        'status' => 'registration',
+    ]);
+
+    foreach (range(1, 2) as $i) {
+        $player = userWithRole('player');
+        TournamentRegistration::create(['tournament_id' => $tournament->id, 'user_id' => $player->id, 'status' => 'pending']);
+    }
+
+    $this->actingAs($owner)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
+    $matchId = $tournament->fresh()->bracket->matches->first()->id;
+
+    $this->actingAs($venueOrganizer)->postJson("/api/matches/{$matchId}/forfeit", [
+        'winner_side' => 'a',
+    ])->assertForbidden();
+
+    $this->actingAs($owner)->postJson("/api/matches/{$matchId}/forfeit", [
+        'winner_side' => 'a',
+    ])->assertForbidden();
+});
+
+it('rejects declaring a match already completed as won by default', function () {
+    $owner = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $sport = Sport::create(['name' => 'Squash']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id,
+        'sport_id' => $sport->id,
+        'name' => 'Already Done Cup',
+        'format' => 'round_robin',
+        'starts_at' => now()->addWeek(),
+        'status' => 'registration',
+        'venue_organizer_id' => $venueOrganizer->id,
+    ]);
+
+    foreach (range(1, 2) as $i) {
+        $player = userWithRole('player');
+        TournamentRegistration::create(['tournament_id' => $tournament->id, 'user_id' => $player->id, 'status' => 'pending']);
+    }
+
+    $this->actingAs($owner)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
+    $matchId = $tournament->fresh()->bracket->matches->first()->id;
+
+    $this->actingAs($venueOrganizer)->patchJson("/api/matches/{$matchId}/score", [
+        'score_a' => 21, 'score_b' => 15, 'status' => 'completed',
+    ])->assertOk();
+
+    $this->actingAs($venueOrganizer)->postJson("/api/matches/{$matchId}/forfeit", [
+        'winner_side' => 'a',
+    ])->assertStatus(422);
+});
+
 it('denies a venue organizer from creating tournaments, but still lets them post news', function () {
     $venueOrganizer = userWithRole('venue_organizer');
     $sport = Sport::create(['name' => 'Table Tennis']);
@@ -1006,5 +1110,163 @@ it('lets a tournaments organizer create a news post tied to it, and denies a dif
 
     $this->actingAs($other)->postJson('/api/news', [
         'title' => 'Hijack', 'body' => 'Body', 'tournament_id' => $tournament->id,
+    ])->assertForbidden();
+});
+
+it('lets a tournaments organizer link a news post to a specific match, exposing its live score, and denies a different organizer', function () {
+    $owner = userWithRole('organizer');
+    $other = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id, 'sport_id' => $sport->id,
+        'name' => 'Shared Match Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'registration',
+    ]);
+
+    foreach (range(1, 2) as $i) {
+        $player = userWithRole('player');
+        TournamentRegistration::create(['tournament_id' => $tournament->id, 'user_id' => $player->id, 'status' => 'pending']);
+    }
+
+    $this->actingAs($owner)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
+    $match = $tournament->fresh()->bracket->matches->first();
+
+    $response = $this->actingAs($owner)->postJson('/api/news', [
+        'title' => 'Live from the match!', 'body' => 'Body', 'tournament_id' => $tournament->id, 'match_id' => $match->id,
+    ])->assertCreated();
+
+    expect($response->json('match.id'))->toBe($match->id);
+    expect($response->json('match.status'))->toBe('scheduled');
+    expect($response->json('match.participant_a.id'))->toBe($match->participant_a_id);
+
+    $this->assertDatabaseHas('news', ['title' => 'Live from the match!', 'match_id' => $match->id]);
+
+    $this->actingAs($other)->postJson('/api/news', [
+        'title' => 'Hijack', 'body' => 'Body', 'match_id' => $match->id,
+    ])->assertForbidden();
+});
+
+it("auto-links the tournament's active livestream when sharing a live match, so the post carries both", function () {
+    $owner = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id, 'sport_id' => $sport->id,
+        'name' => 'Live Broadcast Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'registration',
+    ]);
+
+    foreach (range(1, 2) as $i) {
+        $player = userWithRole('player');
+        TournamentRegistration::create(['tournament_id' => $tournament->id, 'user_id' => $player->id, 'status' => 'pending']);
+    }
+
+    $this->actingAs($owner)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
+    $match = $tournament->fresh()->bracket->matches->first();
+    $match->update(['status' => 'live']);
+
+    $livestream = Livestream::create([
+        'tournament_id' => $tournament->id,
+        'title' => 'Finals feed',
+        'broadcaster_id' => $owner->id,
+        'status' => 'live',
+    ]);
+
+    $response = $this->actingAs($owner)->postJson('/api/news', [
+        'title' => 'Live from the match!', 'body' => 'Body', 'tournament_id' => $tournament->id, 'match_id' => $match->id,
+    ])->assertCreated();
+
+    expect($response->json('livestreams.0.id'))->toBe($livestream->id);
+    expect($response->json('livestreams.0.status'))->toBe('live');
+    expect($livestream->fresh()->news_id)->toBe($response->json('id'));
+});
+
+it('does not steal an already-linked livestream when a second match from the same tournament is shared', function () {
+    $owner = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id, 'sport_id' => $sport->id,
+        'name' => 'Already Linked Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'registration',
+    ]);
+
+    foreach (range(1, 2) as $i) {
+        $player = userWithRole('player');
+        TournamentRegistration::create(['tournament_id' => $tournament->id, 'user_id' => $player->id, 'status' => 'pending']);
+    }
+
+    $this->actingAs($owner)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
+    $match = $tournament->fresh()->bracket->matches->first();
+
+    $existingPost = $owner->news()->create(['title' => 'Earlier post', 'body' => 'x', 'published_at' => now()]);
+    $livestream = Livestream::create([
+        'tournament_id' => $tournament->id,
+        'title' => 'Finals feed',
+        'broadcaster_id' => $owner->id,
+        'status' => 'live',
+        'news_id' => $existingPost->id,
+    ]);
+
+    $this->actingAs($owner)->postJson('/api/news', [
+        'title' => 'Second share', 'body' => 'Body', 'tournament_id' => $tournament->id, 'match_id' => $match->id,
+    ])->assertCreated()->assertJsonPath('livestreams', []);
+
+    expect($livestream->fresh()->news_id)->toBe($existingPost->id);
+});
+
+it('lets the organizer explicitly pick which livestream to link when sharing a match, overriding auto-detection', function () {
+    $owner = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id, 'sport_id' => $sport->id,
+        'name' => 'Pick Stream Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'registration',
+    ]);
+
+    foreach (range(1, 2) as $i) {
+        $player = userWithRole('player');
+        TournamentRegistration::create(['tournament_id' => $tournament->id, 'user_id' => $player->id, 'status' => 'pending']);
+    }
+
+    $this->actingAs($owner)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
+    $match = $tournament->fresh()->bracket->matches->first();
+
+    // Two candidate streams — auto-detection alone couldn't pick between
+    // them, so the organizer's explicit choice is what decides it.
+    $unwanted = Livestream::create([
+        'tournament_id' => $tournament->id, 'title' => 'Court 1 feed',
+        'broadcaster_id' => $owner->id, 'status' => 'live',
+    ]);
+    $wanted = Livestream::create([
+        'tournament_id' => $tournament->id, 'title' => 'Court 2 feed',
+        'broadcaster_id' => $owner->id, 'status' => 'live',
+    ]);
+
+    $response = $this->actingAs($owner)->postJson('/api/news', [
+        'title' => 'Live from Court 2!', 'body' => 'Body', 'tournament_id' => $tournament->id,
+        'match_id' => $match->id, 'livestream_id' => $wanted->id,
+    ])->assertCreated();
+
+    expect($response->json('livestreams.0.id'))->toBe($wanted->id);
+    expect($wanted->fresh()->news_id)->toBe($response->json('id'));
+    expect($unwanted->fresh()->news_id)->toBeNull();
+});
+
+it("denies picking a livestream from a tournament the poster doesn't organize", function () {
+    $owner = userWithRole('organizer');
+    $other = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Chess']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id, 'sport_id' => $sport->id,
+        'name' => 'Someone Elses Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'registration',
+    ]);
+
+    $livestream = Livestream::create([
+        'tournament_id' => $tournament->id, 'title' => 'Feed',
+        'broadcaster_id' => $owner->id, 'status' => 'live',
+    ]);
+
+    $this->actingAs($other)->postJson('/api/news', [
+        'title' => 'Hijack', 'body' => 'Body', 'livestream_id' => $livestream->id,
     ])->assertForbidden();
 });

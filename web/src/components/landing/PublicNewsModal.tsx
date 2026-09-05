@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { fetchNewsFeed, type NewsItem } from '../../lib/newsApi'
+import { fetchNewsFeed, displayNewsTitle, type NewsItem } from '../../lib/newsApi'
 import { LiveRelayVideo } from '../newsfeed/LiveRelayVideo'
+import { LiveMatchScore } from '../newsfeed/LiveMatchScore'
 import { NewsMediaGrid } from '../newsfeed/NewsMediaGrid'
 import { IconChevronLeft, IconHeart, IconMessageCircle, IconX } from '../layout/icons'
 
@@ -219,17 +220,23 @@ function FeaturedSlider({
 }
 
 function SlideCard({ item, onSelect }: { item: NewsItem; onSelect: (item: NewsItem) => void }) {
-  const liveStream = item.livestreams.find((l) => l.status === 'live')
+  const liveStream =
+    item.livestreams.find((l) => l.status === 'live') ??
+    item.livestreams.find((l) => l.status === 'ended' && l.recording_url)
+  const isActuallyLive = liveStream?.status === 'live'
+  const hasLiveMatch = item.match?.status === 'live'
   const image = coverImageFor(item)
 
   return (
     <div className="relative aspect-[16/9] w-full sm:aspect-[21/9]">
       {liveStream ? (
         <>
-          <LiveRelayVideo livestreamId={liveStream.id} />
-          <div className="absolute left-3 top-3 z-[1]">
-            <LiveBadge />
-          </div>
+          <LiveRelayVideo livestreamId={liveStream.id} status={liveStream.status} recordingUrl={liveStream.recording_url} />
+          {isActuallyLive && (
+            <div className="absolute left-3 top-3 z-[1]">
+              <LiveBadge />
+            </div>
+          )}
           {/* Only the caption strip opens the article here — the video area
               above it stays untouched so LiveRelayVideo's own "Click to
               watch" control keeps working instead of being swallowed by an
@@ -239,7 +246,7 @@ function SlideCard({ item, onSelect }: { item: NewsItem; onSelect: (item: NewsIt
             onClick={() => onSelect(item)}
             className="absolute inset-x-0 bottom-0 flex flex-col items-start bg-gradient-to-t from-slate-950/90 to-transparent px-5 pb-10 pt-10 text-left sm:px-6 sm:pb-11"
           >
-            <h2 className="text-xl font-bold leading-tight text-pure-white sm:text-2xl">{item.title}</h2>
+            <h2 className="text-xl font-bold leading-tight text-pure-white sm:text-2xl">{displayNewsTitle(item)}</h2>
             <p className="mt-1.5 text-xs text-pure-white/70">
               {byline(item)}
               {item.published_at && ` · ${new Date(item.published_at).toLocaleDateString()}`}
@@ -250,12 +257,17 @@ function SlideCard({ item, onSelect }: { item: NewsItem; onSelect: (item: NewsIt
         <>
           {image ? <img src={image} alt="" className="h-full w-full object-cover" /> : <GradientFallback />}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/10 to-transparent" />
+          {hasLiveMatch && (
+            <div className="absolute left-3 top-3 z-[1]">
+              <LiveBadge />
+            </div>
+          )}
           <button
             type="button"
             onClick={() => onSelect(item)}
             className="absolute inset-0 flex flex-col justify-end px-5 pb-10 pt-4 text-left sm:px-6 sm:pb-11"
           >
-            <h2 className="text-xl font-bold leading-tight text-pure-white sm:text-2xl">{item.title}</h2>
+            <h2 className="text-xl font-bold leading-tight text-pure-white sm:text-2xl">{displayNewsTitle(item)}</h2>
             <p className="mt-1.5 text-xs text-pure-white/70">
               {byline(item)}
               {item.published_at && ` · ${new Date(item.published_at).toLocaleDateString()}`}
@@ -268,18 +280,24 @@ function SlideCard({ item, onSelect }: { item: NewsItem; onSelect: (item: NewsIt
 }
 
 function NewsCard({ item, onSelect }: { item: NewsItem; onSelect: (item: NewsItem) => void }) {
-  const liveStream = item.livestreams.find((l) => l.status === 'live')
+  const liveStream =
+    item.livestreams.find((l) => l.status === 'live') ??
+    item.livestreams.find((l) => l.status === 'ended' && l.recording_url)
+  const isActuallyLive = liveStream?.status === 'live'
+  const hasLiveMatch = item.match?.status === 'live'
   const image = coverImageFor(item)
 
   return (
     <article className="flex flex-col overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm transition hover:shadow-md">
       <div className="relative aspect-video w-full shrink-0">
-        {liveStream ? <LiveRelayVideo livestreamId={liveStream.id} /> : image ? (
+        {liveStream ? (
+          <LiveRelayVideo livestreamId={liveStream.id} status={liveStream.status} recordingUrl={liveStream.recording_url} />
+        ) : image ? (
           <img src={image} alt="" className="h-full w-full object-cover" />
         ) : (
           <GradientFallback />
         )}
-        {liveStream && (
+        {(isActuallyLive || hasLiveMatch) && (
           <div className="absolute left-3 top-3 z-[1]">
             <LiveBadge />
           </div>
@@ -287,7 +305,7 @@ function NewsCard({ item, onSelect }: { item: NewsItem; onSelect: (item: NewsIte
       </div>
 
       <button type="button" onClick={() => onSelect(item)} className="flex flex-1 flex-col px-4 py-3.5 text-left">
-        <h3 className="line-clamp-2 text-sm font-bold leading-snug text-slate-900">{item.title}</h3>
+        <h3 className="line-clamp-2 text-sm font-bold leading-snug text-slate-900">{displayNewsTitle(item)}</h3>
         <p className="mt-1 text-xs text-slate-500">
           {byline(item)}
           {item.published_at && ` · ${new Date(item.published_at).toLocaleDateString()}`}
@@ -302,7 +320,10 @@ function NewsCard({ item, onSelect }: { item: NewsItem; onSelect: (item: NewsIte
 }
 
 function ArticleDetail({ item, onBack }: { item: NewsItem; onBack: () => void }) {
-  const liveStream = item.livestreams.find((l) => l.status === 'live')
+  const liveStream =
+    item.livestreams.find((l) => l.status === 'live') ??
+    item.livestreams.find((l) => l.status === 'ended' && l.recording_url)
+  const isActuallyLive = liveStream?.status === 'live'
   const image = coverImageFor(item)
 
   return (
@@ -315,31 +336,38 @@ function ArticleDetail({ item, onBack }: { item: NewsItem; onBack: () => void })
         <IconChevronLeft className="h-4 w-4" /> Back to News
       </button>
 
-      {liveStream && (
-        <div className="mb-4">
-          <div className="mb-2">
-            <LiveBadge />
-          </div>
-          <LiveRelayVideo livestreamId={liveStream.id} />
-        </div>
-      )}
-
-      {!liveStream && item.media.length > 0 && (
-        <div className="mb-5">
-          <NewsMediaGrid media={item.media} />
-        </div>
-      )}
-      {!liveStream && item.media.length === 0 && image && (
-        <img src={image} alt="" className="mb-5 aspect-video w-full rounded-xl object-cover" />
-      )}
-
-      <h1 className="text-2xl font-bold leading-tight text-slate-900 sm:text-3xl">{item.title}</h1>
+      {/* Title, byline, details, then — for a live game share — the live
+          scoreboard and finally the live stream, in that order. A plain
+          (non-live) post keeps its cover image/media up top instead. */}
+      <h1 className="text-2xl font-bold leading-tight text-slate-900 sm:text-3xl">{displayNewsTitle(item)}</h1>
       <p className="mt-2 text-sm text-slate-500">
         {byline(item)}
         {item.published_at && ` · ${new Date(item.published_at).toLocaleDateString()}`}
       </p>
 
+      {!liveStream && item.media.length > 0 && (
+        <div className="mt-5">
+          <NewsMediaGrid media={item.media} />
+        </div>
+      )}
+      {!liveStream && item.media.length === 0 && image && (
+        <img src={image} alt="" className="mt-5 aspect-video w-full rounded-xl object-cover" />
+      )}
+
       <p className="mt-5 whitespace-pre-line text-base leading-relaxed text-slate-700">{item.body}</p>
+
+      {item.match && <LiveMatchScore match={item.match} />}
+
+      {liveStream && (
+        <div className="mt-4">
+          {isActuallyLive && (
+            <div className="mb-2">
+              <LiveBadge />
+            </div>
+          )}
+          <LiveRelayVideo livestreamId={liveStream.id} status={liveStream.status} recordingUrl={liveStream.recording_url} />
+        </div>
+      )}
 
       <div className="mt-6 flex items-center gap-5 border-t border-slate-100 pt-4 text-sm text-slate-500">
         <span className="flex items-center gap-1.5">

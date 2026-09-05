@@ -17,14 +17,29 @@ type PublicSignalMessage = {
 // landing page. Never needs auth: it just announces a random token on the
 // livestream's public signal channel and waits for the main organizer's
 // relay (LivestreamViewer.tsx) to offer it a peer connection.
-export function LiveRelayVideo({ livestreamId }: { livestreamId: number }) {
+//
+// Once the broadcast has ended there's no one left to answer that signal —
+// status/recordingUrl let this fall back to plain <video> playback of the
+// broadcaster's own MediaRecorder capture (see LivestreamBroadcast.tsx)
+// instead of hanging on "Connecting..." forever.
+export function LiveRelayVideo({
+  livestreamId,
+  status,
+  recordingUrl,
+}: {
+  livestreamId: number
+  status?: 'scheduled' | 'live' | 'ended'
+  recordingUrl?: string | null
+}) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const tokenRef = useRef<string>(crypto.randomUUID())
   const [connected, setConnected] = useState(false)
   const [needsPlayClick, setNeedsPlayClick] = useState(false)
+  const isEnded = status === 'ended'
 
   useEffect(() => {
+    if (isEnded) return
     const myToken = tokenRef.current
 
     async function handleOffer(message: PublicSignalMessage) {
@@ -70,7 +85,28 @@ export function LiveRelayVideo({ livestreamId }: { livestreamId: number }) {
       pcRef.current?.close()
       pcRef.current = null
     }
-  }, [livestreamId])
+    // isEnded included so a broadcast ending while this is already mounted
+    // tears down the live-connection attempt instead of leaving it hanging.
+  }, [livestreamId, isEnded])
+
+  if (isEnded) {
+    if (!recordingUrl) {
+      return (
+        <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-slate-200 bg-slate-950 text-sm text-pure-white/70">
+          This broadcast has ended — no recording was saved.
+        </div>
+      )
+    }
+
+    return (
+      <video
+        controls
+        playsInline
+        src={recordingUrl}
+        className="aspect-video w-full rounded-lg border border-slate-200 bg-slate-950"
+      />
+    )
+  }
 
   return (
     <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-950">

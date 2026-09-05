@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   fetchMatchRoster,
   toPlayerStatsPayload,
+  updateMatchClock,
   updateMatchScore,
   type BracketMatch,
   type MatchRosterTeam,
@@ -89,7 +90,7 @@ function PlayerPickerModal({
   onCancel: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/70 p-4">
+    <div className="scoreboard-palette fixed inset-0 z-30 flex items-center justify-center bg-slate-950/70 p-4">
       <div className={`w-full max-w-sm rounded-xl p-5 shadow-2xl ${isDark ? 'bg-slate-800 text-slate-100' : 'bg-white text-slate-900'}`}>
         <h4 className="text-sm font-bold">{title}</h4>
         <p className={`mt-0.5 text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{team?.name ?? ''}</p>
@@ -217,16 +218,47 @@ export function Basketball3x3Scoreboard({
     return () => clearInterval(interval)
   }, [clockRunning, inOvertime, shotClockEnabled])
 
-  function playBuzzer(durationSeconds: number) {
+  // A real gym horn is a harsh, buzzing low tone, not a clean sine beep —
+  // two slightly-detuned sawtooth oscillators beating against each other
+  // through a lowpass filter gets much closer to that than a single pure
+  // tone. The shot-clock violation reuses the same rig pitched up into a
+  // sharper, shorter "beep-buzz", matching how an actual shot-clock unit's
+  // horn sounds distinctly different (higher, shorter) from the game/period
+  // horn on a real court.
+  function playBuzzer(durationSeconds: number, variant: 'horn' | 'shotclock' = 'horn') {
     if (buzzerMuted) return
     try {
       const ctx = new AudioContext()
-      const osc = ctx.createOscillator()
-      osc.frequency.value = 440
-      osc.connect(ctx.destination)
-      osc.start()
-      osc.stop(ctx.currentTime + durationSeconds)
-      osc.onended = () => ctx.close()
+      const peak = variant === 'horn' ? 0.4 : 0.3
+
+      const gain = ctx.createGain()
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(peak, ctx.currentTime + 0.02)
+      gain.gain.setValueAtTime(peak, ctx.currentTime + Math.max(0.02, durationSeconds - 0.05))
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + durationSeconds)
+      gain.connect(ctx.destination)
+
+      const filter = ctx.createBiquadFilter()
+      filter.type = 'lowpass'
+      filter.frequency.value = variant === 'horn' ? 650 : 1800
+      filter.connect(gain)
+
+      const baseFreq = variant === 'horn' ? 110 : 880
+      const osc1 = ctx.createOscillator()
+      osc1.type = 'sawtooth'
+      osc1.frequency.value = baseFreq
+      osc1.connect(filter)
+
+      const osc2 = ctx.createOscillator()
+      osc2.type = 'sawtooth'
+      osc2.frequency.value = baseFreq * 1.02
+      osc2.connect(filter)
+
+      osc1.start()
+      osc2.start()
+      osc1.stop(ctx.currentTime + durationSeconds)
+      osc2.stop(ctx.currentTime + durationSeconds)
+      osc2.onended = () => ctx.close()
     } catch {
       // Web Audio unavailable — silently skip the buzzer.
     }
@@ -235,15 +267,16 @@ export function Basketball3x3Scoreboard({
   // Regulation horn — 3 seconds, once the single 10-minute period runs out.
   useEffect(() => {
     if (!clockRunning || inOvertime || periodClock !== 0) return
-    playBuzzer(3)
+    playBuzzer(3, 'horn')
     setClockRunning(false)
+    syncClock({ periodClock: 0, running: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodClock, clockRunning, inOvertime])
 
   // Shot-clock violation — a shorter 1 second buzzer; the game clock keeps running.
   useEffect(() => {
     if (!clockRunning || inOvertime || !shotClockEnabled || shotClock !== 0) return
-    playBuzzer(1)
+    playBuzzer(1, 'shotclock')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shotClock, clockRunning, inOvertime, shotClockEnabled])
 
@@ -254,6 +287,21 @@ export function Basketball3x3Scoreboard({
       queryClient.invalidateQueries({ queryKey: ['organizer', 'bracket', tournamentId] })
     },
   })
+
+  // Same push-only-on-change sync as BasketballScoreboard.tsx — see its own
+  // comment for why. 3x3 has no numbered periods (one 10-minute regulation
+  // period, then clockless sudden-death overtime), so there's no period
+  // counter to track — just regulation vs. overtime.
+  function syncClock(overrides: { periodClock?: number; shotClock?: number; running?: boolean; overtime?: boolean } = {}) {
+    const nextOvertime = overrides.overtime ?? inOvertime
+    const nextShotClock = overrides.shotClock ?? shotClock
+    updateMatchClock(match.id, {
+      clock_seconds_remaining: nextOvertime ? null : (overrides.periodClock ?? periodClock),
+      clock_shot_seconds_remaining: !nextOvertime && shotClockEnabled ? nextShotClock : null,
+      clock_running: nextOvertime ? false : (overrides.running ?? clockRunning),
+      clock_period_label: nextOvertime ? 'Sudden Death' : 'Regulation',
+    }).catch(() => {})
+  }
 
   const canPlay = match.participant_a !== null && match.participant_b !== null
   const isDecided = match.status === 'completed'
@@ -286,6 +334,7 @@ export function Basketball3x3Scoreboard({
     setOtBaselineB(last.otBaselineB)
     setPlayerStats(last.playerStats)
     save.mutate({ score_a: last.scoreA, score_b: last.scoreB, status: 'live', player_stats: toPlayerStatsPayload(last.playerStats) })
+    syncClock({ periodClock: last.periodClock, overtime: last.inOvertime, running: false })
     log('Undo')
   }
 
@@ -369,19 +418,50 @@ export function Basketball3x3Scoreboard({
     setOtBaselineA(scoreA)
     setOtBaselineB(scoreB)
     setClockRunning(false)
+    syncClock({ overtime: true, running: false })
     log('Overtime started — sudden death, first to +2 points wins')
   }
 
   function adjustClock(deltaSeconds: number) {
-    setPeriodClock((c) => Math.max(0, c + deltaSeconds))
+    setPeriodClock((c) => {
+      const next = Math.max(0, c + deltaSeconds)
+      syncClock({ periodClock: next })
+      return next
+    })
+  }
+
+  function toggleClock() {
+    setClockRunning((r) => {
+      const next = !r
+      syncClock({ running: next })
+      return next
+    })
   }
 
   function resetShotClock() {
     setShotClock(SHOT_CLOCK_SECONDS)
+    syncClock({ shotClock: SHOT_CLOCK_SECONDS })
   }
 
   function adjustShotClock(deltaSeconds: number) {
-    setShotClock((c) => Math.max(0, Math.min(SHOT_CLOCK_SECONDS, c + deltaSeconds)))
+    setShotClock((c) => {
+      const next = Math.max(0, Math.min(SHOT_CLOCK_SECONDS, c + deltaSeconds))
+      syncClock({ shotClock: next })
+      return next
+    })
+  }
+
+  function toggleShotClockEnabled() {
+    setShotClockEnabled((e) => {
+      const next = !e
+      updateMatchClock(match.id, {
+        clock_seconds_remaining: inOvertime ? null : periodClock,
+        clock_shot_seconds_remaining: !inOvertime && next ? shotClock : null,
+        clock_running: inOvertime ? false : clockRunning,
+        clock_period_label: inOvertime ? 'Sudden Death' : 'Regulation',
+      }).catch(() => {})
+      return next
+    })
   }
 
   function resetGame() {
@@ -399,6 +479,7 @@ export function Basketball3x3Scoreboard({
     logIdRef.current += 1
     setMatchLog([{ id: logIdRef.current, text: 'Game reset — scores, fouls, and the clock cleared.', at: Date.now() }])
     save.mutate({ score_a: 0, score_b: 0, status: 'live', player_stats: [] })
+    syncClock({ periodClock: REGULATION_SECONDS, shotClock: SHOT_CLOCK_SECONDS, overtime: false, running: false })
   }
 
   function finishMatch() {
@@ -463,7 +544,7 @@ export function Basketball3x3Scoreboard({
         case ' ':
           if (!inOvertime) {
             e.preventDefault()
-            setClockRunning((r) => !r)
+            toggleClock()
           }
           break
       }
@@ -479,7 +560,7 @@ export function Basketball3x3Scoreboard({
   const subtleText = isDark ? 'text-slate-400' : 'text-slate-500'
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4">
+    <div className="scoreboard-palette fixed inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4">
       <div ref={containerRef} className={`flex w-full max-w-7xl flex-col gap-4 overflow-y-auto rounded-xl p-6 shadow-2xl ${panelClass}`} style={{ maxHeight: '92vh' }}>
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/20 pb-3">
@@ -596,10 +677,17 @@ export function Basketball3x3Scoreboard({
                 <p className="text-9xl font-bold leading-none tabular-nums">{formatClock(periodClock)}</p>
                 <p className={`text-sm font-semibold uppercase tracking-wide ${subtleText}`}>10-minute period · first to {WIN_SCORE}</p>
                 <div className="flex gap-1.5">
-                  <button onClick={() => setClockRunning((r) => !r)} className={buttonSecondary}>
+                  <button onClick={toggleClock} className={buttonSecondary}>
                     {clockRunning ? 'Pause' : 'Start'}
                   </button>
-                  <button onClick={() => { setClockRunning(false); setPeriodClock(REGULATION_SECONDS) }} className={buttonSecondary}>
+                  <button
+                    onClick={() => {
+                      setClockRunning(false)
+                      setPeriodClock(REGULATION_SECONDS)
+                      syncClock({ periodClock: REGULATION_SECONDS, running: false })
+                    }}
+                    className={buttonSecondary}
+                  >
                     Reset clock
                   </button>
                 </div>
@@ -673,7 +761,7 @@ export function Basketball3x3Scoreboard({
               </div>
               <div className="flex flex-col gap-1">
                 <label className={`text-xs font-semibold uppercase tracking-wide ${subtleText}`}>Shot clock ({SHOT_CLOCK_SECONDS}s)</label>
-                <button onClick={() => setShotClockEnabled((e) => !e)} className={`self-start ${buttonSecondary}`}>
+                <button onClick={toggleShotClockEnabled} className={`self-start ${buttonSecondary}`}>
                   {shotClockEnabled ? 'Enabled' : 'Disabled'}
                 </button>
               </div>

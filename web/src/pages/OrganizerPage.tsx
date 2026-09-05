@@ -10,6 +10,7 @@ import {
   cancelTournament,
   generateBracket,
   type Tournament,
+  type BracketMatch,
 } from '../lib/organizerApi'
 import { useAuth } from '../lib/AuthContext'
 import { fetchNotifications, markNotificationRead } from '../lib/notificationsApi'
@@ -29,8 +30,10 @@ import { TournamentWizard } from '../components/organizer/TournamentWizard'
 import { BracketView } from '../components/organizer/BracketView'
 import { ChampionCongratsModal } from '../components/organizer/ChampionCongratsModal'
 import { ScoreboardLive } from '../components/organizer/ScoreboardLive'
+import { MatchStartOptionsModal } from '../components/organizer/MatchStartOptionsModal'
+import { MatchScoreboardViewer } from '../components/organizer/MatchScoreboardViewer'
 import { NewsEditor } from '../components/organizer/NewsEditor'
-import { NewsFeed } from '../components/organizer/NewsFeed'
+import { Newsfeed } from '../components/newsfeed/Newsfeed'
 import { LivestreamCreateForm } from '../components/organizer/LivestreamCreateForm'
 import { LivestreamBroadcast } from '../components/organizer/LivestreamBroadcast'
 import { LivestreamViewer } from '../components/organizer/LivestreamViewer'
@@ -141,6 +144,14 @@ export function OrganizerPage() {
 
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
   const [activeMatchId, setActiveMatchId] = useState<number | null>(null)
+  // A not-yet-started match a venue organizer just clicked — shown the
+  // win-by-default/start-game choice (MatchStartOptionsModal) before the
+  // real scoreboard ever opens. A match already live/completed skips this
+  // and opens the scoreboard directly, same as before.
+  const [pendingMatch, setPendingMatch] = useState<BracketMatch | null>(null)
+  // The main organizer's read-only counterpart to the venue organizer's
+  // editable scoreboard above — see MatchScoreboardViewer.
+  const [viewingMatch, setViewingMatch] = useState<BracketMatch | null>(null)
 
   // The organizer's "close registration early" option — the same action
   // BracketService::autoStartExpired() performs automatically once starts_at
@@ -386,20 +397,38 @@ export function OrganizerPage() {
                     instead.
                   </p>
                 )}
-                {/* The main organizer gets a read-only bracket — results are
-                    the outcome of matches facilitated by whichever venue
-                    organizer they designated, not something the main
-                    organizer scores themselves. Omitting onSelectMatch here
-                    makes every match card non-clickable (see MatchCard's
-                    disabled={!onClick}), while a venue organizer viewing
-                    their own "Tournament to Facilitate" tab keeps full
-                    click-to-score access. Scheduling matches, though, is the
-                    main organizer's job specifically — canScheduleMatches is
-                    the opposite gate from onSelectMatch. */}
+                {/* The main organizer gets a read-only scoreboard VIEW —
+                    results are the outcome of matches facilitated by
+                    whichever venue organizer they designated, not something
+                    the main organizer scores themselves — while a venue
+                    organizer viewing their own "Tournament to Facilitate"
+                    tab keeps full click-to-score access. Scheduling
+                    matches, though, is the main organizer's job
+                    specifically — canScheduleMatches is the opposite gate
+                    from the editable half of onSelectMatch. */}
                 <BracketView
                   tournamentId={selectedTournamentId}
-                  onSelectMatch={isMainOrganizer ? undefined : (match) => setActiveMatchId(match.id)}
+                  tournamentName={myTournaments.find((t) => t.id === selectedTournamentId)?.name}
+                  onSelectMatch={
+                    isMainOrganizer
+                      ? (match) => {
+                          if (match.status === 'live' || match.status === 'completed') setViewingMatch(match)
+                        }
+                      : (match) => {
+                          // A still-scheduled game with both sides determined
+                          // gets the win-by-default/start-game choice first;
+                          // a match already live/completed (re-opening the
+                          // scoreboard, e.g. after closing it) skips straight
+                          // to the scoreboard as before.
+                          if (match.status === 'scheduled' && match.participant_a_id && match.participant_b_id) {
+                            setPendingMatch(match)
+                          } else {
+                            setActiveMatchId(match.id)
+                          }
+                        }
+                  }
                   canScheduleMatches={isMainOrganizer}
+                  canShareMatches={isMainOrganizer}
                 />
               </>
             )}
@@ -415,14 +444,34 @@ export function OrganizerPage() {
               />
             </div>
           )}
+
+          {pendingMatch && selectedTournamentId && (
+            <MatchStartOptionsModal
+              match={pendingMatch}
+              tournamentId={selectedTournamentId}
+              onStartGame={() => {
+                setActiveMatchId(pendingMatch.id)
+                setPendingMatch(null)
+              }}
+              onClose={() => setPendingMatch(null)}
+            />
+          )}
+
+          {viewingMatch && (
+            <MatchScoreboardViewer
+              match={viewingMatch}
+              tournamentName={myTournaments.find((t) => t.id === selectedTournamentId)?.name}
+              onClose={() => setViewingMatch(null)}
+            />
+          )}
         </Section>
       )}
 
       {active === 'news' && (
-        <Section title="News" description="Publish an update for the community.">
+        <Section title="News" description="Publish an update, and browse the same newsfeed the community sees.">
           <NewsEditor />
           <div className="mt-4 border-t border-slate-100 pt-4">
-            <NewsFeed />
+            <Newsfeed />
           </div>
         </Section>
       )}

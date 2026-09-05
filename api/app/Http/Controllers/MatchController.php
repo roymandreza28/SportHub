@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\MatchClockChanged;
 use App\Events\MatchEventCreated;
 use App\Events\MatchStatusChanged;
 use App\Models\GameMatch;
@@ -62,27 +63,77 @@ class MatchController extends Controller
                     $match->score_b > $match->score_a => $match->participant_b_team_id,
                     default => null,
                 };
-                $match->update(['winner_team_id' => $winnerTeamId]);
+                $this->completeMatch($match, $bracketService, null, $winnerTeamId);
             } else {
                 $winnerId = match (true) {
                     $match->score_a > $match->score_b => $match->participant_a_id,
                     $match->score_b > $match->score_a => $match->participant_b_id,
                     default => null,
                 };
-                $match->update(['winner_id' => $winnerId]);
+                $this->completeMatch($match, $bracketService, $winnerId, null);
             }
-
-            // Always run, even on a tie (no winner): group_stage needs this
-            // to know a group's matches are all done and start the knockout
-            // stage regardless of whether every result had a clear winner.
-            $bracketService->advanceWinner($match->fresh());
-
-            $this->lockStatSheets($match);
         }
 
         Broadcasting::safely(fn () => MatchStatusChanged::dispatch($match->fresh()));
 
         return $this->respond($match->fresh(self::PARTICIPANT_RELATIONS));
+    }
+
+    // A venue organizer's alternative to ever opening the scoreboard at all —
+    // one side didn't show up / withdrew, so the game is decided without a
+    // single point played. won_by_default keeps this distinguishable from a
+    // real (possibly 0-0, e.g. an abandoned racket-sport game) scored result
+    // everywhere the match is displayed, including a shared news post.
+    public function forfeit(Request $request, GameMatch $match, BracketService $bracketService)
+    {
+        $this->authorize('updateScore', $match);
+
+        abort_if($match->status === 'completed', 422, 'This match is already completed.');
+
+        $data = $request->validate([
+            'winner_side' => ['required', 'in:a,b'],
+        ]);
+
+        $isTeamMatch = $match->participant_a_team_id !== null;
+        $winnerId = ! $isTeamMatch
+            ? ($data['winner_side'] === 'a' ? $match->participant_a_id : $match->participant_b_id)
+            : null;
+        $winnerTeamId = $isTeamMatch
+            ? ($data['winner_side'] === 'a' ? $match->participant_a_team_id : $match->participant_b_team_id)
+            : null;
+
+        abort_if($winnerId === null && $winnerTeamId === null, 422, 'Both sides of this match must be determined before declaring a winner by default.');
+
+        $match->update(['won_by_default' => true]);
+        $this->completeMatch($match, $bracketService, $winnerId, $winnerTeamId);
+
+        $matchEvent = MatchEvent::create([
+            'match_id' => $match->id,
+            'type' => 'point',
+            'payload' => ['won_by_default' => true, 'winner_side' => $data['winner_side']],
+        ]);
+
+        Broadcasting::safely(fn () => MatchEventCreated::dispatch($matchEvent));
+        Broadcasting::safely(fn () => MatchStatusChanged::dispatch($match->fresh()));
+
+        return $this->respond($match->fresh(self::PARTICIPANT_RELATIONS));
+    }
+
+    // Shared tail end of every "this match is now decided" path (a normal
+    // score completing, a best-of-sets match reaching sets_to_win, or a
+    // forfeit) — always advances the bracket (even on a tie/no-winner,
+    // since group_stage needs this to know a group's matches are all done)
+    // and locks any stat sheets against further edits.
+    private function completeMatch(GameMatch $match, BracketService $bracketService, ?int $winnerId, ?int $winnerTeamId): void
+    {
+        $match->update([
+            'status' => 'completed',
+            'winner_id' => $winnerId,
+            'winner_team_id' => $winnerTeamId,
+        ]);
+
+        $bracketService->advanceWinner($match->fresh());
+        $this->lockStatSheets($match);
     }
 
     // Display-cache half of the stat sheet's dual lock design — a coach's
@@ -119,6 +170,38 @@ class MatchController extends Controller
                 ['team_id' => $teamId, 'sport_id' => $sportId, 'stats' => $row['stats']]
             );
         }
+    }
+
+    // Basketball/3x3's game clock lives entirely in the venue organizer's own
+    // browser (see BasketballScoreboard.tsx) — this is the only thing that
+    // ever leaves that tab, and only on a real transition (start, pause,
+    // period/overtime change, manual adjustment), never once per tick. A
+    // viewer's shared-post widget extrapolates the running countdown locally
+    // between syncs from clock_seconds_remaining + clock_synced_at. Every
+    // other sport's scoreboard never calls this at all, so these columns
+    // just stay null for them.
+    public function updateClock(Request $request, GameMatch $match)
+    {
+        $this->authorize('updateScore', $match);
+
+        $data = $request->validate([
+            'clock_seconds_remaining' => ['nullable', 'integer', 'min:0'],
+            'clock_shot_seconds_remaining' => ['nullable', 'integer', 'min:0'],
+            'clock_running' => ['required', 'boolean'],
+            'clock_period_label' => ['nullable', 'string', 'max:40'],
+        ]);
+
+        $match->update([
+            'clock_seconds_remaining' => $data['clock_seconds_remaining'] ?? null,
+            'clock_shot_seconds_remaining' => $data['clock_shot_seconds_remaining'] ?? null,
+            'clock_running' => $data['clock_running'],
+            'clock_period_label' => $data['clock_period_label'] ?? null,
+            'clock_synced_at' => now(),
+        ]);
+
+        Broadcasting::safely(fn () => MatchClockChanged::dispatch($match->fresh()));
+
+        return $match->fresh();
     }
 
     // Setting date/time/court is the main organizer's job (see
@@ -208,10 +291,6 @@ class MatchController extends Controller
             'score_a' => $setsWonA,
             'score_b' => $setsWonB,
             'status' => $isDecided ? 'completed' : 'live',
-            'winner_id' => (! $isTeamMatch && $isDecided)
-                ? ($setsWonA > $setsWonB ? $match->participant_a_id : $match->participant_b_id) : null,
-            'winner_team_id' => ($isTeamMatch && $isDecided)
-                ? ($setsWonA > $setsWonB ? $match->participant_a_team_id : $match->participant_b_team_id) : null,
         ]);
 
         $matchEvent = MatchEvent::create([
@@ -223,8 +302,9 @@ class MatchController extends Controller
         Broadcasting::safely(fn () => MatchEventCreated::dispatch($matchEvent));
 
         if ($isDecided) {
-            $bracketService->advanceWinner($match->fresh());
-            $this->lockStatSheets($match);
+            $winnerId = (! $isTeamMatch) ? ($setsWonA > $setsWonB ? $match->participant_a_id : $match->participant_b_id) : null;
+            $winnerTeamId = $isTeamMatch ? ($setsWonA > $setsWonB ? $match->participant_a_team_id : $match->participant_b_team_id) : null;
+            $this->completeMatch($match, $bracketService, $winnerId, $winnerTeamId);
         }
 
         Broadcasting::safely(fn () => MatchStatusChanged::dispatch($match->fresh()));

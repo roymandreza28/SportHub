@@ -2,6 +2,8 @@ import { useState, type ReactNode } from 'react'
 import { StatusBadge } from '../layout/DashboardShell'
 import { IconChevronDown } from '../layout/icons'
 import { BracketView } from '../organizer/BracketView'
+import { MatchScoreboardViewer } from '../organizer/MatchScoreboardViewer'
+import type { BracketMatch } from '../../lib/organizerApi'
 
 type RegistrationLike = {
   id: number
@@ -80,12 +82,18 @@ export function TournamentRegistrationsBrowser<T extends RegistrationLike>({
   onSelectTournament,
   renderPrimary,
   renderBadges,
+  isStatSheetEligible,
+  onOpenStatSheet,
 }: {
   registrations: T[]
   selectedTournamentId: number | null
   onSelectTournament: (tournamentId: number) => void
   renderPrimary: (registration: T) => ReactNode
   renderBadges?: (registration: T) => ReactNode
+  // Coach-only — see BracketView's own doc comment on these two. Left
+  // undefined by the player-facing caller, so players never see the button.
+  isStatSheetEligible?: (match: BracketMatch) => boolean
+  onOpenStatSheet?: (match: BracketMatch) => void
 }) {
   const badges =
     renderBadges ??
@@ -98,6 +106,13 @@ export function TournamentRegistrationsBrowser<T extends RegistrationLike>({
 
   const ongoing = registrations.filter((r) => r.tournament.status !== 'completed' && r.tournament.status !== 'cancelled')
   const completed = registrations.filter((r) => r.tournament.status === 'completed' || r.tournament.status === 'cancelled')
+
+  // Everyone who can already see this bracket (any player/coach) can open a
+  // live or just-finished game's scoreboard read-only — same public
+  // match.{id} channel the venue organizer's real scoreboard broadcasts on,
+  // just with no controls. A still-scheduled game has nothing to show yet.
+  const [viewingMatch, setViewingMatch] = useState<BracketMatch | null>(null)
+  const selectedTournamentName = registrations.find((r) => r.tournament.id === selectedTournamentId)?.tournament.name
 
   return (
     <div>
@@ -121,8 +136,23 @@ export function TournamentRegistrationsBrowser<T extends RegistrationLike>({
       />
       {selectedTournamentId && (
         <div className="mt-4 border-t border-slate-100 pt-4">
-          <BracketView tournamentId={selectedTournamentId} />
+          <BracketView
+            tournamentId={selectedTournamentId}
+            onSelectMatch={(match) => {
+              if (match.status === 'live' || match.status === 'completed') setViewingMatch(match)
+            }}
+            isStatSheetEligible={isStatSheetEligible}
+            onOpenStatSheet={onOpenStatSheet}
+          />
         </div>
+      )}
+
+      {viewingMatch && (
+        <MatchScoreboardViewer
+          match={viewingMatch}
+          tournamentName={selectedTournamentName}
+          onClose={() => setViewingMatch(null)}
+        />
       )}
     </div>
   )

@@ -10,7 +10,7 @@ class News extends Model
 {
     protected $table = 'news';
 
-    protected $fillable = ['author_id', 'tournament_id', 'title', 'body', 'cover_image_url', 'published_at'];
+    protected $fillable = ['author_id', 'tournament_id', 'match_id', 'title', 'body', 'cover_image_url', 'published_at'];
 
     protected function casts(): array
     {
@@ -27,6 +27,11 @@ class News extends Model
     public function tournament(): BelongsTo
     {
         return $this->belongsTo(Tournament::class);
+    }
+
+    public function match(): BelongsTo
+    {
+        return $this->belongsTo(GameMatch::class, 'match_id');
     }
 
     public function livestreams(): HasMany

@@ -34,6 +34,7 @@ class MatchStatusChanged implements ShouldBroadcastNow
             'score_b' => $this->match->score_b,
             'winner_id' => $this->match->winner_id,
             'winner_team_id' => $this->match->winner_team_id,
+            'won_by_default' => $this->match->won_by_default,
         ];
     }
 }

@@ -62,7 +62,7 @@ function SetsScoreboard({
   }
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4">
+    <div className="scoreboard-palette fixed inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4">
       <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
         <h3 className="text-base font-bold text-slate-900">Scoreboard — Match #{match.id}</h3>
         <p className="mt-0.5 text-xs text-slate-500">Best of {setsToWin * 2 - 1} sets — first to {setsToWin} wins.</p>
@@ -185,7 +185,7 @@ function SingleScoreScoreboard({
   })
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4">
+    <div className="scoreboard-palette fixed inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4">
       <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
         <h3 className="text-base font-bold text-slate-900">Scoreboard — Match #{match.id}</h3>
 

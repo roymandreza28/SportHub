@@ -17,6 +17,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'update match score',
             'manage news',
             'manage livestreams',
+            'interact with news',
         ],
         'venue_facilitator' => [
             'manage venues',
