@@ -51,7 +51,16 @@ return [
         // straight to the local filesystem.
         'public' => [
             'driver' => env('FILESYSTEM_PUBLIC_DRIVER', 'local'),
-            'root' => storage_path('app/public'),
+            // Laravel wraps EVERY disk's adapter in a path-prefixer built
+            // from 'root', regardless of driver — so leaving this set to the
+            // container's local filesystem path while driver=s3 silently
+            // prefixed every uploaded object's key with the literal string
+            // "var/www/html/storage/app/public/..." inside the bucket, and
+            // broke every url() call the same way (confirmed by hand: a real
+            // upload failed and the returned image_url had that whole local
+            // path baked into it). Only the local driver has a real
+            // filesystem root to prefix; s3 has none.
+            'root' => env('FILESYSTEM_PUBLIC_DRIVER', 'local') === 'local' ? storage_path('app/public') : '',
             'url' => env('FILESYSTEM_PUBLIC_URL', rtrim(env('APP_URL', 'http://localhost'), '/').'/storage'),
             'visibility' => 'public',
             'throw' => false,
