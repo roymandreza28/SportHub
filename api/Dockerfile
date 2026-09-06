@@ -17,12 +17,24 @@ RUN composer dump-autoload --optimize --classmap-authoritative
 
 FROM php:8.3-fpm-alpine
 
+# freetype/libjpeg-turbo/libpng (the RUNTIME libraries, not just their -dev
+# headers) are listed explicitly here so apk's world file marks them as
+# wanted on their own — otherwise apk pulls them in only as transitive deps
+# of the -dev packages, and `apk del *-dev` below removes them right along
+# with the headers. Confirmed the hard way: an earlier version of this
+# Dockerfile without this line built fine, but every PHP process at runtime
+# logged "PHP Startup: Unable to load dynamic library 'gd'... Error loading
+# shared library libjpeg.so.8: No such file or directory" — gd.so was
+# present but its own runtime dependency had been deleted.
 RUN apk add --no-cache \
         nginx \
         supervisor \
         gettext \
         postgresql-dev \
         oniguruma-dev \
+        freetype \
+        libjpeg-turbo \
+        libpng \
         freetype-dev \
         libjpeg-turbo-dev \
         libpng-dev \

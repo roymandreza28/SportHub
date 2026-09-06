@@ -11,6 +11,7 @@ use App\Services\NewsCoverCardGenerator;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 // Turns every tournament SampleDataSeeder/ExtendedTournamentsSeeder created
@@ -243,11 +244,22 @@ class NewsfeedSeeder extends Seeder
         try {
             $bytes = NewsCoverCardGenerator::generate($title, $sportName, $tournamentName);
             $path = "news/{$news->id}/cover.jpg";
-            Storage::disk('public')->put($path, $bytes);
+
+            if (! Storage::disk('public')->put($path, $bytes)) {
+                Log::warning("NewsfeedSeeder: failed to store cover for news #{$news->id} (Storage::put returned false)");
+
+                return;
+            }
 
             $news->media()->create(['type' => 'image', 'path' => $path, 'position' => 0]);
-        } catch (\Throwable) {
-            // GD/font unavailable in this environment — skip the cover.
+        } catch (\Throwable $e) {
+            // GD/font unavailable, or the storage disk misconfigured — a
+            // missing cover shouldn't fail the whole seed run, but silently
+            // swallowing this once already hid a real Dockerfile bug (GD's
+            // shared libs got stripped by an over-eager `apk del`) until it
+            // was tracked down by hand via Render's logs. Log it instead so
+            // the next one is visible immediately.
+            Log::warning("NewsfeedSeeder: failed to generate/store cover for news #{$news->id}: {$e->getMessage()}");
         }
     }
 
