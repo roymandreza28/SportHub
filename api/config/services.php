@@ -49,4 +49,11 @@ return [
         'subject' => env('VAPID_SUBJECT', 'mailto:admin@sporthub.test'),
     ],
 
+    // Seed-time only — NewsfeedSeeder searches Pexels for a real, accurately
+    // tagged photo per sport rather than trusting an untagged/mistagged
+    // source. Free tier, no card required: pexels.com/api.
+    'pexels' => [
+        'key' => env('PEXELS_API_KEY'),
+    ],
+
 ];

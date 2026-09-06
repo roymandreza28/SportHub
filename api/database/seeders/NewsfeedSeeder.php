@@ -11,6 +11,7 @@ use App\Services\NewsCoverCardGenerator;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -20,16 +21,18 @@ use Illuminate\Support\Facades\Storage;
 // plus a couple of standalone posts, then sprinkles reactions/comments from
 // the seeded player/coach pool so the feed reads as a lived-in community
 // rather than a fresh, empty table. Every post also gets a real cover photo —
-// rendered locally per-post by NewsCoverCardGenerator (sport-colored
-// gradient + icon + the post's own title/tournament name) rather than
-// fetched from a stock-photo API, so every post's cover is unique to it and
-// there's no external dependency at seed time — then stored through the
-// same NewsMedia/public-disk pipeline NewsController::store() uses for a
-// real uploaded photo, so Newsfeed.tsx's NewsMediaGrid renders it exactly
-// like an organizer's own upload, not a dead cover_image_url field the UI
-// never actually reads. News is organizer-authored only (see
-// RolesAndPermissionsSeeder's 'manage news' permission), so every post here
-// uses the one demo organizer account.
+// fetched from LoremFlickr, tagged by the post's own sport and "locked" to a
+// hash of its title so re-seeding is stable and different posts about the
+// same sport get different specific photos rather than one repeated stock
+// image. If that fetch fails for any reason (offline dev machine, upstream
+// down), NewsCoverCardGenerator's locally-rendered sport-colored card is the
+// fallback, so a post is never left with no cover at all. Either way the
+// result is stored through the same NewsMedia/public-disk pipeline
+// NewsController::store() uses for a real uploaded photo, so
+// Newsfeed.tsx's NewsMediaGrid renders it exactly like an organizer's own
+// upload, not a dead cover_image_url field the UI never actually reads.
+// News is organizer-authored only (see RolesAndPermissionsSeeder's 'manage
+// news' permission), so every post here uses the one demo organizer account.
 class NewsfeedSeeder extends Seeder
 {
     // Bespoke, longer-form copy for the 5 flagship tournaments
@@ -234,17 +237,38 @@ class NewsfeedSeeder extends Seeder
         return $news;
     }
 
-    // Rendered locally by NewsCoverCardGenerator rather than fetched from a
-    // stock-photo API — see this class's own doc comment for why. Wrapped in
-    // a try/catch anyway: a missing GD extension or font on some unusual
-    // environment shouldn't be able to fail the whole seed run, just leave
-    // that one post without a cover.
+    // Pexels rather than LoremFlickr — confirmed by hand that LoremFlickr's
+    // tag matching is unreliable enough to return outright unrelated photos
+    // (a cat statue and a wood-grain close-up both came back tagged
+    // "basketball"). Pexels' library is human-curated/tagged, so a plain
+    // search query actually returns what it says. A natural-language query
+    // works better here than a single tag.
+    private const SPORT_QUERIES = [
+        'Basketball' => 'basketball',
+        'Volleyball' => 'volleyball',
+        'Badminton' => 'badminton',
+        'Pickleball' => 'pickleball',
+        'Tennis' => 'tennis',
+        'Table Tennis' => 'table tennis',
+    ];
+
+    // One search per sport, cached for the rest of this seed run, rather
+    // than one search per post — 6 sports (+ a generic fallback) is 7 API
+    // calls total instead of ~30, and each pool is large enough that
+    // per-post selection below still lands on a different specific photo
+    // most of the time.
+    private array $photoPoolCache = [];
+
     private function attachCover(News $news, string $title, ?string $sportName, ?string $tournamentName): void
     {
-        try {
-            $bytes = NewsCoverCardGenerator::generate($title, $sportName, $tournamentName);
-            $path = "news/{$news->id}/cover.jpg";
+        $path = "news/{$news->id}/cover.jpg";
+        $bytes = $this->fetchStockPhoto($title, $sportName) ?? $this->renderFallbackCard($title, $sportName, $tournamentName, $news->id);
 
+        if ($bytes === null) {
+            return;
+        }
+
+        try {
             if (! Storage::disk('public')->put($path, $bytes)) {
                 Log::warning("NewsfeedSeeder: failed to store cover for news #{$news->id} (Storage::put returned false)");
 
@@ -253,13 +277,83 @@ class NewsfeedSeeder extends Seeder
 
             $news->media()->create(['type' => 'image', 'path' => $path, 'position' => 0]);
         } catch (\Throwable $e) {
-            // GD/font unavailable, or the storage disk misconfigured — a
-            // missing cover shouldn't fail the whole seed run, but silently
-            // swallowing this once already hid a real Dockerfile bug (GD's
-            // shared libs got stripped by an over-eager `apk del`) until it
-            // was tracked down by hand via Render's logs. Log it instead so
-            // the next one is visible immediately.
-            Log::warning("NewsfeedSeeder: failed to generate/store cover for news #{$news->id}: {$e->getMessage()}");
+            Log::warning("NewsfeedSeeder: failed to store cover for news #{$news->id}: {$e->getMessage()}");
+        }
+    }
+
+    private function fetchStockPhoto(string $title, ?string $sportName): ?string
+    {
+        $query = self::SPORT_QUERIES[$sportName] ?? 'sports';
+        $pool = $this->photoPool($query);
+
+        if ($pool === []) {
+            return null;
+        }
+
+        // Deterministic per exact title (stable across reseeds, same
+        // rationale as the old LoremFlickr "lock"), but spread across the
+        // whole pool so different posts about the same sport land on
+        // different specific photos.
+        $url = $pool[crc32($title) % count($pool)];
+
+        try {
+            $response = Http::timeout(12)->get($url);
+
+            return $response->successful() ? $response->body() : null;
+        } catch (\Throwable $e) {
+            Log::warning("NewsfeedSeeder: Pexels image download failed for \"{$title}\": {$e->getMessage()}");
+
+            return null;
+        }
+    }
+
+    /** @return string[] downloadable, pre-cropped 800x450 image URLs */
+    private function photoPool(string $query): array
+    {
+        if (array_key_exists($query, $this->photoPoolCache)) {
+            return $this->photoPoolCache[$query];
+        }
+
+        $apiKey = config('services.pexels.key');
+        if (! $apiKey) {
+            return $this->photoPoolCache[$query] = [];
+        }
+
+        try {
+            $response = Http::timeout(12)
+                ->withHeaders(['Authorization' => $apiKey])
+                ->get('https://api.pexels.com/v1/search', ['query' => $query, 'per_page' => 40]);
+
+            if (! $response->successful()) {
+                Log::warning("NewsfeedSeeder: Pexels search failed for \"{$query}\": HTTP {$response->status()}");
+
+                return $this->photoPoolCache[$query] = [];
+            }
+
+            $urls = collect($response->json('photos', []))
+                ->map(fn ($photo) => "{$photo['src']['original']}?auto=compress&cs=tinysrgb&fit=crop&h=450&w=800")
+                ->values()
+                ->all();
+
+            return $this->photoPoolCache[$query] = $urls;
+        } catch (\Throwable $e) {
+            Log::warning("NewsfeedSeeder: Pexels search failed for \"{$query}\": {$e->getMessage()}");
+
+            return $this->photoPoolCache[$query] = [];
+        }
+    }
+
+    // Only reached when the real-photo fetch above fails outright (offline
+    // dev machine, LoremFlickr unreachable) — a locally-rendered card still
+    // beats leaving the post with no cover at all.
+    private function renderFallbackCard(string $title, ?string $sportName, ?string $tournamentName, int $newsId): ?string
+    {
+        try {
+            return NewsCoverCardGenerator::generate($title, $sportName, $tournamentName);
+        } catch (\Throwable $e) {
+            Log::warning("NewsfeedSeeder: fallback cover render failed for news #{$newsId}: {$e->getMessage()}");
+
+            return null;
         }
     }
 

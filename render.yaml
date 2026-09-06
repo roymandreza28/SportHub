@@ -107,11 +107,16 @@ services:
       - key: AWS_BUCKET
         sync: false
       - key: AWS_ENDPOINT
-        sync: false # https://<account-id>.r2.cloudflarestorage.com
+        sync: false # the S3-compatible endpoint your provider's bucket page shows
       - key: AWS_USE_PATH_STYLE_ENDPOINT
         value: true
       - key: FILESYSTEM_PUBLIC_URL
-        sync: false # the bucket's public r2.dev URL or connected custom domain
+        sync: false # the bucket's public base URL
+      # Seed-time only — NewsfeedSeeder searches Pexels for a real,
+      # accurately tagged photo per sport (falls back to a locally-rendered
+      # card if unset or unreachable). Free, no card required: pexels.com/api.
+      - key: PEXELS_API_KEY
+        sync: false
       - key: QUEUE_CONNECTION
         value: sync
       - key: CACHE_STORE
