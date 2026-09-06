@@ -91,8 +91,11 @@ services:
         value: local
       # Render's web-service disk is ephemeral (wiped on every deploy) — the
       # "public" disk (post images, news covers, avatars) is repointed at a
-      # Cloudflare R2 bucket instead of local storage so uploads actually
-      # persist. See config/filesystems.php and .env.production.example.
+      # Backblaze B2 bucket instead of local storage so uploads actually
+      # persist. B2 (not Cloudflare R2) specifically because R2 requires a
+      # credit/debit card on file even for its free tier; B2 needs no card
+      # and gives 10GB free. See config/filesystems.php and
+      # .env.production.example.
       - key: FILESYSTEM_PUBLIC_DRIVER
         value: s3
       - key: AWS_ACCESS_KEY_ID
@@ -100,7 +103,7 @@ services:
       - key: AWS_SECRET_ACCESS_KEY
         sync: false
       - key: AWS_DEFAULT_REGION
-        value: auto
+        sync: false # the region string embedded in B2's endpoint hostname, e.g. us-west-004
       - key: AWS_BUCKET
         sync: false
       - key: AWS_ENDPOINT

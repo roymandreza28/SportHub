@@ -41,11 +41,14 @@ return [
         // Render's web-service disk is ephemeral — anything written to
         // storage/app/public at runtime (post images, news covers, avatars)
         // is wiped on every deploy/restart. In production FILESYSTEM_PUBLIC_DRIVER
-        // is set to "s3" (pointed at a Cloudflare R2 bucket via the AWS_*
-        // vars below — R2 speaks the S3 API) so every existing
-        // Storage::disk('public') call site in the app keeps working
-        // unchanged, just durably. Local dev leaves this unset and keeps
-        // writing straight to the local filesystem.
+        // is set to "s3" (pointed at a Backblaze B2 bucket via the AWS_*
+        // vars below — B2 speaks the S3 API; used instead of Cloudflare R2
+        // specifically because R2 requires a card on file even for its free
+        // tier) so every existing Storage::disk('public') call site in the
+        // app keeps working unchanged, just durably. Any other S3-compatible
+        // provider works too, with different env values — nothing here is
+        // B2-specific. Local dev leaves this unset and keeps writing
+        // straight to the local filesystem.
         'public' => [
             'driver' => env('FILESYSTEM_PUBLIC_DRIVER', 'local'),
             'root' => storage_path('app/public'),
@@ -55,7 +58,7 @@ return [
             'report' => false,
             'key' => env('AWS_ACCESS_KEY_ID'),
             'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            'region' => env('AWS_DEFAULT_REGION', 'auto'),
+            'region' => env('AWS_DEFAULT_REGION'),
             'bucket' => env('AWS_BUCKET'),
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', true),
