@@ -1,6 +1,7 @@
 import { useChatUI } from '../../lib/ChatUIContext'
 import type { MatchmakingRequestItem } from '../../lib/playerApi'
 import { buttonPrimary } from '../../lib/formStyles'
+import { formatPeso } from '../../lib/venueApi'
 import { IconMessageCircle } from '../layout/icons'
 
 // Shown the instant a match pairs AND the pair's chosen venue+time got
@@ -24,12 +25,16 @@ export function DownPaymentPrompt({ req }: { req: MatchmakingRequestItem }) {
         Matched{opponentName ? ` with ${opponentName}` : ''} — {req.venue?.name} reserved
       </p>
       <p className="text-xs text-amber-800">
-        {new Date(reservation.starts_at).toLocaleString()} – {new Date(reservation.ends_at).toLocaleTimeString()}.
+        {new Date(reservation.starts_at).toLocaleString()} – {new Date(reservation.ends_at).toLocaleTimeString()}
+        {reservation.court && ` · ${reservation.court.name}`}.
         {reservation.status === 'pending' &&
           ' This slot is being held pending the venue facilitator\'s approval. Most venues ask for a down payment (e.g. via GCash) to confirm — message the facilitator below to arrange it and send proof of payment.'}
         {reservation.status === 'approved' && ' Your booking is confirmed.'}
         {reservation.status === 'rejected' && ' The facilitator was unable to confirm this slot.'}
       </p>
+      {reservation.total_amount !== null && (
+        <p className="text-xs font-semibold text-amber-900">Total due: {formatPeso(reservation.total_amount)}</p>
+      )}
       {reservation.conversation_id && (
         <button
           onClick={() => openChatWindow(reservation.conversation_id!)}

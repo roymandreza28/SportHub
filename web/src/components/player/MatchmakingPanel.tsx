@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { cancelMatchmakingRequest, createMatchmakingRequest, fetchMyMatchmakingRequests } from '../../lib/playerApi'
-import { fetchSports, fetchSportFormats, fetchVenues, calculateVenueRent, formatPeso } from '../../lib/venueApi'
+import { fetchSports, fetchSportFormats, fetchVenues, calculateVenueRent, formatPeso, isDurationValidForCourt } from '../../lib/venueApi'
 import { fetchMyTeams } from '../../lib/teamsApi'
 import { useAuth } from '../../lib/AuthContext'
 import { echo } from '../../lib/echo'
@@ -76,10 +76,17 @@ export function MatchmakingPanel() {
     enabled: mode === 'create' && !!sportId,
   })
   const selectedVenue = venues?.find((v) => v.id === venueId)
+  // Matchmaking never lets a player pick a specific court (see
+  // MatchVenueScheduler's own comment) — resolve the one court at this venue
+  // that supports the chosen sport, same as the backend does in
+  // MatchmakingRequestController::store(), so a block-priced court (e.g.
+  // BRCC's badminton gymnasium) is reflected in the estimate shown here too.
+  const selectedCourt = selectedVenue?.courts.find((c) => c.sports.some((s) => s.id === sportId)) ?? null
   const estimatedRent =
-    selectedVenue && startAt && endAt ? calculateVenueRent(selectedVenue, startAt, endAt) : null
+    selectedVenue && startAt && endAt ? calculateVenueRent(selectedVenue, startAt, endAt, selectedCourt) : null
   const rentHours =
     startAt && endAt ? Math.round(((new Date(endAt).getTime() - new Date(startAt).getTime()) / (1000 * 60 * 60)) * 100) / 100 : 0
+  const isDurationValid = !startAt || !endAt || isDurationValidForCourt(selectedCourt, rentHours)
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['player', 'matchmaking'] })
   const invalidateTeams = () => queryClient.invalidateQueries({ queryKey: ['player', 'teams'] })
@@ -155,7 +162,13 @@ export function MatchmakingPanel() {
   // is present (it needs a real range to reserve, not just a venue name).
   const venueTimeReady = !venueId || (!!startAt && !!endAt)
   const canSubmit =
-    isVerified && !!sportId && !!formatId && (!needsTeam || !!teamId) && venueTimeReady && !request.isPending
+    isVerified &&
+    !!sportId &&
+    !!formatId &&
+    (!needsTeam || !!teamId) &&
+    venueTimeReady &&
+    isDurationValid &&
+    !request.isPending
 
   // A player/coach can have more than one sport queued at once, so this is
   // "every still-searching request", not just the one just submitted — each
@@ -317,14 +330,25 @@ export function MatchmakingPanel() {
                     <p className="text-xs font-medium text-teal-700">
                       Selected: {new Date(startAt).toLocaleString()} – {new Date(endAt).toLocaleTimeString()}
                     </p>
+                    {!isDurationValid && selectedCourt?.block_hours && (
+                      <p className="text-xs text-red-600">
+                        {selectedCourt.name} is booked in fixed {selectedCourt.block_hours}-hour blocks — pick a slot
+                        that's a multiple of {selectedCourt.block_hours} hours.
+                      </p>
+                    )}
                     {estimatedRent !== null ? (
                       <p className="text-xs font-semibold text-slate-700">
                         Estimated venue rent: {formatPeso(estimatedRent)}
-                        <span className="font-normal text-slate-400"> ({rentHours} hr × {formatPeso(Number(selectedVenue.price_per_hour))}/hr)</span>
+                        <span className="font-normal text-slate-400">
+                          {' '}
+                          {selectedCourt?.block_hours && selectedCourt.block_price
+                            ? `(${rentHours} hr, ${formatPeso(Number(selectedCourt.block_price))} per ${selectedCourt.block_hours}-hr block)`
+                            : `(${rentHours} hr × ${formatPeso(Number(selectedVenue.price_per_hour))}/hr)`}
+                        </span>
                       </p>
                     ) : (
                       <p className="text-xs text-slate-400">
-                        This venue hasn't published an hourly rate — confirm the cost with the facilitator.
+                        This venue hasn't published a rate — confirm the cost with the facilitator.
                       </p>
                     )}
                   </div>

@@ -5,6 +5,33 @@ use App\Models\SportFormat;
 use App\Models\Venue;
 use App\Models\VenueRegistration;
 
+// Mirrors BRCC's real badminton package (₱1,500 for an exact 3-hour block,
+// no hourly rate at all) — see CourtBlockPricingTest.php's own helper.
+function makeVenueWithBlockPricedCourt(string $sportName = 'Badminton', int $blockHours = 3, float $blockPrice = 1500.00): array
+{
+    $facilitator = userWithRole('venue_facilitator');
+    $venue = Venue::create([
+        'facilitator_id' => $facilitator->id,
+        'name' => 'BRCC-style Test Venue',
+        'address' => '1 Test St',
+        'latitude' => 1,
+        'longitude' => 1,
+        'status' => 'active',
+    ]);
+    $sport = Sport::create(['name' => $sportName]);
+    $court = $venue->courts()->create([
+        'name' => 'Badminton Courts (Gymnasium)',
+        'type' => 'court',
+        'capacity' => 24,
+        'status' => 'active',
+        'block_hours' => $blockHours,
+        'block_price' => $blockPrice,
+    ]);
+    $court->sports()->attach($sport->id);
+
+    return [$venue, $sport, $court];
+}
+
 function makeBookableVenue(): Venue
 {
     $facilitator = userWithRole('venue_facilitator');
@@ -105,6 +132,63 @@ it('auto-reserves the pair\'s venue+time the instant they match, and opens a fac
     $this->actingAs($playerB)
         ->getJson("/api/social/conversations/{$conversationId}/messages")
         ->assertForbidden();
+});
+
+it('prices a matchmaking auto-reservation at a block-priced court\'s package rate, not an hourly rate', function () {
+    [$venue, $sport, $court] = makeVenueWithBlockPricedCourt();
+    $playerA = userWithRole('player');
+    $playerB = userWithRole('player');
+    $format = SportFormat::create(['sport_id' => $sport->id, 'name' => 'Singles', 'players_per_side' => 1]);
+
+    $starts = now()->addHours(5);
+    $ends = now()->addHours(8); // exactly one 3-hour block
+
+    $this->actingAs($playerA)->postJson('/api/matchmaking-requests', [
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+        'venue_id' => $venue->id,
+        'preferred_start_at' => $starts->toIso8601String(),
+        'preferred_end_at' => $ends->toIso8601String(),
+    ])->assertCreated();
+    $this->actingAs($playerB)->postJson('/api/matchmaking-requests', [
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+    ])->assertCreated()->assertJsonPath('status', 'matched');
+
+    $registration = VenueRegistration::where('venue_id', $venue->id)->firstOrFail();
+    expect($registration->court_id)->toBe($court->id);
+
+    $mineA = $this->actingAs($playerA)->getJson('/api/matchmaking-requests/mine')->assertOk();
+    expect((float) $mineA->json('0.venue_registration.total_amount'))->toBe(1500.0);
+    expect($mineA->json('0.venue_registration.court.id'))->toBe($court->id);
+});
+
+it('does not auto-reserve a block-priced court when the requested duration is not a block multiple', function () {
+    [$venue, $sport] = makeVenueWithBlockPricedCourt();
+    $playerA = userWithRole('player');
+    $playerB = userWithRole('player');
+    $format = SportFormat::create(['sport_id' => $sport->id, 'name' => 'Singles', 'players_per_side' => 1]);
+
+    $starts = now()->addHours(5);
+    $ends = now()->addHours(7); // 2 hours — not a multiple of the 3-hour block
+
+    $this->actingAs($playerA)->postJson('/api/matchmaking-requests', [
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+        'venue_id' => $venue->id,
+        'preferred_start_at' => $starts->toIso8601String(),
+        'preferred_end_at' => $ends->toIso8601String(),
+    ])->assertCreated();
+    $this->actingAs($playerB)->postJson('/api/matchmaking-requests', [
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+    ])->assertCreated()->assertJsonPath('status', 'matched');
+
+    // The pair still matched, just without an auto-booked slot — same
+    // soft-fail convention as an overlap or closed venue.
+    expect(VenueRegistration::where('venue_id', $venue->id)->count())->toBe(0);
+    $mineA = $this->actingAs($playerA)->getJson('/api/matchmaking-requests/mine')->assertOk();
+    expect($mineA->json('0.venue_registration'))->toBeNull();
 });
 
 it('still pairs the players even if the requested slot is no longer available, just without an auto-reservation', function () {

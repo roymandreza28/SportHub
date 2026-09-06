@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Conversation;
+use App\Models\Court;
 use App\Models\Venue;
 use App\Models\VenueRegistration;
 use Carbon\Carbon;
@@ -44,7 +45,25 @@ class VenueBookingService
             return null;
         }
 
-        return VenueRegistration::create([
+        $court = $courtId ? Court::find($courtId) : null;
+        $hours = Carbon::parse($startsAt)->diffInMinutes(Carbon::parse($endsAt), true) / 60;
+
+        // Same rule VenueRegistrationController::store() enforces with a real
+        // validation error for a player filling out that form directly — a
+        // block-priced court (e.g. BRCC's badminton gymnasium, ₱1,500 for an
+        // exact 3-hour block) has no valid price for a duration that isn't a
+        // whole multiple of the block length, so there's nothing correct to
+        // auto-reserve here. Soft-fails like every other check above rather
+        // than throwing, for the same reason: the pair still stands even
+        // without an auto-booked slot.
+        if ($court?->block_hours) {
+            $remainder = fmod(round($hours, 4), $court->block_hours);
+            if ($remainder > 0.001 && $remainder < $court->block_hours - 0.001) {
+                return null;
+            }
+        }
+
+        $registration = VenueRegistration::create([
             'venue_id' => $venue->id,
             'court_id' => $courtId,
             'user_id' => $userId,
@@ -52,6 +71,26 @@ class VenueBookingService
             'ends_at' => $endsAt,
             'status' => 'pending',
         ]);
+
+        $registration->setAttribute('total_amount', self::calculateTotalAmount($venue, $court, $hours));
+
+        return $registration;
+    }
+
+    // The one place a booking's price is computed — shared by
+    // VenueRegistrationController::store() (a player booking directly, court
+    // chosen by hand) and reserve() above (matchmaking's auto-booking, court
+    // resolved by sport) so the two can never drift into different answers
+    // for the same court. A block-priced court (fixed length, fixed price)
+    // takes priority over the venue's flat hourly rate whenever it applies;
+    // null means neither is published, not that the venue is free.
+    public static function calculateTotalAmount(Venue $venue, ?Court $court, float $hours): ?float
+    {
+        return match (true) {
+            $court?->block_hours && $court->block_price !== null => round(($hours / $court->block_hours) * $court->block_price, 2),
+            (bool) $venue->price_per_hour => round($hours * $venue->price_per_hour, 2),
+            default => null,
+        };
     }
 
     // The player/coach who booked and the venue's facilitator can only talk

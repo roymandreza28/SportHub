@@ -67,18 +67,40 @@ export type ScheduleEvent = {
   conversation_id: number | null
 }
 
-// Straight duration × rate — venues in this app carry one flat
-// price_per_hour rather than per-sport/per-court rates (see VenueSeeder's
-// own doc comment on that limitation), so this is the full extent of the
-// calculation. Null whenever the venue hasn't published a rate at all,
-// rather than silently treating an unpublished rate as free.
-export function calculateVenueRent(venue: Venue, startsAtIso: string, endsAtIso: string): number | null {
-  if (!venue.price_per_hour) return null
-
+// Mirrors the backend's VenueBookingService::calculateTotalAmount() — a
+// block-priced court (e.g. BRCC's badminton gymnasium: ₱1,500 for an exact
+// 3-hour block, no hourly rate at all) takes priority over the venue's flat
+// price_per_hour whenever one applies; `court` is optional since most
+// call sites (matchmaking, before a court is resolved) don't always have
+// one in hand. Null whenever neither rate is published, rather than
+// silently treating an unpublished rate as free.
+export function calculateVenueRent(
+  venue: Venue,
+  startsAtIso: string,
+  endsAtIso: string,
+  court?: Court | null
+): number | null {
   const hours = (new Date(endsAtIso).getTime() - new Date(startsAtIso).getTime()) / (1000 * 60 * 60)
   if (!Number.isFinite(hours) || hours <= 0) return null
 
+  if (court?.block_hours && court.block_price !== null) {
+    return (hours / court.block_hours) * Number(court.block_price)
+  }
+
+  if (!venue.price_per_hour) return null
+
   return Number(venue.price_per_hour) * hours
+}
+
+// A block-priced court (see calculateVenueRent above) only has a valid price
+// for a duration that's an exact multiple of its block length — mirrors the
+// same epsilon-guarded modulo check VenueRegistrationController::store()
+// enforces server-side. Always true for a court with no block pricing.
+export function isDurationValidForCourt(court: Court | null | undefined, hours: number): boolean {
+  if (!court?.block_hours) return true
+
+  const remainder = Math.round((hours % court.block_hours) * 10000) / 10000
+  return remainder < 0.001 || remainder > court.block_hours - 0.001
 }
 
 export function formatPeso(amount: number): string {

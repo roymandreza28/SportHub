@@ -42,6 +42,11 @@ export type MatchmakingRequestItem = {
     starts_at: string
     ends_at: string
     conversation_id: number | null
+    court: { id: number; name: string } | null
+    // Recomputed fresh on every fetch, not a stored snapshot — see
+    // VenueBookingService::calculateTotalAmount()'s own doc comment. Null
+    // whenever the venue/court hasn't published a rate at all.
+    total_amount: number | null
   }
 }
 

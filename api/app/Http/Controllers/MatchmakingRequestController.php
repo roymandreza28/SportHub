@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\MatchmakingPairFound;
+use App\Models\Court;
 use App\Models\MatchmakingMatch;
 use App\Models\MatchmakingRequest;
 use App\Models\Sport;
@@ -34,7 +35,11 @@ class MatchmakingRequestController extends Controller
         $requests->each(function (MatchmakingRequest $mmr) {
             $match = MatchmakingMatch::where('request_a_id', $mmr->id)
                 ->orWhere('request_b_id', $mmr->id)
-                ->with('venueRegistration:id,venue_id,status,starts_at,ends_at')
+                ->with([
+                    'venueRegistration:id,venue_id,court_id,status,starts_at,ends_at',
+                    'venueRegistration.court:id,name,block_hours,block_price',
+                    'venueRegistration.venue:id,price_per_hour',
+                ])
                 ->first();
 
             if ($match) {
@@ -47,14 +52,24 @@ class MatchmakingRequestController extends Controller
                 // The down-payment prompt on the frontend keys off this —
                 // present only when the pair's chosen venue+time actually
                 // got auto-reserved (see store()'s VenueBookingService call).
-                if ($match->venueRegistration) {
-                    $conversation = $match->venueRegistration->conversation()->first(['conversations.id']);
+                // total_amount isn't a stored column (see
+                // VenueBookingService::calculateTotalAmount()'s own doc
+                // comment) — it's recomputed fresh here the same way, so the
+                // amount shown always reflects the venue/court's current
+                // rate rather than a stale snapshot from whenever the
+                // reservation was first made.
+                if ($registration = $match->venueRegistration) {
+                    $conversation = $registration->conversation()->first(['conversations.id']);
+                    $hours = Carbon::parse($registration->starts_at)->diffInMinutes(Carbon::parse($registration->ends_at), true) / 60;
+
                     $mmr->venue_registration = [
-                        'id' => $match->venueRegistration->id,
-                        'status' => $match->venueRegistration->status,
-                        'starts_at' => $match->venueRegistration->starts_at,
-                        'ends_at' => $match->venueRegistration->ends_at,
+                        'id' => $registration->id,
+                        'status' => $registration->status,
+                        'starts_at' => $registration->starts_at,
+                        'ends_at' => $registration->ends_at,
                         'conversation_id' => $conversation?->id,
+                        'court' => $registration->court ? ['id' => $registration->court->id, 'name' => $registration->court->name] : null,
+                        'total_amount' => VenueBookingService::calculateTotalAmount($registration->venue, $registration->court, $hours),
                     ];
                 }
             }
@@ -173,8 +188,23 @@ class MatchmakingRequestController extends Controller
                 $registration = null;
 
                 if ($booker && ($venue = Venue::find($booker->venue_id))) {
+                    // Matchmaking never lets a player pick a specific court
+                    // (see MatchVenueScheduler.tsx's own comment on why —
+                    // it's a venue-wide, single-column scheduler), but the
+                    // venue's court for this sport still has to be known in
+                    // order to price the reservation correctly: a block-
+                    // priced court (e.g. BRCC's badminton gymnasium, ₱1,500
+                    // per 3-hour block) has no valid price under the venue's
+                    // flat hourly rate at all. Resolves to the first court at
+                    // this venue that supports the sport being matched —
+                    // every seeded venue has at most one court per sport, so
+                    // this is unambiguous in practice.
+                    $court = Court::where('venue_id', $venue->id)
+                        ->whereHas('sports', fn ($q) => $q->where('sports.id', $data['sport_id']))
+                        ->first();
+
                     $registration = VenueBookingService::reserve(
-                        $venue, null, $booker->preferred_start_at, $booker->preferred_end_at, $booker->user_id
+                        $venue, $court?->id, $booker->preferred_start_at, $booker->preferred_end_at, $booker->user_id
                     );
 
                     if ($registration) {

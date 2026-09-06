@@ -114,11 +114,7 @@ class VenueRegistrationController extends Controller
 
         $venue->loadMissing('facilitator:id,name,phone');
 
-        $totalAmount = match (true) {
-            $court?->block_hours && $court->block_price !== null => round(($hours / $court->block_hours) * $court->block_price, 2),
-            (bool) $venue->price_per_hour => round($hours * $venue->price_per_hour, 2),
-            default => null,
-        };
+        $totalAmount = VenueBookingService::calculateTotalAmount($venue, $court, $hours);
 
         $registration->load('venue:id,name', 'court:id,name');
         $registration->setAttribute('total_amount', $totalAmount);
