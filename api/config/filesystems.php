@@ -38,13 +38,27 @@ return [
             'report' => false,
         ],
 
+        // Render's web-service disk is ephemeral — anything written to
+        // storage/app/public at runtime (post images, news covers, avatars)
+        // is wiped on every deploy/restart. In production FILESYSTEM_PUBLIC_DRIVER
+        // is set to "s3" (pointed at a Cloudflare R2 bucket via the AWS_*
+        // vars below — R2 speaks the S3 API) so every existing
+        // Storage::disk('public') call site in the app keeps working
+        // unchanged, just durably. Local dev leaves this unset and keeps
+        // writing straight to the local filesystem.
         'public' => [
-            'driver' => 'local',
+            'driver' => env('FILESYSTEM_PUBLIC_DRIVER', 'local'),
             'root' => storage_path('app/public'),
-            'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
+            'url' => env('FILESYSTEM_PUBLIC_URL', rtrim(env('APP_URL', 'http://localhost'), '/').'/storage'),
             'visibility' => 'public',
             'throw' => false,
             'report' => false,
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION', 'auto'),
+            'bucket' => env('AWS_BUCKET'),
+            'endpoint' => env('AWS_ENDPOINT'),
+            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', true),
         ],
 
         's3' => [

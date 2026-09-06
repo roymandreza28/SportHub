@@ -89,6 +89,26 @@ services:
         value: reverb
       - key: FILESYSTEM_DISK
         value: local
+      # Render's web-service disk is ephemeral (wiped on every deploy) — the
+      # "public" disk (post images, news covers, avatars) is repointed at a
+      # Cloudflare R2 bucket instead of local storage so uploads actually
+      # persist. See config/filesystems.php and .env.production.example.
+      - key: FILESYSTEM_PUBLIC_DRIVER
+        value: s3
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_DEFAULT_REGION
+        value: auto
+      - key: AWS_BUCKET
+        sync: false
+      - key: AWS_ENDPOINT
+        sync: false # https://<account-id>.r2.cloudflarestorage.com
+      - key: AWS_USE_PATH_STYLE_ENDPOINT
+        value: true
+      - key: FILESYSTEM_PUBLIC_URL
+        sync: false # the bucket's public r2.dev URL or connected custom domain
       - key: QUEUE_CONNECTION
         value: sync
       - key: CACHE_STORE

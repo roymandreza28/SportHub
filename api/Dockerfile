@@ -23,6 +23,11 @@ RUN apk add --no-cache \
         gettext \
         postgresql-dev \
         oniguruma-dev \
+        freetype-dev \
+        libjpeg-turbo-dev \
+        libpng-dev \
+        font-dejavu \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
         pdo_pgsql \
         pgsql \
@@ -30,7 +35,8 @@ RUN apk add --no-cache \
         pcntl \
         opcache \
         mbstring \
-    && apk del oniguruma-dev
+        gd \
+    && apk del oniguruma-dev freetype-dev libjpeg-turbo-dev libpng-dev
 
 WORKDIR /var/www/html
 COPY --from=vendor /app ./
