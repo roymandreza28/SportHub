@@ -239,7 +239,7 @@ const ABOUT_POINTS = [
   },
 ]
 
-const MOBILE_NAV_ITEMS: { id: string; label: string; icon: () => JSX.Element; href?: string }[] = [
+const MOBILE_NAV_ITEMS: { id: string; label: string; icon: () => ReactNode; href?: string }[] = [
   { id: 'home', label: 'Home', icon: NavIconHome, href: '#home' },
   { id: 'features', label: 'Features', icon: NavIconGrid, href: '#features' },
   { id: 'about', label: 'About', icon: NavIconInfo, href: '#about' },
