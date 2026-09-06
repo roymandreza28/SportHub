@@ -258,6 +258,40 @@ html {
   }
 }
 
+/* FullCalendar (VenueScheduleCalendar, MatchVenueScheduler,
+   VenueRegistrationForm) ships its own theme through CSS custom properties
+   (--fc-page-bg-color, --fc-border-color, etc.) that live outside this
+   app's Tailwind token system entirely, so Championship Spirit/Night Game
+   Lights above never touches it. Its default --fc-page-bg-color is a
+   hardcoded white, while header/day-number text (.fc-col-header-cell-
+   cushion, .fc-daygrid-day-number, the toolbar title, ...) sets no color of
+   its own and just inherits from the page — so in dark mode, where the
+   ambient text color is already light, the calendar ends up rendering
+   light text on its own still-white background: unreadable, not merely
+   off-theme. Re-pointing FullCalendar's own variables (and an explicit
+   `color` for anything relying on inheritance) at this app's existing dark
+   tokens fixes every calendar in the app at once, with no changes to the
+   three components that render one. */
+[data-theme="dark"] .fc {
+  color: var(--color-slate-900);
+  --fc-page-bg-color: var(--color-slate-100);
+  --fc-neutral-bg-color: var(--color-slate-200);
+  --fc-neutral-text-color: var(--color-slate-900);
+  --fc-border-color: var(--color-slate-300);
+  --fc-button-text-color: var(--color-slate-900);
+  --fc-button-bg-color: var(--color-slate-200);
+  --fc-button-border-color: var(--color-slate-300);
+  --fc-button-hover-bg-color: var(--color-slate-300);
+  --fc-button-hover-border-color: var(--color-slate-400);
+  --fc-button-active-bg-color: var(--color-teal-600);
+  --fc-button-active-border-color: var(--color-teal-600);
+  --fc-highlight-color: var(--color-teal-100);
+  --fc-today-bg-color: var(--color-teal-50);
+  --fc-non-business-color: rgba(255, 255, 255, 0.04);
+  --fc-more-link-bg-color: var(--color-slate-300);
+  --fc-more-link-text-color: var(--color-slate-900);
+}
+
 /* Every native <dialog> in the app (AuthModal, PublicNewsModal, ...) shares
    this entrance/exit — @starting-style rather than a mount/unmount
    transition, since showModal()/close() don't remount the React tree (the
