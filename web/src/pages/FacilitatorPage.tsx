@@ -11,7 +11,7 @@ import {
   StatusBadge,
   type NavItem,
 } from '../components/layout/DashboardShell'
-import { IconCalendar, IconClipboard, IconFileText, IconHome, IconMapPin } from '../components/layout/icons'
+import { IconCalendar, IconChevronDown, IconClipboard, IconFileText, IconHome, IconMapPin } from '../components/layout/icons'
 import { VenueMap } from '../components/venue/VenueMap'
 import { VenueList } from '../components/venue/VenueList'
 import { CreateVenueModal } from '../components/venue/CreateVenueModal'
@@ -53,6 +53,12 @@ export function FacilitatorPage() {
     }
   }
   const [showCreateModal, setShowCreateModal] = useState(false)
+  // Collapsed by default, same reasoning as the player-facing venue
+  // directory — the map above already shows each venue's name/address/
+  // photo on hover, so the full action list (Edit/Deactivate/Delete per
+  // venue) is now an on-demand expansion rather than always taking up the
+  // page.
+  const [showVenueList, setShowVenueList] = useState(false)
   const [editingVenueId, setEditingVenueId] = useState<number | null>(null)
   // Independent of `selectedId` (the Venues tab's court/equipment selection)
   // so opening a venue's bookings or schedule doesn't silently change what's
@@ -143,13 +149,25 @@ export function FacilitatorPage() {
         >
           {myVenues.length > 0 && <VenueMap venues={myVenues} onSelect={(v) => setSelectedId(v.id)} />}
 
-          <div className="mt-4">
-            <VenueList
-              venues={myVenues}
-              selectedId={selected?.id ?? null}
-              onSelect={(v) => setSelectedId(v.id)}
-              onEdit={(v) => setEditingVenueId(v.id)}
-            />
+          <div className="mt-4 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setShowVenueList((s) => !s)}
+              aria-expanded={showVenueList}
+              className="flex items-center justify-between rounded-lg border border-slate-100 bg-white px-4 py-2.5 text-left text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              {showVenueList ? 'Hide venue list' : `Show venue list (${myVenues.length})`}
+              <IconChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${showVenueList ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showVenueList && (
+              <VenueList
+                venues={myVenues}
+                selectedId={selected?.id ?? null}
+                onSelect={(v) => setSelectedId(v.id)}
+                onEdit={(v) => setEditingVenueId(v.id)}
+              />
+            )}
           </div>
 
           {showCreateModal && <CreateVenueModal onClose={() => setShowCreateModal(false)} />}
