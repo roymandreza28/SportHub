@@ -292,12 +292,33 @@ html {
   --fc-more-link-text-color: var(--color-slate-900);
 }
 
-/* VenueScheduleCalendar.tsx adds this class once a venue has enough courts
-   (BRCC's 24 individually-bookable bowling lanes is the case this exists
-   for) that flat horizontal column headers overlap each other. Rotating
-   the label needs the header row itself taller to have room to rotate
-   into — a plain `transform` on the text alone would just get clipped by
-   the row's normal one-line height. */
+/* VenueScheduleCalendar.tsx/VenueRegistrationForm.tsx add this class once a
+   venue has enough courts (BRCC's 24 individually-bookable bowling lanes is
+   the case this exists for) that flat horizontal column headers overlap
+   each other. Rotating the label alone wasn't enough — FullCalendar's
+   resource view shrinks every column to fit the container no matter how
+   many there are, so at 24 columns each one was squeezed to a sliver too
+   narrow for even rotated text to read cleanly, or to comfortably tap on
+   touch. Forcing a real minimum column width and letting the grid scroll
+   horizontally instead is what actually fixes that — the rotation just
+   makes each of those now-reasonably-sized columns take less horizontal
+   space to label.
+   `!important` is deliberate: FullCalendar's resource-timegrid computes
+   and inlines its own per-column pixel widths on both the header and body
+   cells on every render, which would otherwise silently win over a plain
+   CSS rule. */
+.fc-crowded {
+  overflow-x: auto;
+}
+.fc-crowded .fc-scrollgrid,
+.fc-crowded .fc-scrollgrid table {
+  width: auto !important;
+}
+.fc-crowded .fc-col-header-cell,
+.fc-crowded .fc-timegrid-col {
+  width: 3.25rem !important;
+  min-width: 3.25rem !important;
+}
 .fc-crowded .fc-col-header-cell {
   height: 5.5rem;
   vertical-align: bottom;
