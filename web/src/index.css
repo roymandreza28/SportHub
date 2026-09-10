@@ -292,6 +292,24 @@ html {
   --fc-more-link-text-color: var(--color-slate-900);
 }
 
+/* VenueScheduleCalendar.tsx adds this class once a venue has enough courts
+   (BRCC's 24 individually-bookable bowling lanes is the case this exists
+   for) that flat horizontal column headers overlap each other. Rotating
+   the label needs the header row itself taller to have room to rotate
+   into — a plain `transform` on the text alone would just get clipped by
+   the row's normal one-line height. */
+.fc-crowded .fc-col-header-cell {
+  height: 5.5rem;
+  vertical-align: bottom;
+}
+.fc-crowded .fc-col-header-cell-cushion {
+  display: inline-block;
+  transform: rotate(-40deg);
+  transform-origin: bottom left;
+  white-space: nowrap;
+  padding-bottom: 0.25rem;
+}
+
 /* Every native <dialog> in the app (AuthModal, PublicNewsModal, ...) shares
    this entrance/exit — @starting-style rather than a mount/unmount
    transition, since showModal()/close() don't remount the React tree (the
