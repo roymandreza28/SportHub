@@ -605,7 +605,7 @@ it('rejects declaring a match already completed as won by default', function () 
     ])->assertStatus(422);
 });
 
-it('denies a venue organizer from creating tournaments, but still lets them post news', function () {
+it('denies a venue organizer from creating tournaments or news — they browse the newsfeed read-only', function () {
     $venueOrganizer = userWithRole('venue_organizer');
     $sport = Sport::create(['name' => 'Table Tennis']);
 
@@ -613,9 +613,8 @@ it('denies a venue organizer from creating tournaments, but still lets them post
         'sport_id' => $sport->id, 'name' => 'x', 'format' => 'round_robin', 'starts_at' => now()->addWeek(),
     ])->assertForbidden();
 
-    // Newsfeed posting is deliberately open to the whole organizer family
-    // (see NewsAccessTest) — only tournament management stays main-organizer-only.
-    $this->actingAs($venueOrganizer)->postJson('/api/news', ['title' => 'x', 'body' => 'y'])->assertCreated();
+    // See NewsAccessTest for the full read-vs-write breakdown.
+    $this->actingAs($venueOrganizer)->postJson('/api/news', ['title' => 'x', 'body' => 'y'])->assertForbidden();
 });
 
 it('lets a livestream organizer create a livestream for the tournament they were assigned to', function () {

@@ -271,11 +271,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/matches/{match}/schedule', [MatchController::class, 'schedule']);
     });
 
-    // Posting news is wider than tournament management — every member of the
-    // organizer family plus venue facilitators can publish a community
-    // update, not just the main organizer. NewsPolicy still gates edit/delete
-    // to the post's own author regardless of role.
-    Route::middleware('role:organizer|venue_organizer|livestream_organizer|venue_facilitator|admin')->group(function () {
+    // venue_organizer and livestream_organizer deliberately excluded — they
+    // browse the newsfeed read-only (see RolesAndPermissionsSeeder's own
+    // comment on those two roles). NewsPolicy still gates edit/delete to
+    // the post's own author regardless of role.
+    Route::middleware('role:organizer|venue_facilitator|admin')->group(function () {
         Route::post('/news', [NewsController::class, 'store']);
         Route::patch('/news/{news}', [NewsController::class, 'update']);
         Route::delete('/news/{news}', [NewsController::class, 'destroy']);

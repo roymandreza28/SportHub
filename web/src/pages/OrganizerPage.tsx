@@ -468,9 +468,16 @@ export function OrganizerPage() {
       )}
 
       {active === 'news' && (
-        <Section title="News" description="Publish an update, and browse the same newsfeed the community sees.">
-          <NewsEditor />
-          <div className="mt-4 border-t border-slate-100 pt-4">
+        <Section
+          title="News"
+          description={
+            isMainOrganizer
+              ? 'Publish an update, and browse the same newsfeed the community sees.'
+              : 'Browse the same newsfeed the community sees.'
+          }
+        >
+          {isMainOrganizer && <NewsEditor />}
+          <div className={isMainOrganizer ? 'mt-4 border-t border-slate-100 pt-4' : undefined}>
             <Newsfeed />
           </div>
         </Section>

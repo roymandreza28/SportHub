@@ -2,8 +2,8 @@
 
 use App\Models\News;
 
-it('lets every organizer-family role and the venue facilitator publish, edit, and delete their own news post', function () {
-    foreach (['organizer', 'venue_organizer', 'livestream_organizer', 'venue_facilitator'] as $role) {
+it('lets the main organizer and the venue facilitator publish, edit, and delete their own news post', function () {
+    foreach (['organizer', 'venue_facilitator'] as $role) {
         $user = userWithRole($role);
 
         $created = $this->actingAs($user)->postJson('/api/news', [
@@ -20,6 +20,17 @@ it('lets every organizer-family role and the venue facilitator publish, edit, an
     }
 });
 
+it('denies posting news to venue_organizer and livestream_organizer — they browse the newsfeed read-only', function () {
+    foreach (['venue_organizer', 'livestream_organizer'] as $role) {
+        $user = userWithRole($role);
+        $this->actingAs($user)->postJson('/api/news', ['title' => 'x', 'body' => 'y'])->assertForbidden();
+    }
+
+    // Reading the feed is unaffected — only creating a post is gated.
+    $this->actingAs(userWithRole('venue_organizer'))->getJson('/api/news')->assertOk();
+    $this->actingAs(userWithRole('livestream_organizer'))->getJson('/api/news')->assertOk();
+});
+
 it('still denies posting news to roles outside the organizer family and venue facilitator', function () {
     // admin is deliberately excluded here — Gate::before() grants it every
     // ability regardless of the 'manage news' permission, same as elsewhere
@@ -31,8 +42,8 @@ it('still denies posting news to roles outside the organizer family and venue fa
 });
 
 it('never lets one organizer-family member edit or delete another one\'s news post', function () {
-    $author = userWithRole('venue_organizer');
-    $other = userWithRole('livestream_organizer');
+    $author = userWithRole('organizer');
+    $other = userWithRole('venue_facilitator');
 
     $newsId = $this->actingAs($author)->postJson('/api/news', [
         'title' => 'Mine', 'body' => 'Not yours.',
