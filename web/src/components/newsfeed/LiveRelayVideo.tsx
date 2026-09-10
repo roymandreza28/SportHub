@@ -11,12 +11,15 @@ type PublicSignalMessage = {
   data: Record<string, unknown>
 }
 
-// Hop 2's viewer side — used identically by both audience tiers: the
-// authenticated Newsfeed (players/coaches, who also get comment/react UI
-// alongside this) and the fully public/anonymous tabloid news modal on the
-// landing page. Never needs auth: it just announces a random token on the
-// livestream's public signal channel and waits for the main organizer's
-// relay (LivestreamViewer.tsx) to offer it a peer connection.
+// The viewer side of the public relay — used identically by both audience
+// tiers: the authenticated Newsfeed (players/coaches, who also get
+// comment/react UI alongside this) and the fully public/anonymous tabloid
+// news modal on the landing page. Never needs auth: it just announces a
+// random token on the livestream's public signal channel and waits for the
+// broadcaster (LivestreamBroadcast.tsx) to offer it a direct peer
+// connection — connects straight to the broadcaster's own device rather
+// than through a relay hop, so there's no extra decode/re-encode step
+// between the camera and this video element.
 //
 // Once the broadcast has ended there's no one left to answer that signal —
 // status/recordingUrl let this fall back to plain <video> playback of the
@@ -57,14 +60,14 @@ export function LiveRelayVideo({
       }
       pc.onicecandidate = (event) => {
         if (event.candidate) {
-          sendPublicSignal(livestreamId, myToken, 'organizer', 'ice-candidate', event.candidate.toJSON())
+          sendPublicSignal(livestreamId, myToken, 'broadcaster', 'ice-candidate', event.candidate.toJSON())
         }
       }
 
       await pc.setRemoteDescription(new RTCSessionDescription(message.data as unknown as RTCSessionDescriptionInit))
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
-      await sendPublicSignal(livestreamId, myToken, 'organizer', 'answer', { sdp: answer.sdp, type: answer.type })
+      await sendPublicSignal(livestreamId, myToken, 'broadcaster', 'answer', { sdp: answer.sdp, type: answer.type })
     }
 
     const channel = echo.channel(`livestream.${livestreamId}.public-signal`)
@@ -78,7 +81,7 @@ export function LiveRelayVideo({
       }
     })
 
-    sendPublicSignal(livestreamId, myToken, 'organizer', 'join', {})
+    sendPublicSignal(livestreamId, myToken, 'broadcaster', 'join', {})
 
     return () => {
       echo.leave(`livestream.${livestreamId}.public-signal`)

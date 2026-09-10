@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { sendWebRTCSignal, uploadLivestreamRecording, type LivestreamItem } from '../../lib/organizerApi'
+import { useQuery } from '@tanstack/react-query'
+import { fetchLivestream, sendWebRTCSignal, uploadLivestreamRecording, type LivestreamItem } from '../../lib/organizerApi'
+import { sendPublicSignal, type PublicSignalType } from '../../lib/publicSignalApi'
 import { useAuth } from '../../lib/AuthContext'
 import { echo } from '../../lib/echo'
 import { ICE_SERVERS } from '../../lib/webrtc'
@@ -25,6 +27,13 @@ type SignalMessage = {
   data: Record<string, unknown>
 }
 
+type PublicSignalMessage = {
+  from_token: string
+  target_token: string
+  type: PublicSignalType
+  data: Record<string, unknown>
+}
+
 const STATUS_STYLE: Record<string, string> = {
   scheduled: 'bg-slate-100 text-slate-500',
   live: 'bg-red-100 text-red-700',
@@ -40,6 +49,7 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const peersRef = useRef<Map<number, RTCPeerConnection>>(new Map())
+  const publicPeersRef = useRef<Map<string, RTCPeerConnection>>(new Map())
   const isLiveRef = useRef(false)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
@@ -50,6 +60,18 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
   useEffect(() => {
     isLiveRef.current = isLive
   }, [isLive])
+
+  // The main organizer publishes from their OWN device/session — there's no
+  // shared query cache to react to, so this is how the broadcaster's own
+  // browser finds out news_id just got set (i.e. it's time to start
+  // answering public viewers directly) without needing a page reload.
+  const { data: liveLivestream } = useQuery({
+    queryKey: ['livestream', livestream.id, 'poll'],
+    queryFn: () => fetchLivestream(livestream.id),
+    enabled: isLive,
+    refetchInterval: 3000,
+  })
+  const newsId = liveLivestream?.news_id ?? livestream.news_id
 
   function createPeerFor(viewerId: number): RTCPeerConnection {
     const existing = peersRef.current.get(viewerId)
@@ -115,6 +137,8 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
   async function stopBroadcast() {
     peersRef.current.forEach((pc) => pc.close())
     peersRef.current.clear()
+    publicPeersRef.current.forEach((pc) => pc.close())
+    publicPeersRef.current.clear()
 
     const recorder = recorderRef.current
     recorderRef.current = null
@@ -200,6 +224,62 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [livestream.id, user?.id])
+
+  // Answers public/newsfeed viewers DIRECTLY off the same outgoing stream
+  // every other peer connection above is fed from — once published, a
+  // viewer never has to wait on a second decode/re-encode hop through the
+  // main organizer's own browser (that's what LivestreamViewer.tsx used to
+  // do; removed there once this took over) before seeing video. The
+  // tradeoff is bandwidth, not latency: mesh topology (same as hop 1 above)
+  // means this device now uploads one full copy of the stream per viewer —
+  // fine for the small audiences this app expects, not a fit for a large
+  // one, which would need a media relay server instead.
+  useEffect(() => {
+    if (!isLive || !newsId) return
+
+    function createPublicPeerFor(viewerToken: string): RTCPeerConnection {
+      const existing = publicPeersRef.current.get(viewerToken)
+      if (existing) return existing
+
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+      streamRef.current?.getTracks().forEach((track) => pc.addTrack(track, streamRef.current!))
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          sendPublicSignal(livestream.id, 'broadcaster', viewerToken, 'ice-candidate', event.candidate.toJSON())
+        }
+      }
+      publicPeersRef.current.set(viewerToken, pc)
+      return pc
+    }
+
+    async function offerToPublicViewer(viewerToken: string) {
+      const pc = createPublicPeerFor(viewerToken)
+      const offer = await pc.createOffer()
+      await pc.setLocalDescription(offer)
+      await sendPublicSignal(livestream.id, 'broadcaster', viewerToken, 'offer', { sdp: offer.sdp, type: offer.type })
+    }
+
+    const channel = echo.channel(`livestream.${livestream.id}.public-signal`)
+    channel.listen('.PublicSignal', (message: PublicSignalMessage) => {
+      if (message.target_token !== 'broadcaster') return
+
+      if (message.type === 'join' && !publicPeersRef.current.has(message.from_token)) {
+        offerToPublicViewer(message.from_token).catch(() => {})
+      } else if (message.type === 'answer') {
+        publicPeersRef.current
+          .get(message.from_token)
+          ?.setRemoteDescription(new RTCSessionDescription(message.data as unknown as RTCSessionDescriptionInit))
+      } else if (message.type === 'ice-candidate') {
+        publicPeersRef.current.get(message.from_token)?.addIceCandidate(new RTCIceCandidate(message.data as RTCIceCandidateInit))
+      }
+    })
+
+    return () => {
+      echo.leave(`livestream.${livestream.id}.public-signal`)
+      publicPeersRef.current.forEach((pc) => pc.close())
+      publicPeersRef.current.clear()
+    }
+  }, [livestream.id, isLive, newsId])
 
   return (
     <div className="flex flex-col gap-3">

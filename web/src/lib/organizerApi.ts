@@ -330,6 +330,16 @@ export async function fetchLivestreams() {
   return data
 }
 
+// Polled by LivestreamBroadcast.tsx while live — the broadcaster and the
+// main organizer are on two different devices/sessions with no shared
+// query cache, so this is how the broadcaster's own browser finds out the
+// organizer just published (news_id got set) without needing a page
+// reload, in order to start relaying directly to public viewers.
+export async function fetchLivestream(id: number) {
+  const { data } = await api.get<LivestreamItem>(`/api/livestreams/${id}`)
+  return data
+}
+
 export async function createLivestream(input: {
   title: string
   tournament_id?: number

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { sendWebRTCSignal, type LivestreamItem } from '../../lib/organizerApi'
-import { sendPublicSignal, type PublicSignalType } from '../../lib/publicSignalApi'
 import { useAuth } from '../../lib/AuthContext'
 import { echo } from '../../lib/echo'
 import { ICE_SERVERS } from '../../lib/webrtc'
@@ -15,30 +14,24 @@ type SignalMessage = {
   data: Record<string, unknown>
 }
 
-type PublicSignalMessage = {
-  from_token: string
-  target_token: string
-  type: PublicSignalType
-  data: Record<string, unknown>
-}
-
 const STATUS_STYLE: Record<string, string> = {
   scheduled: 'bg-slate-100 text-slate-500',
   live: 'bg-red-100 text-red-700',
   ended: 'bg-slate-100 text-slate-500',
 }
 
-// Rendered for the tournament's main organizer — this is both halves of the
-// relay's middle hop: it RECEIVES the livestream_organizer's camera feed
-// (hop 1, unchanged from before) and, once published to the newsfeed, RE-
-// BROADCASTS that same feed onward to every newsfeed viewer (hop 2, new) —
-// logged-in or fully anonymous, via LiveRelayVideo.tsx on the other end.
+// Rendered for the tournament's main organizer — a preview of the
+// livestream_organizer's camera feed, and the "publish to the newsfeed"
+// gate. Used to also relay that feed onward to every public/newsfeed
+// viewer (a second WebRTC hop through this browser tab), which meant a
+// full decode+re-encode of the video happening here on top of whatever
+// delay hop 1 already had. LivestreamBroadcast.tsx now answers public
+// viewers directly off its own outgoing stream instead, cutting that hop
+// out entirely — this component is purely a preview + publish control now.
 export function LivestreamViewer({ livestream }: { livestream: LivestreamItem }) {
   const { user } = useAuth()
   const videoRef = useRef<HTMLVideoElement>(null)
   const pcRef = useRef<RTCPeerConnection | null>(null)
-  const remoteStreamRef = useRef<MediaStream | null>(null)
-  const relayPeersRef = useRef<Map<string, RTCPeerConnection>>(new Map())
   const [connected, setConnected] = useState(false)
   const [ended, setEnded] = useState(livestream.status === 'ended')
   const [newsId, setNewsId] = useState<number | null>(livestream.news_id)
@@ -49,7 +42,8 @@ export function LivestreamViewer({ livestream }: { livestream: LivestreamItem })
 
   const isMainOrganizer = user?.id === livestream.tournament?.organizer_id
 
-  // --- Hop 1: receive the livestream_organizer's feed (unchanged logic) ---
+  // Receives the livestream_organizer's feed, for the main organizer's own
+  // preview before (and after) deciding to publish it to the newsfeed.
   useEffect(() => {
     if (!user) return
 
@@ -64,7 +58,6 @@ export function LivestreamViewer({ livestream }: { livestream: LivestreamItem })
       pcRef.current = pc
 
       pc.ontrack = (event) => {
-        remoteStreamRef.current = event.streams[0]
         if (videoRef.current) {
           videoRef.current.srcObject = event.streams[0]
           videoRef.current.play().catch(() => setNeedsPlayClick(true))
@@ -95,7 +88,6 @@ export function LivestreamViewer({ livestream }: { livestream: LivestreamItem })
       } else if (message.type === 'broadcast-ended') {
         pcRef.current?.close()
         pcRef.current = null
-        remoteStreamRef.current = null
         if (videoRef.current) videoRef.current.srcObject = null
         setConnected(false)
         setNeedsPlayClick(false)
@@ -110,54 +102,6 @@ export function LivestreamViewer({ livestream }: { livestream: LivestreamItem })
       pcRef.current = null
     }
   }, [livestream.id, user?.id])
-
-  // --- Hop 2: once published, relay the received feed to newsfeed viewers ---
-  useEffect(() => {
-    if (!newsId) return
-
-    function createRelayPeerFor(viewerToken: string): RTCPeerConnection {
-      const existing = relayPeersRef.current.get(viewerToken)
-      if (existing) return existing
-
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
-      remoteStreamRef.current?.getTracks().forEach((track) => pc.addTrack(track, remoteStreamRef.current!))
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          sendPublicSignal(livestream.id, 'organizer', viewerToken, 'ice-candidate', event.candidate.toJSON())
-        }
-      }
-      relayPeersRef.current.set(viewerToken, pc)
-      return pc
-    }
-
-    async function offerTo(viewerToken: string) {
-      const pc = createRelayPeerFor(viewerToken)
-      const offer = await pc.createOffer()
-      await pc.setLocalDescription(offer)
-      await sendPublicSignal(livestream.id, 'organizer', viewerToken, 'offer', { sdp: offer.sdp, type: offer.type })
-    }
-
-    const channel = echo.channel(`livestream.${livestream.id}.public-signal`)
-    channel.listen('.PublicSignal', (message: PublicSignalMessage) => {
-      if (message.target_token !== 'organizer') return
-
-      if (message.type === 'join' && !relayPeersRef.current.has(message.from_token)) {
-        offerTo(message.from_token).catch(() => {})
-      } else if (message.type === 'answer') {
-        relayPeersRef.current
-          .get(message.from_token)
-          ?.setRemoteDescription(new RTCSessionDescription(message.data as unknown as RTCSessionDescriptionInit))
-      } else if (message.type === 'ice-candidate') {
-        relayPeersRef.current.get(message.from_token)?.addIceCandidate(new RTCIceCandidate(message.data as RTCIceCandidateInit))
-      }
-    })
-
-    return () => {
-      echo.leave(`livestream.${livestream.id}.public-signal`)
-      relayPeersRef.current.forEach((pc) => pc.close())
-      relayPeersRef.current.clear()
-    }
-  }, [livestream.id, newsId])
 
   return (
     <div className="flex flex-col gap-3">
