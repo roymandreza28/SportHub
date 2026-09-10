@@ -92,6 +92,19 @@ export async function createEvaluation(input: {
   return data
 }
 
+// Corrects an existing evaluation in place rather than logging a new one —
+// only the most recent evaluation for a sport is editable (the backend
+// rejects an older one with a 422, since a newer evaluation has already
+// superseded whatever tier/score it once set). Omitting `criteria` leaves
+// the evaluation's existing criteria untouched rather than clearing it.
+export async function updateEvaluation(
+  evaluationId: number,
+  input: { level: SkillLevelTier; score?: number; notes?: string }
+) {
+  const { data } = await api.patch<EvaluationEntry>(`/api/evaluations/${evaluationId}`, input)
+  return data
+}
+
 // The stat-sheet columns themselves are entirely server-driven (see
 // api/app/Support/StatSheetFieldSets.php) — a sport's field list and mode
 // arrive in MatchStatSheet.fields/mode below, so StatSheetModal.tsx renders

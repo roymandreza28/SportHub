@@ -199,6 +199,118 @@ it('creates an evaluation that upserts the current skill level and keeps prior e
     ]);
 });
 
+it('lets a coach correct their own most recent evaluation, keeping the skill level in sync', function () {
+    $coach = userWithRole('coach');
+    $player = userWithRole('player');
+    $sport = Sport::create(['name' => 'Badminton']);
+
+    $created = $this->actingAs($coach)->postJson('/api/evaluations', [
+        'player_id' => $player->id,
+        'sport_id' => $sport->id,
+        'level' => 'beginner',
+        'score' => 40,
+        'notes' => 'First session',
+    ])->assertCreated();
+
+    $this->actingAs($coach)->patchJson("/api/evaluations/{$created->json('id')}", [
+        'level' => 'casual_player',
+        'score' => 45,
+        'notes' => 'Typo fixed — meant casual_player',
+    ])->assertOk()
+        ->assertJsonPath('notes', 'Typo fixed — meant casual_player');
+
+    $this->assertDatabaseCount('evaluations', 1);
+    $this->assertDatabaseHas('skill_levels', [
+        'player_profile_id' => $player->fresh()->playerProfile->id,
+        'level' => 'casual_player',
+        'score' => 45,
+    ]);
+});
+
+it('preserves an evaluation\'s existing criteria when an edit does not include that field', function () {
+    $coach = userWithRole('coach');
+    $player = userWithRole('player');
+    $sport = Sport::create(['name' => 'Badminton']);
+
+    $created = $this->actingAs($coach)->postJson('/api/evaluations', [
+        'player_id' => $player->id,
+        'sport_id' => $sport->id,
+        'level' => 'beginner',
+        'criteria' => ['attributes' => ['footwork' => 6]],
+    ])->assertCreated();
+
+    $this->actingAs($coach)->patchJson("/api/evaluations/{$created->json('id')}", [
+        'level' => 'casual_player',
+        'notes' => 'Quick fix, no criteria in this request',
+    ])->assertOk();
+
+    $this->assertDatabaseHas('evaluations', [
+        'id' => $created->json('id'),
+        'criteria' => json_encode(['attributes' => ['footwork' => 6]]),
+    ]);
+});
+
+it('rejects editing an evaluation that has since been superseded by a newer one', function () {
+    $coach = userWithRole('coach');
+    $player = userWithRole('player');
+    $sport = Sport::create(['name' => 'Badminton']);
+
+    $first = $this->actingAs($coach)->postJson('/api/evaluations', [
+        'player_id' => $player->id,
+        'sport_id' => $sport->id,
+        'level' => 'beginner',
+    ])->assertCreated();
+
+    $this->actingAs($coach)->postJson('/api/evaluations', [
+        'player_id' => $player->id,
+        'sport_id' => $sport->id,
+        'level' => 'casual_player',
+    ])->assertCreated();
+
+    $this->actingAs($coach)->patchJson("/api/evaluations/{$first->json('id')}", [
+        'level' => 'professional',
+    ])->assertStatus(422);
+
+    // The current state (set by the second, newer evaluation) is untouched.
+    $this->assertDatabaseHas('skill_levels', [
+        'player_profile_id' => $player->fresh()->playerProfile->id,
+        'level' => 'casual_player',
+    ]);
+});
+
+it('denies editing an evaluation written by a different coach', function () {
+    $coach = userWithRole('coach');
+    $otherCoach = userWithRole('coach');
+    $player = userWithRole('player');
+    $sport = Sport::create(['name' => 'Badminton']);
+
+    $created = $this->actingAs($coach)->postJson('/api/evaluations', [
+        'player_id' => $player->id,
+        'sport_id' => $sport->id,
+        'level' => 'beginner',
+    ])->assertCreated();
+
+    $this->actingAs($otherCoach)->patchJson("/api/evaluations/{$created->json('id')}", [
+        'level' => 'professional',
+    ])->assertForbidden();
+});
+
+it('denies evaluation editing to a non-coach role', function () {
+    $coach = userWithRole('coach');
+    $player = userWithRole('player');
+    $sport = Sport::create(['name' => 'Badminton']);
+
+    $created = $this->actingAs($coach)->postJson('/api/evaluations', [
+        'player_id' => $player->id,
+        'sport_id' => $sport->id,
+        'level' => 'beginner',
+    ])->assertCreated();
+
+    $this->actingAs($player)->patchJson("/api/evaluations/{$created->json('id')}", [
+        'level' => 'professional',
+    ])->assertForbidden();
+});
+
 it('accepts the professional tier, added for Bowling\'s PBA/international-tour level', function () {
     $coach = userWithRole('coach');
     $player = userWithRole('player');

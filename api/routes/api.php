@@ -255,6 +255,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/evaluations', [EvaluationController::class, 'index']);
         Route::post('/evaluations', [EvaluationController::class, 'store']);
+        Route::patch('/evaluations/{evaluation}', [EvaluationController::class, 'update']);
 
         Route::get('/matches/mine/upcoming-stat-sheets', [MatchStatSheetController::class, 'myUpcoming']);
         Route::get('/matches/{match}/stat-sheet', [MatchStatSheetController::class, 'show']);
