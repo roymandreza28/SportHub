@@ -292,6 +292,21 @@ html {
   --fc-more-link-text-color: var(--color-slate-900);
 }
 
+/* VenueScheduleCalendar.tsx/VenueRegistrationForm.tsx tag BRCC's bowling
+   lane columns with this class (via resourceLabelClassNames/
+   resourceLaneClassNames — see resourceLaneLabel.tsx) so they can be
+   noticeably narrower than the other courts: a lane only ever shows a 1-2
+   digit number, while courts like "Badminton Courts (Gymnasium)" need the
+   room. `!important` is required because FullCalendar's resource-timegrid
+   computes and inlines its own per-column pixel width on every render,
+   which would otherwise silently win over a plain CSS rule. Leaving the
+   other courts' width unset lets them expand into the space the lanes give
+   up, instead of everything staying evenly (and needlessly) squeezed. */
+.fc-lane-col {
+  width: 2.25rem !important;
+  min-width: 2.25rem !important;
+}
+
 /* Every native <dialog> in the app (AuthModal, PublicNewsModal, ...) shares
    this entrance/exit — @starting-style rather than a mount/unmount
    transition, since showModal()/close() don't remount the React tree (the

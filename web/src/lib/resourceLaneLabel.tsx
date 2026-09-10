@@ -1,4 +1,4 @@
-import type { ResourceLabelContentArg } from '@fullcalendar/resource'
+import type { ResourceLabelContentArg, ResourceLaneContentArg } from '@fullcalendar/resource'
 
 // BRCC's bowling lanes are seeded as "Duckpin Lane 1".."Duckpin Lane 12" and
 // "Ten-Pin Lane 1".."Ten-Pin Lane 8" (one court row per physically
@@ -20,4 +20,11 @@ export function renderResourceLaneLabel(arg: ResourceLabelContentArg) {
       <span className="font-semibold">{number}</span>
     </div>
   )
+}
+
+// A lane only needs room for a 1-2 digit number, so give it noticeably less
+// column width than the other courts (whose full names need the space) —
+// see the .fc-lane-col rule in index.css.
+export function laneColumnClassNames(arg: ResourceLabelContentArg | ResourceLaneContentArg) {
+  return LANE_PATTERN.test(arg.resource.title) ? ['fc-lane-col'] : []
 }

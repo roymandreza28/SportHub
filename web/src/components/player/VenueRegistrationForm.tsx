@@ -5,7 +5,7 @@ import resourceTimeGridPlugin from '@fullcalendar/resource-timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import type { DateSelectArg } from '@fullcalendar/core'
 import { fetchVenueAvailability, calculateVenueRent, formatPeso, type Venue } from '../../lib/venueApi'
-import { renderResourceLaneLabel } from '../../lib/resourceLaneLabel'
+import { renderResourceLaneLabel, laneColumnClassNames } from '../../lib/resourceLaneLabel'
 import { createVenueRegistration, type CreatedVenueRegistration } from '../../lib/playerApi'
 import { useChatUI } from '../../lib/ChatUIContext'
 import { buttonGhost, buttonPrimary, input } from '../../lib/formStyles'
@@ -115,6 +115,8 @@ export function VenueRegistrationForm({ venue }: { venue: Venue }) {
           height="auto"
           headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
           resourceLabelContent={renderResourceLaneLabel}
+          resourceLabelClassNames={laneColumnClassNames}
+          resourceLaneClassNames={laneColumnClassNames}
           {...(hasFixedHours
             ? {
                 businessHours: { daysOfWeek: [0, 1, 2, 3, 4, 5, 6], startTime: venue.opens_at!, endTime: venue.closes_at! },
