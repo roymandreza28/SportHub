@@ -87,7 +87,11 @@ export function VenueMap<T extends MappableVenue = Venue>({ venues, onSelect }: 
     venues.length > 0 ? [Number(venues[0].latitude), Number(venues[0].longitude)] : [14.4651, 121.1921]
 
   return (
-    <MapContainer center={center} zoom={12} className="h-80 w-full rounded" scrollWheelZoom={false}>
+    // Taller than before (h-80) — the popup card is real content now
+    // (photo, chips, description), not just a two-line tooltip, and Leaflet
+    // needs enough vertical room to auto-pan it fully into view when it
+    // opens above a pin near the top edge.
+    <MapContainer center={center} zoom={12} className="h-[28rem] w-full rounded" scrollWheelZoom={false}>
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
