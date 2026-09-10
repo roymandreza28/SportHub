@@ -10,10 +10,19 @@ import type { ResourceLabelContentArg, ResourceLaneContentArg } from '@fullcalen
 // "Ten-Pin lane" group title as one merged bar above the numbers.
 const LANE_PATTERN = /^(Duckpin|Ten-Pin) Lane (\d+)$/
 
+// The blank span reserves the vertical room LaneGroupBanner's overlay sits
+// in (h-6 = the banner's own height) — without it the header row would
+// only be as tall as the number itself, leaving nowhere for the banner to
+// go that doesn't cover it.
 export function renderResourceLaneLabel(arg: ResourceLabelContentArg) {
   const match = arg.resource.title.match(LANE_PATTERN)
   if (!match) return arg.resource.title
-  return <span className="font-semibold">{match[2]}</span>
+  return (
+    <div className="flex flex-col items-center">
+      <span className="h-6" aria-hidden="true" />
+      <span className="font-semibold">{match[2]}</span>
+    </div>
+  )
 }
 
 // A lane only needs room for a 1-2 digit number, so give it noticeably less
@@ -23,19 +32,20 @@ export function laneColumnClassNames(arg: ResourceLabelContentArg | ResourceLane
   return LANE_PATTERN.test(arg.resource.title) ? ['fc-lane-col'] : []
 }
 
-type LaneGroupSegment = { group: string; left: number; width: number }
+type LaneGroupSegment = { group: string; top: number; left: number; width: number }
 
 // FullCalendar's resource-timegrid has no concept of a header cell spanning
 // multiple resource columns (that's a resourceTimeline-only feature) — its
 // header is always exactly one <th> per resource. To get a real merged
 // "Duckpin lane" / "Ten-Pin lane" title bar spanning the matching columns,
-// this measures the actual rendered position/width of each lane's header
+// this measures the actual rendered position/size of each lane's header
 // cell (after FullCalendar lays them out) and draws the merged bar as an
-// absolutely-positioned overlay on top, rather than guessing column widths
-// ahead of time — the columns aren't a fixed pixel size (see .fc-lane-col:
-// FullCalendar stretches them to fill whatever room the venue's other
-// columns don't use), so anything short of measuring the real DOM would
-// drift out of alignment.
+// absolutely-positioned overlay on top of the blank space
+// renderResourceLaneLabel reserves there, rather than guessing column
+// widths or the header row's position ahead of time — neither is a fixed
+// pixel value (columns stretch to fill available room, and the row's own
+// position shifts with the toolbar above it), so anything computed ahead
+// of time would drift out of alignment.
 export function LaneGroupBanner({
   resources,
   children,
@@ -54,7 +64,7 @@ export function LaneGroupBanner({
       const headerCells = Array.from(
         container!.querySelectorAll<HTMLElement>('.fc-col-header-cell.fc-resource'),
       )
-      const containerLeft = container!.getBoundingClientRect().left
+      const containerRect = container!.getBoundingClientRect()
       const next: LaneGroupSegment[] = []
 
       headerCells.forEach((cell, i) => {
@@ -62,17 +72,23 @@ export function LaneGroupBanner({
         if (!match) return
         const group = match[1] === 'Duckpin' ? 'Duckpin lane' : 'Ten-Pin lane'
         const rect = cell.getBoundingClientRect()
-        const left = rect.left - containerLeft
+        const top = rect.top - containerRect.top
+        const left = rect.left - containerRect.left
         const last = next[next.length - 1]
         if (last && last.group === group) {
           last.width = left + rect.width - last.left
         } else {
-          next.push({ group, left, width: rect.width })
+          next.push({ group, top, left, width: rect.width })
         }
       })
 
       setSegments((prev) =>
-        prev.length === next.length && prev.every((p, i) => p.group === next[i].group && Math.abs(p.left - next[i].left) < 0.5 && Math.abs(p.width - next[i].width) < 0.5)
+        prev.length === next.length && prev.every((p, i) =>
+          p.group === next[i].group
+          && Math.abs(p.top - next[i].top) < 0.5
+          && Math.abs(p.left - next[i].left) < 0.5
+          && Math.abs(p.width - next[i].width) < 0.5,
+        )
           ? prev
           : next,
       )
@@ -86,20 +102,16 @@ export function LaneGroupBanner({
 
   return (
     <div ref={containerRef} className="relative">
-      {segments.length > 0 && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6">
-          {segments.map((segment) => (
-            <div
-              key={segment.group + segment.left}
-              style={{ left: segment.left, width: segment.width }}
-              className="absolute top-0 flex h-6 items-center justify-center overflow-hidden border-x border-b border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-            >
-              {segment.group}
-            </div>
-          ))}
+      {segments.map((segment) => (
+        <div
+          key={segment.group + segment.left}
+          style={{ top: segment.top, left: segment.left, width: segment.width }}
+          className="pointer-events-none absolute z-10 flex h-6 items-center justify-center overflow-hidden border-x border-b border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+        >
+          {segment.group}
         </div>
-      )}
-      <div style={{ paddingTop: segments.length > 0 ? 24 : 0 }}>{children}</div>
+      ))}
+      {children}
     </div>
   )
 }
