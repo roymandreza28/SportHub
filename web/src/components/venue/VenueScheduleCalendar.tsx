@@ -3,6 +3,7 @@ import FullCalendar from '@fullcalendar/react'
 import resourceTimeGridPlugin from '@fullcalendar/resource-timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import { fetchVenueSchedule, type Venue } from '../../lib/venueApi'
+import { renderResourceLaneLabel } from '../../lib/resourceLaneLabel'
 
 const STATUS_COLORS: Record<string, string> = {
   pending: '#f59e0b',
@@ -28,15 +29,9 @@ export function VenueScheduleCalendar({ venue }: { venue: Venue }) {
   }))
 
   const hasFixedHours = Boolean(venue.opens_at && venue.closes_at)
-  // Past a handful of courts, flat horizontal column headers start
-  // overlapping (BRCC's 24 individually-bookable bowling lanes is the
-  // extreme case) — see the .fc-crowded rule in index.css, which only
-  // rotates the header text once there are actually enough columns for it
-  // to matter.
-  const isCrowded = resources.length > 8
 
   return (
-    <div className={`rounded border p-2 ${isCrowded ? 'fc-crowded' : ''}`}>
+    <div className="rounded border p-2">
       <FullCalendar
         schedulerLicenseKey="CC-Attribution-NonCommercial-NoDerivatives"
         plugins={[resourceTimeGridPlugin, interactionPlugin]}
@@ -45,6 +40,7 @@ export function VenueScheduleCalendar({ venue }: { venue: Venue }) {
         events={events}
         height="auto"
         headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
+        resourceLabelContent={renderResourceLaneLabel}
         {...(hasFixedHours
           ? {
               businessHours: { daysOfWeek: [0, 1, 2, 3, 4, 5, 6], startTime: venue.opens_at!, endTime: venue.closes_at! },

@@ -5,6 +5,7 @@ import resourceTimeGridPlugin from '@fullcalendar/resource-timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import type { DateSelectArg } from '@fullcalendar/core'
 import { fetchVenueAvailability, calculateVenueRent, formatPeso, type Venue } from '../../lib/venueApi'
+import { renderResourceLaneLabel } from '../../lib/resourceLaneLabel'
 import { createVenueRegistration, type CreatedVenueRegistration } from '../../lib/playerApi'
 import { useChatUI } from '../../lib/ChatUIContext'
 import { buttonGhost, buttonPrimary, input } from '../../lib/formStyles'
@@ -91,10 +92,6 @@ export function VenueRegistrationForm({ venue }: { venue: Venue }) {
   }))
 
   const hasFixedHours = Boolean(venue.opens_at && venue.closes_at)
-  // Past a handful of courts, flat horizontal column headers start
-  // overlapping (BRCC's 24 individually-bookable bowling lanes is the
-  // extreme case) — see the .fc-crowded rule in index.css.
-  const isCrowded = resources.length > 8
 
   return (
     <div className="flex flex-col gap-3">
@@ -106,7 +103,7 @@ export function VenueRegistrationForm({ venue }: { venue: Venue }) {
         </p>
       </div>
 
-      <div className={`rounded-lg border border-slate-200 ${isCrowded ? 'fc-crowded' : 'overflow-hidden'}`}>
+      <div className="overflow-hidden rounded-lg border border-slate-200">
         <FullCalendar
           schedulerLicenseKey="CC-Attribution-NonCommercial-NoDerivatives"
           plugins={[resourceTimeGridPlugin, interactionPlugin]}
@@ -117,6 +114,7 @@ export function VenueRegistrationForm({ venue }: { venue: Venue }) {
           select={handleSelect}
           height="auto"
           headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
+          resourceLabelContent={renderResourceLaneLabel}
           {...(hasFixedHours
             ? {
                 businessHours: { daysOfWeek: [0, 1, 2, 3, 4, 5, 6], startTime: venue.opens_at!, endTime: venue.closes_at! },
