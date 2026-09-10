@@ -64,6 +64,13 @@ class ProfileController extends Controller
                 'avatar_url' => $user->avatar_url,
                 'cover_url' => $user->cover_url,
                 'friends_count' => $user->friends()->count(),
+                // A coach's evaluation (EvaluationController::store()) updates
+                // this same skill_levels row per sport, so surfacing it here
+                // is how the profile actually shows a coach's evaluation —
+                // GET /api/evaluations is a coach-only endpoint (requires the
+                // 'evaluate player' permission), so it can't be reused for a
+                // profile any player/coach might be viewing.
+                'skill_levels' => $user->playerProfile?->skillLevels()->with('sport', 'coach:id,name')->get() ?? [],
             ],
             'friendship_status' => $status,
             'friendship_id' => $friendshipId,

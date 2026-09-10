@@ -14,6 +14,7 @@ import { PostGrid } from '../components/social/PostGrid'
 import { PostComposer } from '../components/social/PostComposer'
 import { ProfileHeaderCard } from '../components/social/ProfileHeaderCard'
 import { PlayerStatsPentagon } from '../components/social/PlayerStatsPentagon'
+import { SkillLevelBadge } from '../components/player/SkillLevelBadge'
 import { buttonDanger, buttonPrimary, buttonSecondary } from '../lib/formStyles'
 
 export function ProfilePage() {
@@ -169,6 +170,19 @@ export function ProfilePage() {
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Primary sport</span>
                 {user.primary_sport}
               </p>
+            )}
+          </div>
+
+          <div className="mt-6 rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
+            <h2 className="text-base font-bold text-slate-900">Skill Levels</h2>
+            {user.skill_levels.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-400">No coach evaluations yet.</p>
+            ) : (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {user.skill_levels.map((sl) => (
+                  <SkillLevelBadge key={sl.id} skillLevel={sl} />
+                ))}
+              </div>
             )}
           </div>
 

@@ -1,5 +1,6 @@
 import { api } from './api'
 import type { Role } from './AuthContext'
+import type { SkillLevel } from './playerApi'
 
 export type FriendshipStatus = 'self' | 'none' | 'pending_sent' | 'pending_received' | 'friends'
 
@@ -28,6 +29,9 @@ export type ProfileResponse = {
     avatar_url: string | null
     cover_url: string | null
     friends_count: number
+    // A coach's evaluation surfaces here as the skill level it updated —
+    // see ProfileController::show()'s own doc comment.
+    skill_levels: SkillLevel[]
   }
   friendship_status: FriendshipStatus
   friendship_id: number | null

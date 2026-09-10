@@ -56,6 +56,46 @@ it('reports friends_count and primary_sport on the profile response', function (
     $response->assertJsonPath('user.bio', 'Hoops enjoyer');
 });
 
+it('shows a coach\'s evaluation as a skill level on the player\'s profile, visible to any viewer', function () {
+    $coach = userWithRole('coach');
+    $player = userWithRole('player');
+    $viewer = userWithRole('player');
+    $sport = \App\Models\Sport::create(['name' => 'Badminton']);
+
+    $this->actingAs($coach)->postJson('/api/evaluations', [
+        'player_id' => $player->id,
+        'sport_id' => $sport->id,
+        'level' => 'developing_athlete',
+        'score' => 62,
+        'notes' => 'Good footwork',
+    ])->assertCreated();
+
+    // The evaluation endpoint itself is coach-only (requires 'evaluate
+    // player'), so this is specifically checking that the profile — which
+    // any player/coach can view — surfaces the resulting skill level
+    // without needing that permission.
+    $response = $this->actingAs($viewer)->getJson("/api/social/users/{$player->id}")->assertOk();
+
+    $response->assertJsonCount(1, 'user.skill_levels');
+    $response->assertJsonPath('user.skill_levels.0.level', 'developing_athlete');
+    $response->assertJsonPath('user.skill_levels.0.sport.name', 'Badminton');
+    $response->assertJsonPath('user.skill_levels.0.coach.id', $coach->id);
+
+    // The player's own view of their profile shows the same thing.
+    $this->actingAs($player)->getJson("/api/social/users/{$player->id}")
+        ->assertOk()
+        ->assertJsonCount(1, 'user.skill_levels');
+});
+
+it('reports an empty skill_levels array for a player with no coach evaluations yet', function () {
+    $me = userWithRole('player');
+    $stranger = userWithRole('player');
+
+    $this->actingAs($me)->getJson("/api/social/users/{$stranger->id}")
+        ->assertOk()
+        ->assertJsonPath('user.skill_levels', []);
+});
+
 it('404s when viewing a profile for a role outside the social layer', function () {
     $me = userWithRole('player');
     $organizer = userWithRole('organizer');
