@@ -74,7 +74,14 @@ export function PlayerPage() {
   } & UpcomingEventData
 
   const upcomingBookingEvents: UpcomingEvent[] = (bookings ?? [])
-    .filter((b) => b.status === 'approved' && new Date(b.ends_at).getTime() > now)
+    // A booking (a direct court request, or a matchmaking auto-reservation)
+    // is created 'pending' and often stays that way right up until the
+    // event — a facilitator may not approve it until shortly before, if at
+    // all — so requiring 'approved' here was hiding a booking from the
+    // moment it was made. 'pending' and 'approved' both still mean "this
+    // slot is held for you and worth showing"; only 'rejected'/'cancelled'
+    // genuinely aren't upcoming anymore.
+    .filter((b) => (b.status === 'approved' || b.status === 'pending') && new Date(b.ends_at).getTime() > now)
     .map((b) => ({
       key: `booking-${b.id}`,
       date: b.starts_at,
