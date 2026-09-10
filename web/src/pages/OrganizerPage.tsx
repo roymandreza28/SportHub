@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   fetchOrganizerTournaments,
@@ -38,6 +37,7 @@ import { LivestreamCreateForm } from '../components/organizer/LivestreamCreateFo
 import { LivestreamBroadcast } from '../components/organizer/LivestreamBroadcast'
 import { LivestreamViewer } from '../components/organizer/LivestreamViewer'
 import { LivestreamChat } from '../components/organizer/LivestreamChat'
+import { useTabParam } from '../lib/useTabParam'
 
 function TournamentPickerDropdown({
   label,
@@ -109,18 +109,7 @@ export function OrganizerPage() {
   const queryClient = useQueryClient()
   const { data: tournaments } = useQuery({ queryKey: ['organizer', 'tournaments'], queryFn: fetchOrganizerTournaments })
   const { data: livestreams } = useQuery({ queryKey: ['livestreams'], queryFn: fetchLivestreams })
-  const [searchParams] = useSearchParams()
-  const [active, setActive] = useState(searchParams.get('tab') ?? NAV_ITEMS[0].id)
-
-  // Lets a notification (e.g. "you've been assigned to X") deep-link into a
-  // tab even when the user is already mounted on /organizer — a plain
-  // useState initializer only runs once, so without this, clicking the
-  // notification while already on this route silently did nothing (same fix
-  // as PlayerPage/CoachPage's own ?tab= effect).
-  useEffect(() => {
-    const tab = searchParams.get('tab')
-    if (tab) setActive(tab)
-  }, [searchParams])
+  const [active, setActive] = useTabParam(NAV_ITEMS[0].id)
 
   // A new tournament starts as a draft so an organizer can finish setting
   // it up before coaches see it — but coaches only ever fetch

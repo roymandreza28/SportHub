@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { useState } from 'react'
+import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import type { Venue } from '../lib/venueApi'
 import { fetchMyTournamentRegistrations, fetchMyUpcomingStatSheetMatches } from '../lib/coachApi'
@@ -24,6 +24,7 @@ import { useAuth } from '../lib/AuthContext'
 import { useChatUI } from '../lib/ChatUIContext'
 import { useProfileMediaMutations } from '../lib/useProfileMedia'
 import { extractErrorMessage } from '../lib/errors'
+import { useTabParam } from '../lib/useTabParam'
 import { buttonPrimary, buttonSecondary, chip } from '../lib/formStyles'
 
 // 'profile' is deliberately not in this list — the profile tab is still
@@ -41,16 +42,7 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 export function CoachPage() {
-  const [searchParams] = useSearchParams()
-  const [active, setActive] = useState(searchParams.get('tab') ?? NAV_ITEMS[0].id)
-  // Re-applies ?tab= whenever it changes, not just on first mount — a
-  // notification click (e.g. a team invite → /coach?tab=matchmaking)
-  // navigates to this same route while it's already mounted, which the
-  // useState initializer above alone would never see.
-  useEffect(() => {
-    const tab = searchParams.get('tab')
-    if (tab) setActive(tab)
-  }, [searchParams])
+  const [active, setActive] = useTabParam(NAV_ITEMS[0].id)
   const { openChatWindow } = useChatUI()
   const { user } = useAuth()
   const [showRegisterModal, setShowRegisterModal] = useState(false)

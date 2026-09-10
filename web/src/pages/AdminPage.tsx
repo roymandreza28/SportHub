@@ -1,7 +1,7 @@
-import { useState } from 'react'
 import { DashboardShell, Section, StatCard, StatCardGrid, type NavItem } from '../components/layout/DashboardShell'
 import { IconFileText, IconHelpCircle, IconHome, IconShieldCheck, IconUserCog, IconUsers } from '../components/layout/icons'
 import { useAdminMetrics } from '../components/admin/useAdminMetrics'
+import { useTabParam } from '../lib/useTabParam'
 import { FacilitatorCreateForm } from '../components/admin/FacilitatorCreateForm'
 import { OrganizerCreateForm } from '../components/admin/OrganizerCreateForm'
 import { UserManagementTable } from '../components/admin/UserManagementTable'
@@ -21,7 +21,7 @@ const NAV_ITEMS: NavItem[] = [
 
 export function AdminPage() {
   const { data: metrics, isLoading } = useAdminMetrics()
-  const [active, setActive] = useState(NAV_ITEMS[0].id)
+  const [active, setActive] = useTabParam(NAV_ITEMS[0].id)
 
   return (
     <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={setActive}>

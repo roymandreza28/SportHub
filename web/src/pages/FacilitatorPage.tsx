@@ -22,6 +22,7 @@ import { VenueBookingsList } from '../components/venue/VenueBookingsList'
 import { ManualBookingForm } from '../components/venue/ManualBookingForm'
 import { NewsEditor } from '../components/organizer/NewsEditor'
 import { NewsFeed } from '../components/organizer/NewsFeed'
+import { useTabParam } from '../lib/useTabParam'
 import { buttonGhost, buttonPrimary, select } from '../lib/formStyles'
 
 const NAV_ITEMS: NavItem[] = [
@@ -39,7 +40,7 @@ export function FacilitatorPage() {
   const queryClient = useQueryClient()
   const { data: venues, isLoading } = useQuery({ queryKey: ['facilitator', 'venues'], queryFn: fetchMyVenues })
   const [selectedId, setSelectedId] = useState<number | null>(null)
-  const [active, setActive] = useState(NAV_ITEMS[0].id)
+  const [active, setActive] = useTabParam(NAV_ITEMS[0].id)
 
   // Booking/pending counts on this query only change from actions taken
   // elsewhere (a player booking a slot, another session approving one) —
