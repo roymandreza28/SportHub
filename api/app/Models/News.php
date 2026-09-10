@@ -34,9 +34,15 @@ class News extends Model
         return $this->belongsTo(GameMatch::class, 'match_id');
     }
 
+    // Newest first — Newsfeed.tsx/PublicNewsModal.tsx pick "the live one, else
+    // the most recent ended-with-a-recording one" via Array.find(), which
+    // grabs whichever comes first in this relation's own order. Without this
+    // ordering a stale duplicate row (see LivestreamController::store()'s own
+    // comment on why there should only ever be one per tournament going
+    // forward) would win by insertion order instead of recency.
     public function livestreams(): HasMany
     {
-        return $this->hasMany(Livestream::class);
+        return $this->hasMany(Livestream::class)->latest();
     }
 
     public function comments(): HasMany

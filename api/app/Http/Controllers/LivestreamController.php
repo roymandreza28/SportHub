@@ -55,12 +55,42 @@ class LivestreamController extends Controller
             abort_unless(News::findOrFail($data['news_id'])->author_id === $user->id, 403);
         }
 
-        $livestream = Livestream::create([
-            ...$data,
-            'broadcaster_id' => $broadcasterId,
-            'chat_channel_name' => 'livestream.'.Str::random(12),
-            'status' => 'scheduled',
-        ]);
+        // A tournament is "one game" — going live again for it (after ending
+        // the first broadcast, a dropped-connection retry, a second half)
+        // reuses that SAME row instead of leaving the old one's recording
+        // sitting next to a new row. News::livestreams() has no way to know
+        // which of several rows for the same tournament is the "real" one to
+        // show a viewer, so there must only ever be one per tournament — and
+        // reusing the row is also what makes uploadRecording()'s existing
+        // replace-in-place behavior actually override the old footage
+        // instead of just adding a second, orphaned recording. A livestream
+        // with no tournament has no natural "same game" key, so it still
+        // gets a fresh row every time.
+        if (! empty($data['tournament_id'])) {
+            $existing = Livestream::where('tournament_id', $data['tournament_id'])->first();
+
+            $livestream = Livestream::updateOrCreate(
+                ['tournament_id' => $data['tournament_id']],
+                [
+                    // Keeps whichever News post this game was already
+                    // published under (if any) linked to the new broadcast,
+                    // rather than wiping the connection a prior publish()
+                    // made.
+                    'news_id' => $data['news_id'] ?? $existing?->news_id,
+                    'title' => $data['title'],
+                    'broadcaster_id' => $broadcasterId,
+                    'chat_channel_name' => 'livestream.'.Str::random(12),
+                    'status' => 'scheduled',
+                ]
+            );
+        } else {
+            $livestream = Livestream::create([
+                ...$data,
+                'broadcaster_id' => $broadcasterId,
+                'chat_channel_name' => 'livestream.'.Str::random(12),
+                'status' => 'scheduled',
+            ]);
+        }
 
         return response()->json($livestream->load(['broadcaster:id,name', 'tournament:id,organizer_id']), 201);
     }
