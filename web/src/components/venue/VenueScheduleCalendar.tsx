@@ -3,7 +3,7 @@ import FullCalendar from '@fullcalendar/react'
 import resourceTimeGridPlugin from '@fullcalendar/resource-timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import { fetchVenueSchedule, type Venue } from '../../lib/venueApi'
-import { renderResourceLaneLabel, laneColumnClassNames } from '../../lib/resourceLaneLabel'
+import { renderResourceLaneLabel, laneColumnClassNames, LaneGroupBanner } from '../../lib/resourceLaneLabel'
 
 const STATUS_COLORS: Record<string, string> = {
   pending: '#f59e0b',
@@ -32,25 +32,27 @@ export function VenueScheduleCalendar({ venue }: { venue: Venue }) {
 
   return (
     <div className="rounded border p-2">
-      <FullCalendar
-        schedulerLicenseKey="CC-Attribution-NonCommercial-NoDerivatives"
-        plugins={[resourceTimeGridPlugin, interactionPlugin]}
-        initialView="resourceTimeGridDay"
-        resources={resources}
-        events={events}
-        height="auto"
-        headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
-        resourceLabelContent={renderResourceLaneLabel}
-        resourceLabelClassNames={laneColumnClassNames}
-        resourceLaneClassNames={laneColumnClassNames}
-        {...(hasFixedHours
-          ? {
-              businessHours: { daysOfWeek: [0, 1, 2, 3, 4, 5, 6], startTime: venue.opens_at!, endTime: venue.closes_at! },
-              slotMinTime: venue.opens_at!,
-              slotMaxTime: venue.closes_at!,
-            }
-          : {})}
-      />
+      <LaneGroupBanner resources={resources}>
+        <FullCalendar
+          schedulerLicenseKey="CC-Attribution-NonCommercial-NoDerivatives"
+          plugins={[resourceTimeGridPlugin, interactionPlugin]}
+          initialView="resourceTimeGridDay"
+          resources={resources}
+          events={events}
+          height="auto"
+          headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
+          resourceLabelContent={renderResourceLaneLabel}
+          resourceLabelClassNames={laneColumnClassNames}
+          resourceLaneClassNames={laneColumnClassNames}
+          {...(hasFixedHours
+            ? {
+                businessHours: { daysOfWeek: [0, 1, 2, 3, 4, 5, 6], startTime: venue.opens_at!, endTime: venue.closes_at! },
+                slotMinTime: venue.opens_at!,
+                slotMaxTime: venue.closes_at!,
+              }
+            : {})}
+        />
+      </LaneGroupBanner>
     </div>
   )
 }
