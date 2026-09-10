@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createVenue, fetchSports, type Sport } from '../../lib/venueApi'
+import { createVenue, fetchSports, uploadVenueMedia, type Sport } from '../../lib/venueApi'
 import { LocationPicker } from './LocationPicker'
 import { buttonPrimary, buttonSecondary, chip, fieldGroup, input, label, textarea } from '../../lib/formStyles'
 
@@ -53,6 +53,8 @@ export function VenueForm({ onCreated }: { onCreated?: () => void }) {
   const [equipment, setEquipment] = useState<EquipmentDraft[]>([])
   const [equipmentName, setEquipmentName] = useState('')
   const [equipmentQty, setEquipmentQty] = useState(1)
+  const [photos, setPhotos] = useState<File[]>([])
+  const [photoError, setPhotoError] = useState<string | null>(null)
 
   const [courts, setCourts] = useState<CourtDraft[]>([])
 
@@ -69,7 +71,21 @@ export function VenueForm({ onCreated }: { onCreated?: () => void }) {
 
   const mutation = useMutation({
     mutationFn: createVenue,
-    onSuccess: () => {
+    onSuccess: async (venue) => {
+      // A separate follow-up upload rather than bundled into the JSON
+      // create payload above — see uploadVenueMedia's own doc comment.
+      // Doesn't auto-close the modal on failure, so the message below is
+      // actually visible rather than unmounting with it.
+      if (photos.length > 0) {
+        try {
+          await uploadVenueMedia(venue.id, photos)
+        } catch {
+          setPhotoError('Venue created, but the photos failed to upload — add them from Edit venue.')
+          queryClient.invalidateQueries({ queryKey: ['facilitator', 'venues'] })
+          return
+        }
+      }
+
       setName('')
       setAddress('')
       setDescription('')
@@ -80,6 +96,7 @@ export function VenueForm({ onCreated }: { onCreated?: () => void }) {
       setPricePerHour('')
       setEquipment([])
       setCourts([])
+      setPhotos([])
       queryClient.invalidateQueries({ queryKey: ['facilitator', 'venues'] })
       onCreated?.()
     },
@@ -328,6 +345,40 @@ export function VenueForm({ onCreated }: { onCreated?: () => void }) {
             + Add
           </button>
         </div>
+      </div>
+
+      <div className={fieldGroup}>
+        <label className={label} htmlFor="venue-photos">Photos (optional)</label>
+        <p className="text-xs text-slate-500">Show players what the venue actually looks like.</p>
+        {photos.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {photos.map((file, i) => (
+              <div key={i} className="relative h-20 w-20 overflow-hidden rounded-lg border border-slate-200">
+                <img src={URL.createObjectURL(file)} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setPhotos((list) => list.filter((_, idx) => idx !== i))}
+                  className="absolute right-0.5 top-0.5 rounded-full bg-slate-900/70 px-1.5 text-xs font-bold text-pure-white"
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <input
+          id="venue-photos"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          onChange={(e) => {
+            setPhotoError(null)
+            setPhotos((list) => [...list, ...Array.from(e.target.files ?? [])])
+            e.target.value = ''
+          }}
+          className={input}
+        />
+        {photoError && <p className="text-xs text-red-600">{photoError}</p>}
       </div>
 
       <div className={fieldGroup}>

@@ -14,7 +14,7 @@ class VenueController extends Controller
     {
         return Venue::query()
             ->where('status', 'active')
-            ->with(['courts.sports', 'equipment'])
+            ->with(['courts.sports', 'equipment', 'media'])
             ->when($request->string('sport_id')->toString(), fn ($q, $sportId) => $q
                 ->whereHas('courts.sports', fn ($sq) => $sq->where('sports.id', $sportId)))
             ->when($request->string('search')->toString(), fn ($q, $search) => $q
@@ -29,7 +29,7 @@ class VenueController extends Controller
         // every venue they own regardless of status, so an inactive venue
         // (hidden from players) is still visible here to be edited/reactivated.
         return $request->user()->venues()
-            ->with(['courts.sports', 'equipment'])
+            ->with(['courts.sports', 'equipment', 'media'])
             ->withCount([
                 'venueRegistrations',
                 'venueRegistrations as pending_bookings_count' => fn ($q) => $q->where('status', 'pending'),
@@ -40,7 +40,7 @@ class VenueController extends Controller
 
     public function show(Venue $venue)
     {
-        return $venue->load(['courts.sports', 'equipment', 'facilitator:id,name,email']);
+        return $venue->load(['courts.sports', 'equipment', 'media', 'facilitator:id,name,email']);
     }
 
     public function store(Request $request)
@@ -102,7 +102,7 @@ class VenueController extends Controller
 
         Broadcasting::safely(fn () => SystemMetricUpdated::dispatch('total_venues', Venue::count()));
 
-        return response()->json($venue->fresh(['courts.sports', 'equipment']), 201);
+        return response()->json($venue->fresh(['courts.sports', 'equipment', 'media']), 201);
     }
 
     public function update(Request $request, Venue $venue)
@@ -124,7 +124,7 @@ class VenueController extends Controller
 
         $venue->update($data);
 
-        return $venue;
+        return $venue->fresh(['courts.sports', 'equipment', 'media']);
     }
 
     public function destroy(Request $request, Venue $venue)

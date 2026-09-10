@@ -29,6 +29,13 @@ export type Equipment = {
   quantity_available: number
 }
 
+export type VenueMediaItem = {
+  id: number
+  venue_id: number
+  position: number
+  url: string
+}
+
 export type Venue = {
   id: number
   facilitator_id: number
@@ -44,6 +51,7 @@ export type Venue = {
   status: 'active' | 'inactive'
   courts: Court[]
   equipment: Equipment[]
+  media: VenueMediaItem[]
   facilitator?: { id: number; name: string; email: string }
   // Only present on the facilitator's own /venues/mine listing.
   venue_registrations_count?: number
@@ -158,6 +166,21 @@ export async function updateVenue(
 
 export async function deleteVenue(id: number) {
   await api.delete(`/api/venues/${id}`)
+}
+
+// A separate immediate upload rather than bundled into createVenue/
+// updateVenue's plain-JSON payload (same reason profile avatar/cover
+// uploads are their own endpoint) — used both right after creating a new
+// venue and later from the edit modal.
+export async function uploadVenueMedia(venueId: number, files: File[]) {
+  const form = new FormData()
+  files.forEach((file) => form.append('media[]', file))
+  const { data } = await api.post<VenueMediaItem[]>(`/api/venues/${venueId}/media`, form)
+  return data
+}
+
+export async function deleteVenueMedia(mediaId: number) {
+  await api.delete(`/api/venue-media/${mediaId}`)
 }
 
 export async function createCourt(

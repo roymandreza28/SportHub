@@ -41,6 +41,11 @@ class Venue extends Model
         return $this->hasMany(Equipment::class);
     }
 
+    public function media(): HasMany
+    {
+        return $this->hasMany(VenueMedia::class)->orderBy('position');
+    }
+
     public function venueRegistrations(): HasMany
     {
         return $this->hasMany(VenueRegistration::class);

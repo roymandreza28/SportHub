@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { updateVenue, type Venue } from '../../lib/venueApi'
 import { LocationPicker } from './LocationPicker'
 import { CourtEquipmentManager } from './CourtEquipmentManager'
+import { VenuePhotoManager } from './VenuePhotoManager'
 import { buttonGhost, buttonPrimary, buttonSecondary, fieldGroup, input, label, textarea } from '../../lib/formStyles'
 
 export function VenueEditModal({ venue, onClose }: { venue: Venue; onClose: () => void }) {
@@ -146,6 +147,10 @@ export function VenueEditModal({ venue, onClose }: { venue: Venue; onClose: () =
               </button>
             </div>
           </form>
+
+          <div className="mt-6 border-t border-slate-100 pt-6">
+            <VenuePhotoManager venue={venue} />
+          </div>
 
           <div className="mt-6 border-t border-slate-100 pt-6">
             <CourtEquipmentManager venue={venue} />

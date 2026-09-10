@@ -30,6 +30,7 @@ use App\Http\Controllers\TeamController;
 use App\Http\Controllers\TournamentController;
 use App\Http\Controllers\TournamentRegistrationController;
 use App\Http\Controllers\VenueController;
+use App\Http\Controllers\VenueMediaController;
 use App\Http\Controllers\VenueRegistrationController;
 use App\Models\Sport;
 use App\Models\User;
@@ -191,6 +192,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/venues/{venue}/equipment', [EquipmentController::class, 'store']);
         Route::patch('/equipment/{equipment}', [EquipmentController::class, 'update']);
         Route::delete('/equipment/{equipment}', [EquipmentController::class, 'destroy']);
+
+        Route::post('/venues/{venue}/media', [VenueMediaController::class, 'store']);
+        Route::delete('/venue-media/{venueMedia}', [VenueMediaController::class, 'destroy']);
 
         Route::patch('/venue-registrations/{venueRegistration}', [VenueRegistrationController::class, 'update']);
     });
