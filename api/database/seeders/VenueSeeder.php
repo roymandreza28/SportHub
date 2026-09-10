@@ -42,6 +42,7 @@ class VenueSeeder extends Seeder
         Venue::withTrashed()->forceDelete();
 
         $this->seedBrcc($facilitator, $sports);
+        $this->seedBrccBowlingCenter($facilitator, $sports);
         $this->seedJbtc($facilitator, $sports);
         $this->seedDarangan($facilitator);
         $this->seedCrossXCourt($facilitator);
@@ -58,8 +59,8 @@ class VenueSeeder extends Seeder
             'address' => 'Manila East Road, Brgy. Batingan, Binangonan, Rizal',
             'latitude' => 14.4763,
             'longitude' => 121.2071,
-            'description' => "Binangonan's flagship LGU/commercial multi-sport complex. Basketball, volleyball, and badminton share the indoor gymnasium floor; volleyball and tennis share an outdoor court. A separate Bowling Center wing has 12 dedicated duckpin lanes and 8 dedicated ten-pin lanes (not shared with any other sport), plus recreational table tennis and billiards tables. Basketball, volleyball, and tennis run ₱100/hour (basketball and volleyball add a ₱200 advance-booking charge; tennis does not); badminton has no published hourly rate, only a ₱1,500-for-3-courts/3-hours event package; bowling is charged strictly per game, per person (₱50/game/person, not hourly) — full payment due in cash at the Bowling Center cashier before play. The Bowling Center keeps its own hours, 9:00 AM–11:00 PM daily, separate from the rest of the complex's 6:00 AM–12:00 MN. Bowling is walk-in if a lane is free; a group event must be reserved at the cashier rather than through this app, and a reservation is non-refundable but can be rescheduled subject to lane availability. Cash only throughout. Contact: Gymnasium (02) 8650-1962, Bowling Center (02) 8650-1963, Admin (02) 8571-7565 / brcc@binangonan.gov.ph. Booking: walk-in, Facebook, or QR code.",
-            'amenities' => ['parking', 'restrooms', 'bowling_lanes', 'billiards'],
+            'description' => "Binangonan's flagship LGU/commercial multi-sport complex. Basketball, volleyball, and badminton share the indoor gymnasium floor; volleyball and tennis share an outdoor court, plus a recreational table tennis corner. Basketball, volleyball, and tennis run ₱100/hour (basketball and volleyball add a ₱200 advance-booking charge; tennis does not); badminton has no published hourly rate, only a ₱1,500-for-3-courts/3-hours event package. Cash only throughout. Contact: Gymnasium (02) 8650-1962, Admin (02) 8571-7565 / brcc@binangonan.gov.ph. Booking: walk-in, Facebook, or QR code. The complex's separate Bowling Center wing (12 duckpin + 8 ten-pin lanes) keeps its own hours and rates and is booked as its own venue — see \"Binangonan Recreational and Conference Center Bowling Center\".",
+            'amenities' => ['parking', 'restrooms'],
             'opens_at' => '06:00',
             'closes_at' => '23:59',
             'status' => 'active',
@@ -86,16 +87,34 @@ class VenueSeeder extends Seeder
         // and price bookings on this specific court that way instead of via
         // the venue's flat price_per_hour.
         $this->makeCourt($venue, 'Badminton Courts (Gymnasium)', 24, [$sports['Badminton']], blockHours: 3, blockPrice: 1500.00);
-        // The Bowling Center wing's own dedicated lanes — genuinely separate
-        // from every other court here, both physically (its own wing, own
-        // 9:00 AM–11:00 PM hours, see the venue description above) and
-        // commercially (₱50/game/person, cash before play, group bookings
-        // taken at its own cashier rather than online). That per-game/
-        // per-person shape doesn't fit either price_per_hour (hourly) or
-        // block_hours/block_price (fixed multi-hour package, used above for
-        // badminton) — there's no time-slot rate to enforce here at all, so
-        // deliberately left unset rather than forced into either mechanism.
-        //
+    }
+
+    // The Bowling Center is physically a wing of BRCC but run as its own
+    // venue here: its own hours (9:00 AM–11:00 PM daily, vs. the rest of the
+    // complex's 6:00 AM–12:00 MN) and its own commercial model
+    // (₱50/game/person, cash before play, group bookings taken at its own
+    // cashier rather than online) — that per-game/per-person shape doesn't
+    // fit either price_per_hour (hourly) or block_hours/block_price (fixed
+    // multi-hour package, used for BRCC's own badminton courts), so
+    // price_per_hour is deliberately left unset rather than forced into
+    // either mechanism.
+    /** @param  Collection<string, int>  $sports */
+    private function seedBrccBowlingCenter(User $facilitator, Collection $sports): void
+    {
+        $venue = Venue::create([
+            'facilitator_id' => $facilitator->id,
+            'name' => 'Binangonan Recreational and Conference Center Bowling Center',
+            'address' => 'Manila East Road, Brgy. Batingan, Binangonan, Rizal',
+            'latitude' => 14.4763,
+            'longitude' => 121.2071,
+            'description' => 'The Bowling Center wing of BRCC: 12 dedicated duckpin lanes and 8 dedicated ten-pin lanes, not shared with any other sport. ₱50/game/person, cash only, due at the Bowling Center cashier before play — bowling is walk-in if a lane is free; a group event must be reserved at the cashier rather than through this app, and a reservation is non-refundable but can be rescheduled subject to lane availability. Open 9:00 AM–11:00 PM daily. Contact: (02) 8650-1963.',
+            'amenities' => ['parking', 'restrooms', 'bowling_lanes'],
+            'opens_at' => '09:00',
+            'closes_at' => '23:00',
+            'status' => 'active',
+            'price_per_hour' => null,
+        ]);
+
         // One Court row PER LANE, not one aggregate row per lane-type — an
         // earlier version of this had a single "Duckpin Lanes" row
         // (capacity 12) and a single "Ten-Pin Lanes" row (capacity 8), which

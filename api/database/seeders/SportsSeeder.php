@@ -27,9 +27,9 @@ class SportsSeeder extends Seeder
         // (players_per_side 1) is never a valid sport_format_id — see
         // TournamentController::validateSportFormat() — so it's the implicit
         // individual mode; "Handicap Doubles" and "Team Baker" are real team
-        // formats an organizer can pick. BRCC's own Bowling Center (12
-        // duckpin + 8 ten-pin lanes, per VenueSeeder) is the real facility
-        // this is modeled on.
+        // formats an organizer can pick. Binangonan Recreational and
+        // Conference Center Bowling Center (12 duckpin + 8 ten-pin lanes,
+        // per VenueSeeder) is the real facility this is modeled on.
         'Bowling' => [
             ['name' => 'Scratch Singles', 'players_per_side' => 1],
             ['name' => 'Handicap Doubles', 'players_per_side' => 2],
