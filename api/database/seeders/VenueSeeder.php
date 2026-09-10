@@ -95,8 +95,21 @@ class VenueSeeder extends Seeder
         // block_hours/block_price (fixed multi-hour package, used above for
         // badminton) — there's no time-slot rate to enforce here at all, so
         // deliberately left unset rather than forced into either mechanism.
-        $this->makeCourt($venue, 'Duckpin Lanes (Bowling Center)', 12, [$sports['Bowling']]);
-        $this->makeCourt($venue, 'Ten-Pin Lanes (Bowling Center)', 8, [$sports['Bowling']]);
+        //
+        // One Court row PER LANE, not one aggregate row per lane-type — an
+        // earlier version of this had a single "Duckpin Lanes" row
+        // (capacity 12) and a single "Ten-Pin Lanes" row (capacity 8), which
+        // meant VenueRegistration::hasOverlap() treated all 12 duckpin lanes
+        // as ONE shared bookable resource: booking any duckpin lane blocked
+        // every other duckpin lane for that slot, even with 11 still
+        // physically free. Capacity here is a standard per-lane headcount
+        // (6), not the old lane-count-as-capacity placeholder.
+        foreach (range(1, 12) as $lane) {
+            $this->makeCourt($venue, "Duckpin Lane {$lane}", 6, [$sports['Bowling']]);
+        }
+        foreach (range(1, 8) as $lane) {
+            $this->makeCourt($venue, "Ten-Pin Lane {$lane}", 6, [$sports['Bowling']]);
+        }
     }
 
     /** @param  Collection<string, int>  $sports */
