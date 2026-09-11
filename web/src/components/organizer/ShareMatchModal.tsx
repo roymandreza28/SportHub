@@ -38,6 +38,16 @@ function prefillFor(match: BracketMatch, tournamentName: string, round: number) 
     }
   }
 
+  if (match.status === 'scheduled') {
+    const whenLine = match.scheduled_at
+      ? ` on ${new Date(match.scheduled_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`
+      : ''
+    return {
+      title: `Upcoming: ${aName} vs ${bName}`,
+      body: `${aName} takes on ${bName} in ${roundLabel} of ${tournamentName}${whenLine}${venueLine}. Don't miss it!`,
+    }
+  }
+
   return {
     title: `🔴 LIVE: ${aName} vs ${bName}`,
     body: `${aName} and ${bName} are going head-to-head right now in ${roundLabel} of ${tournamentName}${venueLine}. Current score: ${match.score_a}–${match.score_b}.`,
@@ -126,10 +136,11 @@ export function ShareMatchModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="mb-1 text-sm font-semibold text-slate-800">
-          {liveMatch.status === 'completed' ? '🏁' : '🔴'} Share {aName} vs {bName}
+          {liveMatch.status === 'completed' ? '🏁' : liveMatch.status === 'scheduled' ? '📅' : '🔴'} Share {aName} vs{' '}
+          {bName}
         </h3>
         <p className="mb-4 text-xs text-slate-500">
-          Post this {liveMatch.status === 'completed' ? 'result' : 'game, live'} to the newsfeed and news page.
+          Post this {liveMatch.status === 'completed' ? 'result' : liveMatch.status === 'scheduled' ? 'upcoming game' : 'game, live'} to the newsfeed and news page.
         </p>
 
         <div className="flex flex-col gap-4">

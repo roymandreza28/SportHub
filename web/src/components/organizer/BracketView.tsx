@@ -43,9 +43,12 @@ function MatchCard({
   const trackLabel = match.bracket_type ? TRACK_LABEL[match.bracket_type] : null
   const groupLabel = match.group_number != null ? `Group ${match.group_number + 1}` : null
   const canSchedule = !!onSchedule && !isOpen && match.status !== 'completed'
-  // Nothing to share until the game is actually underway or decided — a
-  // still-open "awaiting players" slot has no score/result worth posting.
-  const canShare = !!onShare && (match.status === 'live' || match.status === 'completed')
+  // Nothing to share until both participants are actually known — a
+  // still-open "awaiting players" slot has no matchup worth posting. Once
+  // they are, a scheduled-but-not-yet-live match is just as shareable as a
+  // live or completed one (ShareMatchModal frames it as an upcoming-game
+  // announcement rather than a score/result).
+  const canShare = !!onShare && !isOpen
 
   return (
     <div ref={cardRef}>
