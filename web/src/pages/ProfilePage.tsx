@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchPlayerStatSummary, fetchProfile } from '../lib/socialApi'
@@ -40,6 +41,12 @@ export function ProfilePage() {
     queryKey: ['social', 'stat-summary', id],
     queryFn: () => fetchPlayerStatSummary(id),
   })
+
+  // Both cards default collapsed to a compact summary — the full charts and
+  // match-by-match history are the "details" a viewer opts into, not the
+  // first thing they see landing on a profile.
+  const [skillsExpanded, setSkillsExpanded] = useState(false)
+  const [statsExpanded, setStatsExpanded] = useState(false)
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ['social', 'profile', id] })
@@ -175,10 +182,29 @@ export function ProfilePage() {
           </div>
 
           <div className="mt-6 rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Skill Levels</h2>
-            {user.skill_levels.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-400">No coach evaluations yet.</p>
-            ) : (
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-bold text-slate-900">Skill Levels</h2>
+              {user.skill_levels.length > 0 && (
+                <button
+                  onClick={() => setSkillsExpanded((v) => !v)}
+                  className="shrink-0 text-xs font-semibold text-teal-600 hover:text-teal-700"
+                >
+                  {skillsExpanded ? 'Hide details ▾' : 'Show details ▸'}
+                </button>
+              )}
+            </div>
+
+            {user.skill_levels.length === 0 && <p className="mt-3 text-sm text-slate-400">No coach evaluations yet.</p>}
+
+            {user.skill_levels.length > 0 && !skillsExpanded && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {user.skill_levels.map((sl) => (
+                  <SkillLevelBadge key={sl.id} skillLevel={sl} />
+                ))}
+              </div>
+            )}
+
+            {user.skill_levels.length > 0 && skillsExpanded && (
               <div className="mt-3 flex flex-col gap-4">
                 {user.skill_levels.map((sl) => {
                   const attributes = sl.latest_evaluation?.criteria?.attributes
@@ -203,7 +229,18 @@ export function ProfilePage() {
           </div>
 
           <div className="mt-6 rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900">Career Stats</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-bold text-slate-900">Career Stats</h2>
+              {!!statSummary?.sports.length && (
+                <button
+                  onClick={() => setStatsExpanded((v) => !v)}
+                  className="shrink-0 text-xs font-semibold text-teal-600 hover:text-teal-700"
+                >
+                  {statsExpanded ? 'Hide details ▾' : 'Show details ▸'}
+                </button>
+              )}
+            </div>
+
             {statsLoading && <p className="mt-3 text-sm text-slate-500">Loading...</p>}
             {!statsLoading && !statSummary?.sports.length && (
               <p className="mt-3 text-sm text-slate-400">
@@ -211,74 +248,84 @@ export function ProfilePage() {
               </p>
             )}
 
+            {/* The overall record stays visible even collapsed — a
+                one-line summary, not one of the "details" being hidden. */}
             {!!statSummary?.overall.matches_played && (
-              <div className="mt-3 flex flex-col items-center gap-1 border-b border-slate-100 pb-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Overall Record</p>
-                <p className="text-sm text-slate-700">
-                  {statSummary.overall.wins}W&ndash;{statSummary.overall.losses}L{' '}
-                  <span className="text-slate-400">({statSummary.overall.win_rate}% win rate)</span>
-                </p>
-                {/* Reuses PlayerStatsPentagon's same N-gon radar chart — one
-                    axis per sport actually played, showing that sport's win
-                    rate out of 100 — rather than a separate chart type. */}
-                {statSummary.overall.by_sport.length >= 3 && (
-                  <PlayerStatsPentagon
-                    sportName="Win Rate by Sport"
-                    axes={statSummary.overall.by_sport.map((s) => ({ key: String(s.sport_id), label: s.sport_name, scale_max: 100 }))}
-                    totals={Object.fromEntries(statSummary.overall.by_sport.map((s) => [String(s.sport_id), s.win_rate]))}
-                    matchesPlayed={statSummary.overall.matches_played}
-                  />
-                )}
-              </div>
+              <p className="mt-3 text-sm text-slate-700">
+                {statSummary.overall.wins}W&ndash;{statSummary.overall.losses}L{' '}
+                <span className="text-slate-400">
+                  ({statSummary.overall.win_rate}% win rate across {statSummary.overall.matches_played} match
+                  {statSummary.overall.matches_played === 1 ? '' : 'es'})
+                </span>
+              </p>
             )}
 
-            {statSummary?.sports.map((entry) => (
-              <div key={entry.sport_id} className="flex flex-col items-center">
-                <PlayerStatsPentagon
-                  sportName={entry.sport_name}
-                  axes={entry.pentagon_fields}
-                  totals={entry.totals}
-                  matchesPlayed={entry.matches_played}
-                />
-                <p className="-mt-1 text-xs text-slate-400">
-                  {entry.wins}W&ndash;{entry.losses}L ({entry.win_rate}%)
-                </p>
-              </div>
-            ))}
+            {statsExpanded && (
+              <>
+                {!!statSummary?.overall.matches_played && statSummary.overall.by_sport.length >= 3 && (
+                  <div className="mt-3 flex flex-col items-center gap-1 border-b border-slate-100 pb-2">
+                    {/* Reuses PlayerStatsPentagon's same N-gon radar chart —
+                        one axis per sport actually played, showing that
+                        sport's win rate out of 100 — rather than a separate
+                        chart type. */}
+                    <PlayerStatsPentagon
+                      sportName="Win Rate by Sport"
+                      axes={statSummary.overall.by_sport.map((s) => ({ key: String(s.sport_id), label: s.sport_name, scale_max: 100 }))}
+                      totals={Object.fromEntries(statSummary.overall.by_sport.map((s) => [String(s.sport_id), s.win_rate]))}
+                      matchesPlayed={statSummary.overall.matches_played}
+                    />
+                  </div>
+                )}
 
-            {!!statSummary?.history.length && (
-              <div className="mt-4 border-t border-slate-100 pt-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Match History</p>
-                <ul className="mt-2 flex flex-col gap-2">
-                  {statSummary.history.map((h) => (
-                    <li key={h.match_id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-slate-800">
-                          {h.sport_name} vs {h.opponent_name}
-                        </p>
-                        <p className="truncate text-xs text-slate-400">
-                          {h.tournament_name ?? 'Tournament'}
-                          {h.date ? ` · ${new Date(h.date).toLocaleDateString()}` : ''}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        {h.score && <span className="text-xs text-slate-400">{h.score}</span>}
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                            h.result === 'win'
-                              ? 'bg-teal-100 text-teal-700'
-                              : h.result === 'loss'
-                                ? 'bg-rose-100 text-rose-700'
-                                : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {h.result === 'win' ? 'W' : h.result === 'loss' ? 'L' : 'D'}
-                        </span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                {statSummary?.sports.map((entry) => (
+                  <div key={entry.sport_id} className="flex flex-col items-center">
+                    <PlayerStatsPentagon
+                      sportName={entry.sport_name}
+                      axes={entry.pentagon_fields}
+                      totals={entry.totals}
+                      matchesPlayed={entry.matches_played}
+                    />
+                    <p className="-mt-1 text-xs text-slate-400">
+                      {entry.wins}W&ndash;{entry.losses}L ({entry.win_rate}%)
+                    </p>
+                  </div>
+                ))}
+
+                {!!statSummary?.history.length && (
+                  <div className="mt-4 border-t border-slate-100 pt-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Match History</p>
+                    <ul className="mt-2 flex flex-col gap-2">
+                      {statSummary.history.map((h) => (
+                        <li key={h.match_id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-slate-800">
+                              {h.sport_name} vs {h.opponent_name}
+                            </p>
+                            <p className="truncate text-xs text-slate-400">
+                              {h.tournament_name ?? 'Tournament'}
+                              {h.date ? ` · ${new Date(h.date).toLocaleDateString()}` : ''}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            {h.score && <span className="text-xs text-slate-400">{h.score}</span>}
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                h.result === 'win'
+                                  ? 'bg-teal-100 text-teal-700'
+                                  : h.result === 'loss'
+                                    ? 'bg-rose-100 text-rose-700'
+                                    : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {h.result === 'win' ? 'W' : h.result === 'loss' ? 'L' : 'D'}
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
