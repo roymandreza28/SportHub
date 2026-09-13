@@ -100,14 +100,14 @@ export function DashboardShell({
       {/* Desktop/laptop sidebar — hidden below md, where the always-visible
           icon nav bar below the header takes over instead. */}
       <aside
-        className={`sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white py-6 transition-all md:flex ${
+        className={`sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white py-6 shadow-[1px_0_0_0_rgba(0,0,0,0.02),4px_0_16px_-8px_rgba(36,30,23,0.08)] transition-all md:flex ${
           collapsed ? 'w-20 px-2' : 'w-64 px-4'
         }`}
       >
         <Link to="/dashboard" className={`mb-8 flex items-center gap-2 px-2 ${collapsed ? 'justify-center' : ''}`}>
-          <img src="/logo.png" alt="" className="h-8 w-8 shrink-0" />
+          <img src="/logo.png" alt="" className="h-9 w-9 shrink-0" />
           {!collapsed && (
-            <span className="text-lg font-bold text-slate-900">
+            <span className="font-display text-2xl font-bold leading-none tracking-tight text-slate-900">
               Sport<span className="text-teal-600">Hub</span>
             </span>
           )}
@@ -119,11 +119,11 @@ export function DashboardShell({
               key={item.id}
               onClick={() => onNavigate(item.id)}
               title={collapsed ? item.label : undefined}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-all duration-150 ${
                 collapsed ? 'justify-center' : ''
               } ${
                 activeId === item.id
-                  ? 'bg-teal-600 text-pure-white'
+                  ? 'bg-teal-600 text-pure-white shadow-sm shadow-teal-600/25'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
@@ -142,7 +142,7 @@ export function DashboardShell({
         <header
           ref={headerRef}
           style={isMobile ? { transform: headerHidden ? `translateY(-${headerHeight}px)` : 'translateY(0)' } : undefined}
-          className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-4 backdrop-blur transition-transform duration-300 sm:gap-4 sm:px-8"
+          className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-4 shadow-sm backdrop-blur transition-transform duration-300 sm:gap-4 sm:px-8"
         >
           {/* Desktop-only sidebar collapse toggle — hidden while search is
               expanded is unnecessary since expansion only ever happens
@@ -150,7 +150,7 @@ export function DashboardShell({
           <button
             onClick={() => setCollapsed((c) => !c)}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 md:flex"
+            className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 md:flex"
           >
             <IconChevronLeft className={`h-4 w-4 transition-transform ${collapsed ? 'rotate-180' : ''}`} />
           </button>
@@ -160,7 +160,7 @@ export function DashboardShell({
           {!searchExpanded && (
             <Link to="/dashboard" className="flex shrink-0 items-center gap-2 rounded-lg p-1 hover:bg-slate-50 md:hidden">
               <img src="/logo.png" alt="" className="h-8 w-8 shrink-0" />
-              <span className="text-base font-bold text-slate-900">
+              <span className="font-display text-xl font-bold leading-none tracking-tight text-slate-900">
                 Sport<span className="text-teal-600">Hub</span>
               </span>
             </Link>
@@ -200,9 +200,9 @@ export function DashboardShell({
               <button
                 onClick={() => onNavigate(item.id)}
                 aria-label={item.label}
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition ${
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all duration-150 ${
                   activeId === item.id
-                    ? 'bg-teal-600 text-pure-white'
+                    ? 'bg-teal-600 text-pure-white shadow-sm shadow-teal-600/25'
                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
@@ -226,7 +226,7 @@ export function DashboardShell({
         <main className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
           {showVerificationBanner && (
             <div
-              className={`mb-6 rounded-lg border p-4 text-sm ${
+              className={`mb-6 rounded-xl border p-4 text-sm ${
                 user?.verification_status === 'rejected'
                   ? 'border-red-200 bg-red-50 text-red-800'
                   : 'border-amber-200 bg-amber-50 text-amber-800'
@@ -257,9 +257,14 @@ export function StatCardGrid({ children }: { children: ReactNode }) {
 
 export function StatCard({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
+    <div className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+      {/* A quiet accent, not a loud one — a thin top bar in the brand color,
+          only fully visible on hover, so a grid of these reads as calm at
+          rest and responsive to the touch rather than every tile shouting
+          for attention at once. */}
+      <span className="absolute inset-x-0 top-0 h-1 origin-left scale-x-0 bg-teal-600 transition-transform duration-200 group-hover:scale-x-100" />
       <p className="text-sm font-medium text-slate-500">{label}</p>
-      <p className="mt-1 text-3xl font-bold text-slate-900">{value}</p>
+      <p className="font-display mt-1 text-4xl font-bold leading-none tracking-tight text-slate-900">{value}</p>
     </div>
   )
 }
@@ -286,10 +291,11 @@ const STATUS_BADGE_STYLES: Record<string, string> = {
 export function StatusBadge({ status }: { status: string }) {
   return (
     <span
-      className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
         STATUS_BADGE_STYLES[status] ?? 'bg-slate-100 text-slate-600'
       }`}
     >
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
       {status.replace('_', ' ')}
     </span>
   )
@@ -305,7 +311,7 @@ export function ListRow({
   badge?: ReactNode
 }) {
   return (
-    <li className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+    <li className="-mx-2 flex items-center justify-between gap-4 rounded-lg px-2 py-3 transition-colors hover:bg-slate-50">
       <div className="min-w-0">
         <p className="truncate text-sm font-medium text-slate-800">{primary}</p>
         {secondary && <p className="truncate text-xs text-slate-500">{secondary}</p>}
@@ -329,7 +335,7 @@ export function ListPreview({
   action?: ReactNode
 }) {
   return (
-    <div className="mb-8 rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
+    <div className="mb-8 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
       <div className="mb-1 flex items-end justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900">{title}</h2>
@@ -373,7 +379,7 @@ export function Section({
         </div>
         {action}
       </div>
-      <div className="rounded-xl border border-slate-100 bg-white p-6 shadow-sm">{children}</div>
+      <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">{children}</div>
     </section>
   )
 }

@@ -5,8 +5,20 @@
     <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#0d9488" />
+    <!-- Matches Championship Spirit's brand primary (--color-teal-600 in
+         index.css) — was a leftover teal from before that rebrand. -->
+    <meta name="theme-color" content="#ff4500" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Inter for body copy (consistent across every OS instead of each
+         platform's own system-ui rendering); Barlow Condensed as the bold
+         athletic display face for headings and stat numbers — see
+         index.css's .font-display rule and the global h1-h3 selector. -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
     <!-- iOS only grants Web Push permission to a site added to the Home
          Screen — apple-mobile-web-app-capable is what makes that installed
          icon launch as a standalone app instead of just a Safari bookmark. -->

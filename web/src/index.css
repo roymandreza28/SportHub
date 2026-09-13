@@ -67,9 +67,31 @@
   --color-pure-white: #ffffff;
 
   --animate-spin-reverse: spin-reverse 1.6s linear infinite;
+
+  /* Inter (body copy) reads consistently across every OS instead of each
+     platform's own system-ui rendering; Barlow Condensed is the bold,
+     slightly-condensed athletic face used for headings and stat numbers —
+     both loaded via index.html's Google Fonts link. Declared as Tailwind
+     theme keys (not a bare CSS var) so `font-display` is a real, always-
+     available utility class alongside Tailwind's own font-sans. */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: 'Barlow Condensed', 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Every heading reads in the athletic display face by default — covers
+   every dashboard's page titles and Section/StatCard headings (all real
+   h1-h3 elements) with zero per-component changes. Components that need
+   the same treatment on a non-heading element (the sidebar wordmark, a
+   StatCard's big number) reach for the .font-display utility instead. */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
 }
 
 html {
+  font-family: var(--font-sans);
   color-scheme: light dark;
 }
 
