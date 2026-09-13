@@ -1,18 +1,20 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchBracket, freshBracketMatch, type BracketMatch } from '../../lib/organizerApi'
+import { fetchBracket, freshBracketMatch, type BracketMatch, type ScoringType } from '../../lib/organizerApi'
 import { echo } from '../../lib/echo'
+import { chip } from '../../lib/formStyles'
 import { MatchScheduleModal } from './MatchScheduleModal'
 import { ShareMatchModal } from './ShareMatchModal'
+import { TournamentStandingsView } from './TournamentStandingsView'
 import { IconCalendar, IconClipboard, IconShare } from '../layout/icons'
 
-const STATUS_STYLE: Record<string, string> = {
+export const STATUS_STYLE: Record<string, string> = {
   scheduled: 'bg-slate-100 text-slate-500',
   live: 'bg-red-100 text-red-700',
   completed: 'bg-green-100 text-green-700',
 }
 
-const TRACK_LABEL: Record<string, string> = {
+export const TRACK_LABEL: Record<string, string> = {
   winners: 'Winners bracket',
   losers: 'Losers bracket',
   final: 'Grand final',
@@ -140,7 +142,7 @@ function MatchCard({
 // for single_elimination throughout, and for group_stage once its knockout
 // stage has been generated (its matches look identical to single_elimination
 // ones) — so no extra "format" prop is needed to know when arrows apply.
-function isTreeRound(round: BracketMatch[]): boolean {
+export function isTreeRound(round: BracketMatch[]): boolean {
   return round.length > 0 && round.every((m) => !m.bracket_type && m.group_number == null)
 }
 
@@ -150,7 +152,7 @@ function isTreeRound(round: BracketMatch[]): boolean {
 // before it (a bye-heavy earlier round doesn't shift this). Only meaningful
 // for a tree round (see isTreeRound) — round_robin/swiss/pre-knockout
 // group_stage rounds don't shrink this way, so those keep "Round N".
-function eliminationRoundLabel(matchCount: number, roundIndex: number): string {
+export function eliminationRoundLabel(matchCount: number, roundIndex: number): string {
   switch (matchCount) {
     case 1:
       return 'Final'
@@ -167,52 +169,10 @@ function eliminationRoundLabel(matchCount: number, roundIndex: number): string {
   }
 }
 
-function SwissStandings({ matches }: { matches: BracketMatch[] }) {
-  const stats = new Map<number, { name: string; wins: number; for: number; against: number }>()
-
-  for (const m of matches) {
-    for (const [id, name, forScore, againstScore] of [
-      [m.participant_a_id, m.participant_a?.name, m.score_a, m.score_b],
-      [m.participant_b_id, m.participant_b?.name, m.score_b, m.score_a],
-    ] as const) {
-      if (!id) continue
-      const entry = stats.get(id) ?? { name: name ?? 'Unknown', wins: 0, for: 0, against: 0 }
-      entry.for += forScore
-      entry.against += againstScore
-      if (m.winner_id === id) entry.wins += 1
-      stats.set(id, entry)
-    }
-  }
-
-  const ranked = [...stats.values()].sort(
-    (a, b) => b.wins - a.wins || b.for - b.against - (a.for - a.against) || b.for - a.for
-  )
-
-  if (ranked.length === 0) return null
-
-  return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-4">
-      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Standings</h4>
-      <ol className="flex flex-col gap-1 text-sm">
-        {ranked.map((p, i) => (
-          <li key={p.name + i} className="flex items-center justify-between rounded-md bg-white px-3 py-1.5 shadow-sm">
-            <span className="font-medium text-slate-700">
-              {i + 1}. {p.name}
-            </span>
-            <span className="tabular-nums text-xs text-slate-500">
-              {p.wins}W &middot; {p.for - p.against >= 0 ? '+' : ''}
-              {p.for - p.against}
-            </span>
-          </li>
-        ))}
-      </ol>
-    </div>
-  )
-}
-
 export function BracketView({
   tournamentId,
   tournamentName,
+  scoringType,
   onSelectMatch,
   canScheduleMatches,
   canShareMatches,
@@ -223,6 +183,11 @@ export function BracketView({
   // Only needed when canShareMatches is set — used to prefill the shared
   // post's text (e.g. "...in Round 2 of {tournamentName}").
   tournamentName?: string
+  // Only needed for the Standings tab's match-detail popup, to show a
+  // best-of-sets match's set-by-set breakdown — omitted entirely (rather
+  // than fetched here) by callers that don't already have the tournament
+  // record in hand.
+  scoringType?: ScoringType
   onSelectMatch?: (match: BracketMatch) => void
   // Only the main organizer sets the date/time/court for a game — distinct
   // from onSelectMatch, which is the venue organizer's click-to-score path.
@@ -239,6 +204,13 @@ export function BracketView({
   isStatSheetEligible?: (match: BracketMatch) => boolean
   onOpenStatSheet?: (match: BracketMatch) => void
 }) {
+  // 'bracket' (the existing tree/grid view) or 'standings' (a flat,
+  // ranked list — every participant with their win/loss record, each
+  // expandable into that participant's own match history, each of THOSE
+  // expandable into that one game's full record). Works for every
+  // tournament format since it's built from the same match list the
+  // bracket grid already has, not a format-specific computation.
+  const [viewMode, setViewMode] = useState<'bracket' | 'standings'>('bracket')
   const queryClient = useQueryClient()
   const { data: bracket, isLoading } = useQuery({
     queryKey: ['organizer', 'bracket', tournamentId],
@@ -276,7 +248,6 @@ export function BracketView({
   const [scale, setScale] = useState(1)
   const [scaledSize, setScaledSize] = useState({ width: 0, height: 0 })
 
-  const isSwiss = bracket?.structure?.[0]?.[0]?.bracket_type === 'swiss'
   // "Portrait" / pyramid-upward layout — only single_elimination is a
   // single clean tree narrowing to one final; double_elimination is two
   // trees (winners+losers) converging, and round_robin/swiss/group_stage's
@@ -428,11 +399,24 @@ export function BracketView({
         </div>
       )}
 
-      {isSwiss && <SwissStandings matches={structure.flat()} />}
+      <div className="flex gap-2">
+        <button type="button" className={chip(viewMode === 'bracket')} onClick={() => setViewMode('bracket')}>
+          Bracket
+        </button>
+        <button type="button" className={chip(viewMode === 'standings')} onClick={() => setViewMode('standings')}>
+          Standings
+        </button>
+      </div>
+
+      {viewMode === 'standings' && (
+        <TournamentStandingsView structure={structure} tournamentName={tournamentName} scoringType={scoringType} />
+      )}
 
       <div
         ref={containerRef}
-        className="relative overflow-auto rounded-lg border border-slate-100 bg-slate-50/60 p-4"
+        className={`relative overflow-auto rounded-lg border border-slate-100 bg-slate-50/60 p-4 ${
+          viewMode === 'standings' ? 'hidden' : ''
+        }`}
       >
         <svg
           className="pointer-events-none absolute left-0 top-0"

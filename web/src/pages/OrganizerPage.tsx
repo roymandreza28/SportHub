@@ -398,6 +398,7 @@ export function OrganizerPage() {
                 <BracketView
                   tournamentId={selectedTournamentId}
                   tournamentName={myTournaments.find((t) => t.id === selectedTournamentId)?.name}
+                  scoringType={myTournaments.find((t) => t.id === selectedTournamentId)?.scoring_type}
                   onSelectMatch={
                     isMainOrganizer
                       ? (match) => {
