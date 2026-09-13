@@ -101,6 +101,12 @@ export function StatSheetModal({ matchId, onClose }: { matchId: number; onClose:
   const isLocked = sheet?.is_locked ?? false
   const fields = sheet?.fields ?? []
   const isBasketball = sheet?.sport_name === 'Basketball'
+  // Fields the venue organizer's live scoreboard also tracks — always
+  // read-only regardless of isLocked, and styled distinctly (teal, not
+  // the neutral "locked because the match finished" gray) so it reads as
+  // "sourced from the scoreboard" rather than "can't edit this anymore."
+  const lockedFields = sheet?.locked_fields ?? []
+  const organizerTooltip = 'Auto-filled from the venue organizer’s live scoreboard'
 
   return (
     <div
@@ -194,24 +200,34 @@ export function StatSheetModal({ matchId, onClose }: { matchId: number; onClose:
                         )}
                       </div>
                       <div className="mt-2 grid grid-cols-3 gap-1.5">
-                        {fields.map((f) => (
-                          <div key={f.key} className="rounded-md bg-slate-50 p-1.5 text-center">
-                            <p className="truncate text-[9px] font-semibold uppercase tracking-wide text-slate-400">
-                              {f.label}
-                            </p>
-                            {isLocked ? (
-                              <p className="mt-0.5 text-sm font-semibold text-slate-800">{row.stats[f.key] ?? 0}</p>
-                            ) : (
-                              <input
-                                type="number"
-                                min={0}
-                                value={row.stats[f.key] ?? 0}
-                                onChange={(e) => updateRowStat(i, f.key, Number(e.target.value) || 0)}
-                                className="mt-0.5 w-full rounded border border-slate-200 bg-white px-1 py-1 text-center text-sm"
-                              />
-                            )}
-                          </div>
-                        ))}
+                        {fields.map((f) => {
+                          const organizerLocked = lockedFields.includes(f.key)
+                          return (
+                            <div
+                              key={f.key}
+                              className={`rounded-md p-1.5 text-center ${organizerLocked ? 'bg-teal-50' : 'bg-slate-50'}`}
+                              title={organizerLocked ? organizerTooltip : undefined}
+                            >
+                              <p className="truncate text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                                {f.label}
+                                {organizerLocked && ' 🔗'}
+                              </p>
+                              {isLocked || organizerLocked ? (
+                                <p className={`mt-0.5 text-sm font-semibold ${organizerLocked ? 'text-teal-700' : 'text-slate-800'}`}>
+                                  {row.stats[f.key] ?? 0}
+                                </p>
+                              ) : (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={row.stats[f.key] ?? 0}
+                                  onChange={(e) => updateRowStat(i, f.key, Number(e.target.value) || 0)}
+                                  className="mt-0.5 w-full rounded border border-slate-200 bg-white px-1 py-1 text-center text-sm"
+                                />
+                              )}
+                            </div>
+                          )
+                        })}
                         {isBasketball && (
                           <div className="rounded-md bg-teal-50 p-1.5 text-center">
                             <p className="text-[9px] font-semibold uppercase tracking-wide text-teal-600">Total Pts</p>
@@ -266,8 +282,13 @@ export function StatSheetModal({ matchId, onClose }: { matchId: number; onClose:
                       <th className="py-2 pr-2">Player</th>
                       <th className="py-2 pr-2">#</th>
                       {fields.map((f) => (
-                        <th key={f.key} className="py-2 pr-2 text-center">
+                        <th
+                          key={f.key}
+                          className="py-2 pr-2 text-center"
+                          title={lockedFields.includes(f.key) ? organizerTooltip : undefined}
+                        >
                           {f.label}
+                          {lockedFields.includes(f.key) && ' 🔗'}
                         </th>
                       ))}
                       {isBasketball && <th className="py-2 pr-2 text-center">Total Pts</th>}
@@ -289,21 +310,29 @@ export function StatSheetModal({ matchId, onClose }: { matchId: number; onClose:
                             />
                           )}
                         </td>
-                        {fields.map((f) => (
-                          <td key={f.key} className="py-1.5 pr-2 text-center">
-                            {isLocked ? (
-                              row.stats[f.key] ?? 0
-                            ) : (
-                              <input
-                                type="number"
-                                min={0}
-                                value={row.stats[f.key] ?? 0}
-                                onChange={(e) => updateRowStat(i, f.key, Number(e.target.value) || 0)}
-                                className={`${input} w-14 px-1.5 py-1 text-center`}
-                              />
-                            )}
-                          </td>
-                        ))}
+                        {fields.map((f) => {
+                          const organizerLocked = lockedFields.includes(f.key)
+                          return (
+                            <td
+                              key={f.key}
+                              className={`py-1.5 pr-2 text-center ${organizerLocked ? 'bg-teal-50' : ''}`}
+                            >
+                              {isLocked || organizerLocked ? (
+                                <span className={organizerLocked ? 'font-medium text-teal-700' : undefined}>
+                                  {row.stats[f.key] ?? 0}
+                                </span>
+                              ) : (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={row.stats[f.key] ?? 0}
+                                  onChange={(e) => updateRowStat(i, f.key, Number(e.target.value) || 0)}
+                                  className={`${input} w-14 px-1.5 py-1 text-center`}
+                                />
+                              )}
+                            </td>
+                          )
+                        })}
                         {isBasketball && (
                           <td className="py-1.5 pr-2 text-center font-semibold text-slate-800">
                             {basketballTotalPoints(row.stats)}
@@ -353,13 +382,22 @@ export function StatSheetModal({ matchId, onClose }: { matchId: number; onClose:
                   {sheet.participant_name} — {sheet.participant_type === 'team' ? 'Team Performance Stats' : 'Player Performance Stats'}
                 </p>
                 <div className="grid grid-cols-2 gap-2">
-                {fields.map((f) => (
-                  <div key={f.key} className="rounded-lg border border-slate-200 p-2.5">
+                {fields.map((f) => {
+                  const organizerLocked = lockedFields.includes(f.key)
+                  return (
+                  <div
+                    key={f.key}
+                    className={`rounded-lg border p-2.5 ${organizerLocked ? 'border-teal-200 bg-teal-50' : 'border-slate-200'}`}
+                    title={organizerLocked ? organizerTooltip : undefined}
+                  >
                     <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                       {f.label}
+                      {organizerLocked && ' 🔗'}
                     </p>
-                    {isLocked ? (
-                      <p className="mt-1 text-lg font-bold text-slate-900">{values[f.key] ?? 0}</p>
+                    {isLocked || organizerLocked ? (
+                      <p className={`mt-1 text-lg font-bold ${organizerLocked ? 'text-teal-700' : 'text-slate-900'}`}>
+                        {values[f.key] ?? 0}
+                      </p>
                     ) : (
                       <input
                         type="number"
@@ -386,7 +424,8 @@ export function StatSheetModal({ matchId, onClose }: { matchId: number; onClose:
                       )}
                     </div>
                   </div>
-                ))}
+                  )
+                })}
                 </div>
               </div>
             ) : (
@@ -398,8 +437,13 @@ export function StatSheetModal({ matchId, onClose }: { matchId: number; onClose:
                         {sheet.participant_type === 'team' ? 'Team Performance Stats' : 'Player Performance Stats'}
                       </th>
                       {fields.map((f) => (
-                        <th key={f.key} className="py-2 pr-2 text-center">
+                        <th
+                          key={f.key}
+                          className="py-2 pr-2 text-center"
+                          title={lockedFields.includes(f.key) ? organizerTooltip : undefined}
+                        >
                           {f.label}
+                          {lockedFields.includes(f.key) && ' 🔗'}
                         </th>
                       ))}
                     </tr>
@@ -407,21 +451,29 @@ export function StatSheetModal({ matchId, onClose }: { matchId: number; onClose:
                   <tbody>
                     <tr className="border-b border-slate-100">
                       <td className="py-1.5 pr-2 font-medium text-slate-800">Value</td>
-                      {fields.map((f) => (
-                        <td key={f.key} className="py-1.5 pr-2 text-center">
-                          {isLocked ? (
-                            values[f.key] ?? 0
-                          ) : (
-                            <input
-                              type="number"
-                              min={0}
-                              value={values[f.key] ?? 0}
-                              onChange={(e) => setValues((v) => ({ ...v, [f.key]: Number(e.target.value) || 0 }))}
-                              className={`${input} w-16 px-1.5 py-1 text-center`}
-                            />
-                          )}
-                        </td>
-                      ))}
+                      {fields.map((f) => {
+                        const organizerLocked = lockedFields.includes(f.key)
+                        return (
+                          <td
+                            key={f.key}
+                            className={`py-1.5 pr-2 text-center ${organizerLocked ? 'bg-teal-50' : ''}`}
+                          >
+                            {isLocked || organizerLocked ? (
+                              <span className={organizerLocked ? 'font-medium text-teal-700' : undefined}>
+                                {values[f.key] ?? 0}
+                              </span>
+                            ) : (
+                              <input
+                                type="number"
+                                min={0}
+                                value={values[f.key] ?? 0}
+                                onChange={(e) => setValues((v) => ({ ...v, [f.key]: Number(e.target.value) || 0 }))}
+                                className={`${input} w-16 px-1.5 py-1 text-center`}
+                              />
+                            )}
+                          </td>
+                        )
+                      })}
                     </tr>
                     <tr>
                       <td className="py-1.5 pr-2 font-medium text-slate-800">Total %</td>

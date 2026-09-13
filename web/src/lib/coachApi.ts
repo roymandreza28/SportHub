@@ -149,6 +149,11 @@ export type MatchStatSheet = {
   is_locked: boolean
   locked_at: string | null
   filled_by: { id: number; name: string } | null
+  // Field keys the venue organizer's live scoreboard also tracks (see
+  // api/app/Support/PlayerStatSheetLinkage.php) — StatSheetModal.tsx
+  // renders these read-only, sourced from the scoreboard rather than
+  // coach-entered, even while the rest of the sheet is still editable.
+  locked_fields: string[]
   data: MatchStatSheetRosterData | MatchStatSheetSummaryData
 }
 

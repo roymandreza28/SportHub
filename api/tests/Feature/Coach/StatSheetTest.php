@@ -157,6 +157,46 @@ it('saves roster-mode stat sheet edits and records who filled them in', function
     $this->assertDatabaseHas('match_stat_sheets', ['match_id' => $ctx['match']->id, 'team_id' => $ctx['teamA']->id, 'filled_by_user_id' => $ctx['coachA']->id]);
 });
 
+it('auto-fills a roster-mode player\'s assists/steals/blocks/fouls from the venue organizer\'s live scoreboard', function () {
+    $ctx = statSheetBasketballSetup();
+    $player = $ctx['teamA']->members()->where('status', 'accepted')->first();
+
+    // The venue organizer's scoreboard has already tapped some stats for
+    // this player mid-game — MatchStatSheetController should reflect them
+    // live, without the coach having entered anything yet.
+    \App\Models\MatchPlayerStat::create([
+        'match_id' => $ctx['match']->id, 'user_id' => $player->user_id, 'team_id' => $ctx['teamA']->id,
+        'sport_id' => $ctx['sport']->id,
+        'stats' => ['points' => 12, 'rebounds' => 3, 'assists' => 5, 'steals' => 2, 'blocks' => 1, 'fouls' => 3],
+    ]);
+
+    $show = $this->actingAs($ctx['coachA'])->getJson("/api/matches/{$ctx['match']->id}/stat-sheet");
+    $show->assertOk();
+    expect($show->json('locked_fields'))->toEqual(['assists', 'steals', 'blocks', 'fouls']);
+    expect($show->json('data.rows.0.stats.assists'))->toBe(5);
+    expect($show->json('data.rows.0.stats.steals'))->toBe(2);
+    expect($show->json('data.rows.0.stats.blocks'))->toBe(1);
+    expect($show->json('data.rows.0.stats.fouls'))->toBe(3);
+    // Not scoreboard-linked (no clean single-field mapping — see
+    // PlayerStatSheetLinkage's own doc comment) — stays at whatever the
+    // sheet itself has (0, freshly created), unaffected by the organizer's
+    // "points"/"rebounds" totals.
+    expect($show->json('data.rows.0.stats.fg2_att'))->toBe(0);
+
+    // A coach's own submission for a locked field is silently dropped, not
+    // persisted or reflected back — the response still reports the live
+    // organizer total.
+    $rows = $show->json('data.rows');
+    $rows[0]['stats']['fouls'] = 99;
+    $rows[0]['stats']['fg2_made'] = 4;
+    $update = $this->actingAs($ctx['coachA'])->patchJson("/api/matches/{$ctx['match']->id}/stat-sheet", [
+        'data' => ['rows' => $rows, 'further_comments' => null, 'recorded_by' => null, 'signed' => null],
+    ]);
+    $update->assertOk();
+    expect($update->json('data.rows.0.stats.fouls'))->toBe(3);
+    expect($update->json('data.rows.0.stats.fg2_made'))->toBe(4);
+});
+
 it('blocks editing once the venue organizer completes the match', function () {
     $ctx = statSheetBasketballSetup();
     $this->actingAs($ctx['coachA'])->getJson("/api/matches/{$ctx['match']->id}/stat-sheet");
@@ -247,7 +287,57 @@ it('supports summary mode for a racquet-sport doubles (team-based) match', funct
         ],
     ]);
     $update->assertOk();
-    expect($update->json('data.values.smash_winners'))->toBe(3);
+    // rally_win_rate isn't tracked by the venue organizer's scoreboard, so
+    // the coach's own submitted value persists normally.
+    expect($update->json('data.values.rally_win_rate'))->toBe(3);
+    // smash_winners/net_kills/unforced_errors ARE tracked by the organizer's
+    // Badminton scoreboard (see PlayerStatSheetLinkage) — locked, so the
+    // coach's submitted "3" for them is dropped, and the response instead
+    // reports the live organizer-derived total (0 here: no MatchPlayerStat
+    // rows exist yet for this match).
+    expect($update->json('locked_fields'))->toEqual(['smash_winners', 'net_kills', 'unforced_errors']);
+    expect($update->json('data.values.smash_winners'))->toBe(0);
+    expect($update->json('data.values.net_kills'))->toBe(0);
+    expect($update->json('data.values.unforced_errors'))->toBe(0);
+    // Total % stays coach-editable even for a locked field — it's always
+    // the coach's own read of the game, never something the scoreboard
+    // tracks.
+    expect($update->json('data.total_percent.smash_winners'))->toBe(50);
+});
+
+it('sums every teammate\'s scoreboard-tracked stat into a doubles team\'s locked stat-sheet fields', function () {
+    $sport = Sport::create(['name' => 'Badminton', 'category' => 'racket']);
+    $format = SportFormat::create(['sport_id' => $sport->id, 'name' => 'Doubles', 'players_per_side' => 2]);
+    $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $coach = userWithRole('coach');
+    $tournament = statSheetTournament($sport, $format, $organizer, $venueOrganizer, 'Shuttle Cup');
+    $teamA = statSheetTeamWithCaptain($sport, $format, $coach, 'Smashers');
+    $teamB = statSheetTeamWithCaptain($sport, $format, userWithRole('coach'), 'Net Ninjas');
+    $match = statSheetTeamMatch($tournament, $teamA, $teamB);
+
+    // statSheetTeamWithCaptain only seeds one accepted member — add a
+    // second so this doubles team actually has two teammates to sum across.
+    TeamMember::create(['team_id' => $teamA->id, 'user_id' => User::factory()->create()->id, 'status' => 'accepted']);
+
+    $teamAMembers = $teamA->members()->where('status', 'accepted')->pluck('user_id');
+    expect($teamAMembers)->toHaveCount(2);
+
+    \App\Models\MatchPlayerStat::create([
+        'match_id' => $match->id, 'user_id' => $teamAMembers[0], 'team_id' => $teamA->id, 'sport_id' => $sport->id,
+        'stats' => ['smash_winners' => 4, 'net_kills' => 1, 'unforced_errors' => 2],
+    ]);
+    \App\Models\MatchPlayerStat::create([
+        'match_id' => $match->id, 'user_id' => $teamAMembers[1], 'team_id' => $teamA->id, 'sport_id' => $sport->id,
+        'stats' => ['smash_winners' => 3, 'net_kills' => 2, 'unforced_errors' => 1],
+    ]);
+
+    $response = $this->actingAs($coach)->getJson("/api/matches/{$match->id}/stat-sheet");
+
+    $response->assertOk();
+    expect($response->json('data.values.smash_winners'))->toBe(7);
+    expect($response->json('data.values.net_kills'))->toBe(3);
+    expect($response->json('data.values.unforced_errors'))->toBe(3);
 });
 
 it('authorizes a racquet-sport singles (individual) stat sheet via who registered the player, not team captaincy', function () {

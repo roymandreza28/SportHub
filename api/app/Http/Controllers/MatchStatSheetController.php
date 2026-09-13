@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\GameMatch;
+use App\Models\MatchPlayerStat;
 use App\Models\MatchStatSheet;
 use App\Models\Team;
 use App\Models\TournamentRegistration;
+use App\Support\PlayerStatSheetLinkage;
 use App\Support\StatSheetFieldSets;
 use Illuminate\Http\Request;
 
@@ -41,7 +43,15 @@ class MatchStatSheetController extends Controller
             abort(422, 'This stat sheet is locked and can no longer be edited.');
         }
 
-        $validated = $request->validate($this->validationRules($fieldSet));
+        $tournament = $match->bracket->tournament;
+        $lockedKeys = PlayerStatSheetLinkage::lockedStatSheetKeys($tournament->sport->name, $tournament->sportFormat?->name);
+
+        // Locked keys are simply absent from the rules below, so Laravel's
+        // validate() drops them from $validated entirely — a coach's
+        // submission can't overwrite a value the venue organizer's
+        // scoreboard already owns, even if something bypassed the read-only
+        // UI and POSTed one directly.
+        $validated = $request->validate($this->validationRules($fieldSet, $lockedKeys));
 
         $sheet->update(['data' => $validated['data'], 'filled_by_user_id' => $request->user()->id]);
 
@@ -169,9 +179,16 @@ class MatchStatSheetController extends Controller
         ];
     }
 
-    private function validationRules(array $fieldSet): array
+    /** @param  string[]  $lockedKeys  */
+    private function validationRules(array $fieldSet, array $lockedKeys = []): array
     {
-        $fieldKeys = array_column($fieldSet['fields'], 'key');
+        $allKeys = array_column($fieldSet['fields'], 'key');
+        // The raw stat value is what the organizer's scoreboard owns for a
+        // locked field — but "Total %" is always the coach's own read of
+        // the game (e.g. "what share of points were unforced errors"),
+        // never something the scoreboard tracks, so it stays editable even
+        // for an otherwise-locked field.
+        $fieldKeys = array_values(array_diff($allKeys, $lockedKeys));
         $numericRule = ['nullable', 'numeric', 'min:0'];
 
         if ($fieldSet['mode'] === 'roster') {
@@ -199,13 +216,14 @@ class MatchStatSheetController extends Controller
                 'data.signed' => ['nullable', 'string'],
             ],
             array_fill_keys(array_map(fn ($k) => "data.values.{$k}", $fieldKeys), $numericRule),
-            array_fill_keys(array_map(fn ($k) => "data.total_percent.{$k}", $fieldKeys), $numericRule)
+            array_fill_keys(array_map(fn ($k) => "data.total_percent.{$k}", $allKeys), $numericRule)
         );
     }
 
     private function respond(GameMatch $match, MatchStatSheet $sheet, array $self, ?array $opponent, array $fieldSet): array
     {
         $tournament = $match->bracket->tournament;
+        $lockedKeys = PlayerStatSheetLinkage::lockedStatSheetKeys($tournament->sport->name, $tournament->sportFormat?->name);
 
         return [
             'id' => $sheet->id,
@@ -222,7 +240,58 @@ class MatchStatSheetController extends Controller
             'is_locked' => $sheet->is_locked || $match->status === 'completed',
             'locked_at' => $sheet->locked_at,
             'filled_by' => $sheet->filledBy ? ['id' => $sheet->filledBy->id, 'name' => $sheet->filledBy->name] : null,
-            'data' => $sheet->data,
+            // Stat-sheet fields the venue organizer's live scoreboard also
+            // tracks for this sport — StatSheetModal.tsx renders these as
+            // read-only "auto-filled" rather than a normal input, and the
+            // values overlaid into `data` below are always freshly computed
+            // from MatchPlayerStat, never whatever a coach happened to save
+            // there before this field became locked.
+            'locked_fields' => $lockedKeys,
+            'data' => $lockedKeys === [] ? $sheet->data : $this->overlayOrganizerStats($match, $fieldSet, $self, $sheet->data, $lockedKeys),
         ];
+    }
+
+    // Fills the given (already-locked) stat-sheet keys with live totals from
+    // MatchPlayerStat — see the class-level doc comment on
+    // PlayerStatSheetLinkage for why these keys are never read from the
+    // sheet's own stored `data` at all. Roster mode (Basketball/Volleyball)
+    // matches per-player by user_id, exactly like the scoreboard recorded
+    // them; summary mode (racquet sports) sums every MatchPlayerStat row
+    // belonging to `self` — one row for a singles participant, or every
+    // teammate's row for a doubles team, since the sheet has one aggregate
+    // line rather than a roster.
+    private function overlayOrganizerStats(GameMatch $match, array $fieldSet, array $self, array $data, array $lockedKeys): array
+    {
+        $mapping = array_flip(PlayerStatSheetLinkage::for(
+            $match->bracket->tournament->sport->name,
+            $match->bracket->tournament->sportFormat?->name
+        ));
+
+        if ($fieldSet['mode'] === 'roster') {
+            $statsByUser = MatchPlayerStat::where('match_id', $match->id)
+                ->where('team_id', $self['id'])
+                ->pluck('stats', 'user_id');
+
+            $data['rows'] = array_map(function ($row) use ($statsByUser, $lockedKeys, $mapping) {
+                $organizerStats = $statsByUser[$row['player_id']] ?? [];
+                foreach ($lockedKeys as $sheetKey) {
+                    $row['stats'][$sheetKey] = (int) ($organizerStats[$mapping[$sheetKey]] ?? 0);
+                }
+
+                return $row;
+            }, $data['rows']);
+
+            return $data;
+        }
+
+        $query = MatchPlayerStat::where('match_id', $match->id);
+        $rows = ($self['type'] === 'team' ? $query->where('team_id', $self['id']) : $query->where('user_id', $self['id']))->get();
+
+        foreach ($lockedKeys as $sheetKey) {
+            $organizerKey = $mapping[$sheetKey];
+            $data['values'][$sheetKey] = (int) $rows->sum(fn ($r) => $r->stats[$organizerKey] ?? 0);
+        }
+
+        return $data;
     }
 }
