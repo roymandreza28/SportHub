@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class SkillLevel extends Model
 {
@@ -36,5 +37,15 @@ class SkillLevel extends Model
     public function evaluations(): HasMany
     {
         return $this->hasMany(Evaluation::class);
+    }
+
+    // The one evaluation whose attribute ratings/notes are still "current"
+    // for this skill level — an older evaluation is locked history (see
+    // EvaluationController::update()'s own doc comment), so this is always
+    // the right one to read for display (e.g. the profile's skill radar
+    // chart) without a caller having to know to sort/limit itself.
+    public function latestEvaluation(): HasOne
+    {
+        return $this->hasOne(Evaluation::class)->latestOfMany();
     }
 }

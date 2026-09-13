@@ -14,6 +14,6 @@ class SkillLevelController extends Controller
             return response()->json([]);
         }
 
-        return $profile->skillLevels()->with('sport', 'coach:id,name')->get();
+        return $profile->skillLevels()->with('sport', 'coach:id,name', 'latestEvaluation')->get();
     }
 }

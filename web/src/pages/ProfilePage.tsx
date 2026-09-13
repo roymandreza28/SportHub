@@ -15,6 +15,7 @@ import { PostComposer } from '../components/social/PostComposer'
 import { ProfileHeaderCard } from '../components/social/ProfileHeaderCard'
 import { PlayerStatsPentagon } from '../components/social/PlayerStatsPentagon'
 import { SkillLevelBadge } from '../components/player/SkillLevelBadge'
+import { SkillEvaluationChart } from '../components/player/SkillEvaluationChart'
 import { buttonDanger, buttonPrimary, buttonSecondary } from '../lib/formStyles'
 
 export function ProfilePage() {
@@ -178,10 +179,25 @@ export function ProfilePage() {
             {user.skill_levels.length === 0 ? (
               <p className="mt-3 text-sm text-slate-400">No coach evaluations yet.</p>
             ) : (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {user.skill_levels.map((sl) => (
-                  <SkillLevelBadge key={sl.id} skillLevel={sl} />
-                ))}
+              <div className="mt-3 flex flex-col gap-4">
+                {user.skill_levels.map((sl) => {
+                  const attributes = sl.latest_evaluation?.criteria?.attributes
+                  return (
+                    <div key={sl.id} className="flex flex-col items-center gap-3">
+                      <SkillLevelBadge skillLevel={sl} />
+                      {/* Only once the coach actually filled in per-attribute
+                          ratings (not every evaluation does — see
+                          EvaluationForm.tsx) is there anything to chart. */}
+                      {attributes && Object.keys(attributes).length > 0 && (
+                        <SkillEvaluationChart
+                          sportName={sl.sport.name}
+                          attributes={attributes}
+                          caption={sl.coach ? `Evaluated by ${sl.coach.name}` : undefined}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

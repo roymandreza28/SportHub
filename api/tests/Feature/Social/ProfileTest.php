@@ -87,6 +87,34 @@ it('shows a coach\'s evaluation as a skill level on the player\'s profile, visib
         ->assertJsonCount(1, 'user.skill_levels');
 });
 
+it('surfaces the latest evaluation\'s per-attribute ratings on the profile, for the skill radar chart', function () {
+    $coach = userWithRole('coach');
+    $player = userWithRole('player');
+    $sport = \App\Models\Sport::create(['name' => 'Basketball']);
+
+    $this->actingAs($coach)->postJson('/api/evaluations', [
+        'player_id' => $player->id,
+        'sport_id' => $sport->id,
+        'level' => 'developing_athlete',
+        'criteria' => ['attributes' => ['shooting' => 7, 'passing' => 5]],
+    ])->assertCreated();
+
+    // A second evaluation supersedes the first as "current" — the profile
+    // should reflect only this newer one's attributes, not the older one's.
+    $this->actingAs($coach)->postJson('/api/evaluations', [
+        'player_id' => $player->id,
+        'sport_id' => $sport->id,
+        'level' => 'competitive_athlete',
+        'criteria' => ['attributes' => ['shooting' => 9, 'passing' => 8, 'defense' => 6]],
+    ])->assertCreated();
+
+    $response = $this->actingAs($player)->getJson("/api/social/users/{$player->id}")->assertOk();
+
+    $response->assertJsonPath('user.skill_levels.0.latest_evaluation.criteria.attributes.shooting', 9);
+    $response->assertJsonPath('user.skill_levels.0.latest_evaluation.criteria.attributes.passing', 8);
+    $response->assertJsonPath('user.skill_levels.0.latest_evaluation.criteria.attributes.defense', 6);
+});
+
 it('reports an empty skill_levels array for a player with no coach evaluations yet', function () {
     $me = userWithRole('player');
     $stranger = userWithRole('player');

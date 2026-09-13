@@ -70,7 +70,11 @@ class ProfileController extends Controller
                 // GET /api/evaluations is a coach-only endpoint (requires the
                 // 'evaluate player' permission), so it can't be reused for a
                 // profile any player/coach might be viewing.
-                'skill_levels' => $user->playerProfile?->skillLevels()->with('sport', 'coach:id,name')->get() ?? [],
+                // latestEvaluation is what the profile's skill radar chart
+                // renders (its criteria.attributes, when the coach filled
+                // those in rather than just level/score) — see SkillLevel::
+                // latestEvaluation()'s own doc comment.
+                'skill_levels' => $user->playerProfile?->skillLevels()->with('sport', 'coach:id,name', 'latestEvaluation')->get() ?? [],
             ],
             'friendship_status' => $status,
             'friendship_id' => $friendshipId,

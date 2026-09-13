@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchPlayerProfile, fetchMySkillLevels, updatePlayerProfile } from '../../lib/playerApi'
 import { fetchSports } from '../../lib/venueApi'
 import { SkillLevelBadge } from './SkillLevelBadge'
+import { SkillEvaluationChart } from './SkillEvaluationChart'
 import { buttonPrimary, fieldGroup, label, select, textarea } from '../../lib/formStyles'
 
 export function PlayerProfileEditor() {
@@ -38,8 +39,22 @@ export function PlayerProfileEditor() {
     <div className="flex flex-col gap-4">
       <div className={fieldGroup}>
         <p className={label}>Skill levels</p>
-        <div className="flex flex-wrap gap-2">
-          {skillLevels?.map((sl) => <SkillLevelBadge key={sl.id} skillLevel={sl} />)}
+        <div className="flex flex-col gap-4">
+          {skillLevels?.map((sl) => {
+            const attributes = sl.latest_evaluation?.criteria?.attributes
+            return (
+              <div key={sl.id} className="flex flex-col items-center gap-3">
+                <SkillLevelBadge skillLevel={sl} />
+                {attributes && Object.keys(attributes).length > 0 && (
+                  <SkillEvaluationChart
+                    sportName={sl.sport.name}
+                    attributes={attributes}
+                    caption={sl.coach ? `Evaluated by ${sl.coach.name}` : undefined}
+                  />
+                )}
+              </div>
+            )
+          })}
           {skillLevels?.length === 0 && <p className="text-sm text-slate-400">No skill evaluations yet.</p>}
         </div>
       </div>
