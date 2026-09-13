@@ -62,6 +62,10 @@ Route::get('/venues/{venue}/availability', [VenueController::class, 'availabilit
 Route::get('/tournaments', [TournamentController::class, 'index']);
 Route::get('/tournaments/{tournament}', [TournamentController::class, 'show']);
 Route::get('/tournaments/{tournament}/bracket', [TournamentController::class, 'bracket']);
+// Public, same as the bracket route above it — anyone who can see the
+// bracket can drill into one match's full record (rosters, per-player
+// stats, event log) from the Standings tab's match-detail popup.
+Route::get('/matches/{match}/record', [MatchController::class, 'record']);
 
 Route::get('/news', [NewsController::class, 'index']);
 Route::get('/news/{news}', [NewsController::class, 'show']);

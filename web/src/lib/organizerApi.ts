@@ -253,6 +253,33 @@ export async function updateMatchSets(
   return data
 }
 
+export type MatchStatField = { key: string; label: string; is_axis: boolean; scale_max: number }
+
+export type MatchPlayerStatRecord = {
+  user_id: number
+  user_name: string
+  team_id: number | null
+  stats: Record<string, number>
+}
+
+export type MatchEventRecord = { type: string; payload: Record<string, unknown>; created_at: string }
+
+export type MatchRecord = {
+  team_a: MatchRosterTeam | null
+  team_b: MatchRosterTeam | null
+  stat_fields: MatchStatField[]
+  player_stats: MatchPlayerStatRecord[]
+  events: MatchEventRecord[]
+}
+
+// Backs the Standings tab's match-detail popup — public/unauthenticated,
+// same as fetchBracket, since anyone who can see the bracket can already
+// see every score on it.
+export async function fetchMatchRecord(matchId: number) {
+  const { data } = await api.get<MatchRecord>(`/api/matches/${matchId}/record`)
+  return data
+}
+
 // Basketball/3x3's game clock only — every other sport's scoreboard never
 // calls this. Fired on a real transition (start, pause, period/overtime
 // change, manual adjustment), never once per tick; the shared-post widget

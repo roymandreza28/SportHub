@@ -15,6 +15,7 @@ use App\Models\Tournament;
 use App\Services\BracketService;
 use App\Support\Broadcasting;
 use App\Support\MatchParticipants;
+use App\Support\PlayerStatFieldSets;
 use Illuminate\Http\Request;
 
 class MatchController extends Controller
@@ -249,6 +250,50 @@ class MatchController extends Controller
         return [
             'team_a' => $shape($match->participantATeam),
             'team_b' => $shape($match->participantBTeam),
+        ];
+    }
+
+    // The public counterpart to roster() above — anyone who can already see
+    // this match's tournament bracket (fully public/unauthenticated, same
+    // as TournamentController::bracket()) can pull its full record: both
+    // rosters, the per-player stats the venue organizer's scoreboard
+    // tracked during play (see upsertPlayerStats()), and the chronological
+    // score-event log. Powers the Standings tab's match-detail popup
+    // (TournamentStandingsView -> MatchDetailModal on the frontend).
+    public function record(GameMatch $match)
+    {
+        $match->load([
+            'participantATeam.members' => fn ($q) => $q->where('status', 'accepted')->with('user:id,name'),
+            'participantBTeam.members' => fn ($q) => $q->where('status', 'accepted')->with('user:id,name'),
+            'playerStats.user:id,name',
+            'events' => fn ($q) => $q->orderBy('created_at'),
+            'bracket.tournament.sport',
+        ]);
+
+        $shapeTeam = fn (?Team $team) => $team ? [
+            'id' => $team->id,
+            'name' => $team->name,
+            'members' => $team->members->map(fn ($m) => ['id' => $m->user->id, 'name' => $m->user->name])->values(),
+        ] : null;
+
+        return [
+            'team_a' => $shapeTeam($match->participantATeam),
+            'team_b' => $shapeTeam($match->participantBTeam),
+            // The field defs (key + human label) for whatever sport this
+            // match belongs to — shipped here rather than hardcoded on the
+            // frontend, same reasoning as ProfileController::statSummary().
+            'stat_fields' => PlayerStatFieldSets::for($match->bracket->tournament->sport->name) ?? [],
+            'player_stats' => $match->playerStats->map(fn ($stat) => [
+                'user_id' => $stat->user_id,
+                'user_name' => $stat->user->name,
+                'team_id' => $stat->team_id,
+                'stats' => $stat->stats,
+            ])->values(),
+            'events' => $match->events->map(fn ($event) => [
+                'type' => $event->type,
+                'payload' => $event->payload,
+                'created_at' => $event->created_at,
+            ])->values(),
         ];
     }
 

@@ -72,4 +72,9 @@ class GameMatch extends Model
     {
         return $this->hasMany(MatchEvent::class, 'match_id');
     }
+
+    public function playerStats(): HasMany
+    {
+        return $this->hasMany(MatchPlayerStat::class, 'match_id');
+    }
 }
