@@ -11,12 +11,19 @@ namespace App\Support;
 class PlayerStatFieldSets
 {
     private const CONFIG = [
+        // Assists/steals/blocks/rebounds were dropped as axes here — the
+        // venue organizer's scoreboard only ever records what it can
+        // unambiguously attribute live (a made shot, or a foul; see
+        // PlayerStatSheetLinkage's own doc comment for why the rest stays
+        // coach-only), so those keys were never populated. Points is now
+        // broken into its 3 made-shot types instead, matching exactly what
+        // the scoreboard's FT/2PT/3PT-made buttons record.
         'Basketball' => [
             ['key' => 'points', 'label' => 'Points', 'is_axis' => true, 'scale_max' => 500],
             ['key' => 'rebounds', 'label' => 'Rebounds', 'is_axis' => true, 'scale_max' => 200],
-            ['key' => 'assists', 'label' => 'Assists', 'is_axis' => true, 'scale_max' => 150],
-            ['key' => 'steals', 'label' => 'Steals', 'is_axis' => true, 'scale_max' => 80],
-            ['key' => 'blocks', 'label' => 'Blocks', 'is_axis' => true, 'scale_max' => 80],
+            ['key' => 'ft_made', 'label' => 'FT Made', 'is_axis' => true, 'scale_max' => 150],
+            ['key' => 'fg2_made', 'label' => '2PT Made', 'is_axis' => true, 'scale_max' => 200],
+            ['key' => 'fg3_made', 'label' => '3PT Made', 'is_axis' => true, 'scale_max' => 100],
             ['key' => 'fouls', 'label' => 'Fouls', 'is_axis' => false, 'scale_max' => 0],
         ],
         'Volleyball' => [

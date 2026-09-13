@@ -5,10 +5,12 @@ namespace App\Support;
 // Maps a venue organizer's live-scoreboard stat key (PlayerStatFieldSets)
 // to the coach stat sheet key (StatSheetFieldSets) that represents the
 // exact same real-world number — only pairs confirmed to mean the same
-// thing are listed here, never a fuzzy/guessed match (e.g. Basketball's
-// organizer-tracked "points" isn't mapped to anything, since the stat
-// sheet only has it split into 2PT/3PT/FT makes and attempts, which the
-// organizer's scoreboard doesn't track at that granularity).
+// thing are listed here, never a fuzzy/guessed match. Basketball's
+// organizer scoreboard only records what's realistic to track live and
+// unambiguously (a made free throw/2PT/3PT shot, and personal fouls) —
+// assists, steals, blocks, rebounds and shot attempts require closer
+// in-game judgment than a venue organizer can reliably make, so those stay
+// coach-only, hand-entered from game film/notes after the fact.
 //
 // A stat-sheet field with an entry here is never coach-editable —
 // MatchStatSheetController excludes it from update()'s validation rules
@@ -26,7 +28,9 @@ class PlayerStatSheetLinkage
 {
     private const MAP = [
         'Basketball' => [
-            null => ['assists' => 'assists', 'steals' => 'steals', 'blocks' => 'blocks', 'fouls' => 'fouls'],
+            null => [
+                'fouls' => 'fouls', 'ft_made' => 'ft_made', 'fg2_made' => 'fg2_made', 'fg3_made' => 'fg3_made',
+            ],
         ],
         'Volleyball' => [
             // "aces" (organizer) and "service_aces" (stat sheet) are the

@@ -31,16 +31,21 @@ function formatClock(totalSeconds: number) {
 }
 
 type RosterPlayer = { id: number; name: string }
-// Same 5 pentagon axes as BasketballScoreboard.tsx (both share one Sport
-// row — 3x3 is only a SportFormat, per SportsSeeder).
-type PlayerStat = { points: number; rebounds: number; assists: number; steals: number; blocks: number; fouls: number }
+// 3x3 has no free throw/3-point distinction like 5v5's does at the rules
+// level, but it shares the exact same Sport row (3x3 is only a
+// SportFormat, per SportsSeeder) and therefore the same stat keys as
+// BasketballScoreboard.tsx — its "inside the arc"/free-throw 1-point make
+// maps to ft_made, its "beyond the arc" 2-point make to fg2_made, so both
+// boards feed the same pentagon axes and coach stat-sheet fields.
+type ShotKind = 'ft' | 'fg2'
+const POINTS_FOR: Record<ShotKind, number> = { ft: 1, fg2: 2 }
+const MADE_KEY: Record<ShotKind, 'ft_made' | 'fg2_made'> = { ft: 'ft_made', fg2: 'fg2_made' }
+const SHOT_LABEL: Record<ShotKind, string> = { ft: '1PT Made', fg2: '2PT Made' }
+type PlayerStat = { points: number; rebounds: number; fouls: number; ft_made: number; fg2_made: number }
 type PlayerStats = Record<number, PlayerStat>
-type QuickStatKey = 'rebounds' | 'assists' | 'steals' | 'blocks'
-
-const QUICK_STAT_LABEL: Record<QuickStatKey, string> = { rebounds: 'REB', assists: 'AST', steals: 'STL', blocks: 'BLK' }
 
 function emptyStat(): PlayerStat {
-  return { points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, fouls: 0 }
+  return { points: 0, rebounds: 0, fouls: 0, ft_made: 0, fg2_made: 0 }
 }
 
 type Snapshot = {
@@ -171,7 +176,7 @@ export function Basketball3x3Scoreboard({
   const [jerseys, setJerseys] = useState<Record<number, string>>(() => loadJSON(jerseyKey(match.id), {}))
   const [playerStats, setPlayerStats] = useState<PlayerStats>(() => loadJSON(statsKey(match.id), {}))
 
-  const [pointPicker, setPointPicker] = useState<{ side: 'a' | 'b'; delta: number } | null>(null)
+  const [pointPicker, setPointPicker] = useState<{ side: 'a' | 'b'; kind: ShotKind } | null>(null)
   const [foulPicker, setFoulPicker] = useState<'a' | 'b' | null>(null)
 
   const [rosterOpen, setRosterOpen] = useState(true)
@@ -338,12 +343,22 @@ export function Basketball3x3Scoreboard({
     log('Undo')
   }
 
-  function applyPoints(side: 'a' | 'b', delta: number, player?: RosterPlayer) {
+  function applyMake(side: 'a' | 'b', kind: ShotKind, player?: RosterPlayer) {
     if (!canPlay || isDecided) return
     pushHistory()
     const teamName = side === 'a' ? homeName : awayName
+    const delta = POINTS_FOR[kind]
+    const madeKey = MADE_KEY[kind]
     const nextStats = player
-      ? { ...playerStats, [player.id]: { ...emptyStat(), ...playerStats[player.id], points: (playerStats[player.id]?.points ?? 0) + delta } }
+      ? {
+          ...playerStats,
+          [player.id]: {
+            ...emptyStat(),
+            ...playerStats[player.id],
+            points: (playerStats[player.id]?.points ?? 0) + delta,
+            [madeKey]: (playerStats[player.id]?.[madeKey] ?? 0) + 1,
+          },
+        }
       : playerStats
     if (player) setPlayerStats(nextStats)
     let nextA = scoreA
@@ -356,8 +371,7 @@ export function Basketball3x3Scoreboard({
       setScoreB(nextB)
     }
     save.mutate({ score_a: nextA, score_b: nextB, status: 'live', player_stats: toPlayerStatsPayload(nextStats) })
-    const pointLabel = `${delta > 0 ? '+' : ''}${delta} point${Math.abs(delta) === 1 ? '' : 's'}`
-    log(player ? `${player.name} (${teamName}) ${pointLabel}` : `${teamName} ${pointLabel}`)
+    log(player ? `${player.name} (${teamName}) ${SHOT_LABEL[kind]}` : `${teamName} +${delta} point${delta === 1 ? '' : 's'}`)
 
     // Auto-stop the clock once a win condition is met so the organizer
     // isn't left running time on an already-decided game.
@@ -366,18 +380,33 @@ export function Basketball3x3Scoreboard({
     if (willWinByScore || willWinOt) setClockRunning(false)
   }
 
-  function requestPoints(side: 'a' | 'b', delta: number) {
+  // A -1 correction fixes a misclick, not a real shot — no picker, no
+  // made-shot counter credited.
+  function applyCorrection(side: 'a' | 'b') {
     if (!canPlay || isDecided) return
-    if (delta < 0) {
-      applyPoints(side, delta)
-      return
+    pushHistory()
+    const teamName = side === 'a' ? homeName : awayName
+    let nextA = scoreA
+    let nextB = scoreB
+    if (side === 'a') {
+      nextA = Math.max(0, scoreA - 1)
+      setScoreA(nextA)
+    } else {
+      nextB = Math.max(0, scoreB - 1)
+      setScoreB(nextB)
     }
-    setPointPicker({ side, delta })
+    save.mutate({ score_a: nextA, score_b: nextB, status: 'live', player_stats: toPlayerStatsPayload(playerStats) })
+    log(`${teamName} -1 point`)
+  }
+
+  function requestMake(side: 'a' | 'b', kind: ShotKind) {
+    if (!canPlay || isDecided) return
+    setPointPicker({ side, kind })
   }
 
   function choosePlayerForPoints(player: RosterPlayer) {
     if (!pointPicker) return
-    applyPoints(pointPicker.side, pointPicker.delta, player)
+    applyMake(pointPicker.side, pointPicker.kind, player)
     setPointPicker(null)
   }
 
@@ -398,10 +427,10 @@ export function Basketball3x3Scoreboard({
     setFoulPicker(null)
   }
 
-  function bumpStat(playerId: number, key: QuickStatKey) {
+  function bumpRebound(playerId: number) {
     if (isDecided) return
     pushHistory()
-    const nextStats = { ...playerStats, [playerId]: { ...emptyStat(), ...playerStats[playerId], [key]: (playerStats[playerId]?.[key] ?? 0) + 1 } }
+    const nextStats = { ...playerStats, [playerId]: { ...emptyStat(), ...playerStats[playerId], rebounds: (playerStats[playerId]?.rebounds ?? 0) + 1 } }
     setPlayerStats(nextStats)
     save.mutate({ score_a: scoreA, score_b: scoreB, status: 'live', player_stats: toPlayerStatsPayload(nextStats) })
   }
@@ -515,22 +544,22 @@ export function Basketball3x3Scoreboard({
 
       switch (e.key.toLowerCase()) {
         case 'q':
-          requestPoints('a', 1)
+          requestMake('a', 'ft')
           break
         case 'w':
-          requestPoints('a', 2)
+          requestMake('a', 'fg2')
           break
         case 'a':
-          requestPoints('a', -1)
+          applyCorrection('a')
           break
         case 'o':
-          requestPoints('b', 1)
+          requestMake('b', 'ft')
           break
         case 'p':
-          requestPoints('b', 2)
+          requestMake('b', 'fg2')
           break
         case 'l':
-          requestPoints('b', -1)
+          applyCorrection('b')
           break
         case 'r':
           requestFoul('a')
@@ -640,14 +669,14 @@ export function Basketball3x3Scoreboard({
                 />
                 <p className="text-9xl font-bold leading-none tabular-nums">{score}</p>
                 <div className="grid w-full grid-cols-2 gap-1.5">
-                  <button onClick={() => requestPoints(side, 1)} disabled={!canPlay || isDecided} className={buttonSecondary}>
-                    +1 point
+                  <button onClick={() => requestMake(side, 'ft')} disabled={!canPlay || isDecided} className={buttonSecondary}>
+                    1PT Made
                   </button>
-                  <button onClick={() => requestPoints(side, 2)} disabled={!canPlay || isDecided} className={buttonSecondary}>
-                    +2 points
+                  <button onClick={() => requestMake(side, 'fg2')} disabled={!canPlay || isDecided} className={buttonSecondary}>
+                    2PT Made
                   </button>
                 </div>
-                <button onClick={() => requestPoints(side, -1)} disabled={!canPlay || isDecided} className={`w-full ${buttonSecondary}`}>
+                <button onClick={() => applyCorrection(side)} disabled={!canPlay || isDecided} className={`w-full ${buttonSecondary}`}>
                   -1 point
                 </button>
                 <button
@@ -796,16 +825,13 @@ export function Basketball3x3Scoreboard({
                           />
                           <span className="flex-1 truncate font-medium">{m.name}</span>
                           <span className={subtleText}>{stat?.points ?? 0} pts</span>
-                          {(['rebounds', 'assists', 'steals', 'blocks'] as const).map((key) => (
-                            <button
-                              key={key}
-                              onClick={() => bumpStat(m.id, key)}
-                              disabled={isDecided}
-                              className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                            >
-                              {QUICK_STAT_LABEL[key]} {stat?.[key] ?? 0}
-                            </button>
-                          ))}
+                          <button
+                            onClick={() => bumpRebound(m.id)}
+                            disabled={isDecided}
+                            className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${isDark ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                          >
+                            REB {stat?.rebounds ?? 0}
+                          </button>
                           <span className={subtleText}>{stat?.fouls ?? 0} F</span>
                         </div>
                       )
@@ -882,7 +908,7 @@ export function Basketball3x3Scoreboard({
             whenever the scoreboard is fullscreened. */}
         {pointPicker && (
           <PlayerPickerModal
-            title={`Who scored? (+${pointPicker.delta})`}
+            title={`Who scored? (${SHOT_LABEL[pointPicker.kind]})`}
             team={pointPicker.side === 'a' ? roster?.team_a : roster?.team_b}
             jerseys={jerseys}
             playerStats={playerStats}

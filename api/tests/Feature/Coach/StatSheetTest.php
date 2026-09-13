@@ -145,19 +145,20 @@ it('saves roster-mode stat sheet edits and records who filled them in', function
 
     $show = $this->actingAs($ctx['coachA'])->getJson("/api/matches/{$ctx['match']->id}/stat-sheet")->json();
     $rows = $show['data']['rows'];
-    $rows[0]['stats']['fg2_made'] = 4;
     $rows[0]['stats']['fg2_att'] = 6;
+    $rows[0]['stats']['assists'] = 4;
 
     $response = $this->actingAs($ctx['coachA'])->patchJson("/api/matches/{$ctx['match']->id}/stat-sheet", [
         'data' => ['rows' => $rows, 'further_comments' => 'Great hustle', 'recorded_by' => 'Coach A', 'signed' => 'Coach A'],
     ]);
 
     $response->assertOk();
-    expect($response->json('data.rows.0.stats.fg2_made'))->toBe(4);
+    expect($response->json('data.rows.0.stats.fg2_att'))->toBe(6);
+    expect($response->json('data.rows.0.stats.assists'))->toBe(4);
     $this->assertDatabaseHas('match_stat_sheets', ['match_id' => $ctx['match']->id, 'team_id' => $ctx['teamA']->id, 'filled_by_user_id' => $ctx['coachA']->id]);
 });
 
-it('auto-fills a roster-mode player\'s assists/steals/blocks/fouls from the venue organizer\'s live scoreboard', function () {
+it('auto-fills a roster-mode player\'s fouls and made-shot counts from the venue organizer\'s live scoreboard, leaving assists/steals/blocks coach-entered', function () {
     $ctx = statSheetBasketballSetup();
     $player = $ctx['teamA']->members()->where('status', 'accepted')->first();
 
@@ -167,34 +168,38 @@ it('auto-fills a roster-mode player\'s assists/steals/blocks/fouls from the venu
     \App\Models\MatchPlayerStat::create([
         'match_id' => $ctx['match']->id, 'user_id' => $player->user_id, 'team_id' => $ctx['teamA']->id,
         'sport_id' => $ctx['sport']->id,
-        'stats' => ['points' => 12, 'rebounds' => 3, 'assists' => 5, 'steals' => 2, 'blocks' => 1, 'fouls' => 3],
+        'stats' => ['points' => 12, 'rebounds' => 3, 'ft_made' => 2, 'fg2_made' => 4, 'fg3_made' => 0, 'fouls' => 3],
     ]);
 
     $show = $this->actingAs($ctx['coachA'])->getJson("/api/matches/{$ctx['match']->id}/stat-sheet");
     $show->assertOk();
-    expect($show->json('locked_fields'))->toEqual(['assists', 'steals', 'blocks', 'fouls']);
-    expect($show->json('data.rows.0.stats.assists'))->toBe(5);
-    expect($show->json('data.rows.0.stats.steals'))->toBe(2);
-    expect($show->json('data.rows.0.stats.blocks'))->toBe(1);
+    expect($show->json('locked_fields'))->toEqual(['fouls', 'ft_made', 'fg2_made', 'fg3_made']);
     expect($show->json('data.rows.0.stats.fouls'))->toBe(3);
-    // Not scoreboard-linked (no clean single-field mapping — see
-    // PlayerStatSheetLinkage's own doc comment) — stays at whatever the
-    // sheet itself has (0, freshly created), unaffected by the organizer's
-    // "points"/"rebounds" totals.
+    expect($show->json('data.rows.0.stats.ft_made'))->toBe(2);
+    expect($show->json('data.rows.0.stats.fg2_made'))->toBe(4);
+    expect($show->json('data.rows.0.stats.fg3_made'))->toBe(0);
+    // The venue organizer no longer tracks these live (see
+    // PlayerStatSheetLinkage's own doc comment) — they stay at whatever the
+    // sheet itself has (0, freshly created), for the coach to fill in.
+    expect($show->json('data.rows.0.stats.assists'))->toBe(0);
+    expect($show->json('data.rows.0.stats.steals'))->toBe(0);
+    expect($show->json('data.rows.0.stats.blocks'))->toBe(0);
     expect($show->json('data.rows.0.stats.fg2_att'))->toBe(0);
 
     // A coach's own submission for a locked field is silently dropped, not
     // persisted or reflected back — the response still reports the live
-    // organizer total.
+    // organizer total. Assists is coach-editable, so that submission sticks.
     $rows = $show->json('data.rows');
     $rows[0]['stats']['fouls'] = 99;
-    $rows[0]['stats']['fg2_made'] = 4;
+    $rows[0]['stats']['fg2_made'] = 999;
+    $rows[0]['stats']['assists'] = 5;
     $update = $this->actingAs($ctx['coachA'])->patchJson("/api/matches/{$ctx['match']->id}/stat-sheet", [
         'data' => ['rows' => $rows, 'further_comments' => null, 'recorded_by' => null, 'signed' => null],
     ]);
     $update->assertOk();
     expect($update->json('data.rows.0.stats.fouls'))->toBe(3);
     expect($update->json('data.rows.0.stats.fg2_made'))->toBe(4);
+    expect($update->json('data.rows.0.stats.assists'))->toBe(5);
 });
 
 it('blocks editing once the venue organizer completes the match', function () {
