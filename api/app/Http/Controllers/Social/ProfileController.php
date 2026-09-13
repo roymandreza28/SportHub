@@ -83,38 +83,124 @@ class ProfileController extends Controller
 
     // Career totals for the venue-organizer scoreboard's per-player stats
     // (see MatchController::upsertPlayerStats()), grouped by sport, powering
-    // ProfilePage.tsx's stats pentagon. Only completed matches count, so a
-    // career total never fluctuates mid-game.
+    // ProfilePage.tsx's stats pentagon — plus each match's win/loss result
+    // (from the same bracket data BracketService already maintains) rolled
+    // up into a per-sport and overall win rate, and the full match-by-match
+    // history list. Only completed matches count, so a career total never
+    // fluctuates mid-game.
     public function statSummary(User $user)
     {
         abort_unless($user->hasAnyRole(['player', 'coach']), 404);
 
-        return MatchPlayerStat::where('user_id', $user->id)
+        $rows = MatchPlayerStat::where('user_id', $user->id)
             ->whereHas('match', fn ($q) => $q->where('status', 'completed'))
-            ->with('sport:id,name')
-            ->get()
-            ->groupBy('sport_id')
-            ->map(function ($rows) {
-                $sportName = $rows->first()->sport->name;
-                $fields = PlayerStatFieldSets::for($sportName) ?? [];
-                $totals = array_fill_keys(array_column($fields, 'key'), 0);
+            ->with([
+                'sport:id,name',
+                'match.bracket.tournament:id,name',
+                'match.participantA:id,name',
+                'match.participantB:id,name',
+                'match.participantATeam:id,name',
+                'match.participantBTeam:id,name',
+            ])
+            ->get();
 
-                foreach ($rows as $row) {
-                    foreach ($row->stats ?? [] as $key => $value) {
-                        if (array_key_exists($key, $totals)) {
-                            $totals[$key] += (int) $value;
-                        }
+        $history = $rows
+            ->map(fn ($row) => $this->historyEntryFor($row, $user))
+            ->sortByDesc('date')
+            ->values();
+
+        $bySport = $rows->groupBy('sport_id')->map(function ($sportRows) use ($user) {
+            $sportName = $sportRows->first()->sport->name;
+            $fields = PlayerStatFieldSets::for($sportName) ?? [];
+            $totals = array_fill_keys(array_column($fields, 'key'), 0);
+            $wins = 0;
+            $losses = 0;
+
+            foreach ($sportRows as $row) {
+                foreach ($row->stats ?? [] as $key => $value) {
+                    if (array_key_exists($key, $totals)) {
+                        $totals[$key] += (int) $value;
                     }
                 }
 
-                return [
-                    'sport_id' => $rows->first()->sport_id,
-                    'sport_name' => $sportName,
-                    'matches_played' => $rows->count(),
-                    'totals' => $totals,
-                    'pentagon_fields' => PlayerStatFieldSets::pentagonAxesFor($sportName),
-                ];
-            })
-            ->values();
+                match ($this->resultFor($row, $user)) {
+                    'win' => $wins++,
+                    'loss' => $losses++,
+                    default => null,
+                };
+            }
+
+            $decided = $wins + $losses;
+
+            return [
+                'sport_id' => $sportRows->first()->sport_id,
+                'sport_name' => $sportName,
+                'matches_played' => $sportRows->count(),
+                'wins' => $wins,
+                'losses' => $losses,
+                'win_rate' => $decided > 0 ? round($wins / $decided * 100, 1) : 0,
+                'totals' => $totals,
+                'pentagon_fields' => PlayerStatFieldSets::pentagonAxesFor($sportName),
+            ];
+        })->values();
+
+        $totalWins = $bySport->sum('wins');
+        $totalLosses = $bySport->sum('losses');
+        $totalDecided = $totalWins + $totalLosses;
+
+        return [
+            'sports' => $bySport,
+            'overall' => [
+                'matches_played' => $rows->count(),
+                'wins' => $totalWins,
+                'losses' => $totalLosses,
+                'win_rate' => $totalDecided > 0 ? round($totalWins / $totalDecided * 100, 1) : 0,
+                'by_sport' => $bySport->map(fn ($s) => [
+                    'sport_id' => $s['sport_id'],
+                    'sport_name' => $s['sport_name'],
+                    'win_rate' => $s['win_rate'],
+                ])->values(),
+            ],
+            'history' => $history,
+        ];
+    }
+
+    // 'draw' covers both a genuine tie and a match BracketService advanced
+    // without recording either winner column (e.g. a group-stage decider) —
+    // in both cases there's no winning side to credit, so it's never counted
+    // as a win or a loss in the win-rate rollup above.
+    private function resultFor(MatchPlayerStat $row, User $user): string
+    {
+        $match = $row->match;
+        $isTeamMatch = $row->team_id !== null;
+        $winningSide = $isTeamMatch ? $match->winner_team_id : $match->winner_id;
+
+        if ($winningSide === null) {
+            return 'draw';
+        }
+
+        $won = $isTeamMatch ? $winningSide === $row->team_id : $winningSide === $user->id;
+
+        return $won ? 'win' : 'loss';
+    }
+
+    private function historyEntryFor(MatchPlayerStat $row, User $user): array
+    {
+        $match = $row->match;
+        $isTeamMatch = $row->team_id !== null;
+
+        $opponentName = $isTeamMatch
+            ? ($match->participant_a_team_id === $row->team_id ? $match->participantBTeam?->name : $match->participantATeam?->name)
+            : ($match->participant_a_id === $user->id ? $match->participantB?->name : $match->participantA?->name);
+
+        return [
+            'match_id' => $match->id,
+            'sport_name' => $row->sport->name,
+            'tournament_name' => $match->bracket?->tournament?->name,
+            'opponent_name' => $opponentName ?? 'TBD',
+            'result' => $this->resultFor($row, $user),
+            'score' => $match->score_a !== null && $match->score_b !== null ? "{$match->score_a}-{$match->score_b}" : null,
+            'date' => ($match->scheduled_at ?? $match->updated_at)?->toIso8601String(),
+        ];
     }
 }

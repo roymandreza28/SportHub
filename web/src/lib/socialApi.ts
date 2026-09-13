@@ -57,16 +57,46 @@ export async function updateOwnCover(file: File) {
 // Career totals from the venue organizer's live scoreboard stats (see
 // MatchController::upsertPlayerStats()), summed per sport across every
 // completed tournament match — powers the profile's stats pentagon. Only
-// sports with at least one recorded match are returned.
+// sports with at least one recorded match are returned. win/loss counts come
+// from the same bracket winner_id/winner_team_id BracketService maintains —
+// a match with neither set (a draw, or a group-stage match with no single
+// decider) counts toward matches_played but not wins or losses.
 export type PlayerStatSummaryEntry = {
   sport_id: number
   sport_name: string
   matches_played: number
+  wins: number
+  losses: number
+  win_rate: number
   totals: Record<string, number>
   pentagon_fields: { key: string; label: string; scale_max: number }[]
 }
 
+export type PlayerMatchHistoryEntry = {
+  match_id: number
+  sport_name: string
+  tournament_name: string | null
+  opponent_name: string
+  result: 'win' | 'loss' | 'draw'
+  score: string | null
+  date: string | null
+}
+
+export type PlayerStatOverall = {
+  matches_played: number
+  wins: number
+  losses: number
+  win_rate: number
+  by_sport: { sport_id: number; sport_name: string; win_rate: number }[]
+}
+
+export type PlayerStatSummary = {
+  sports: PlayerStatSummaryEntry[]
+  overall: PlayerStatOverall
+  history: PlayerMatchHistoryEntry[]
+}
+
 export async function fetchPlayerStatSummary(userId: number) {
-  const { data } = await api.get<PlayerStatSummaryEntry[]>(`/api/social/users/${userId}/stat-summary`)
+  const { data } = await api.get<PlayerStatSummary>(`/api/social/users/${userId}/stat-summary`)
   return data
 }

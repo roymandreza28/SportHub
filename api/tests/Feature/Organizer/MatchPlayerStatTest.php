@@ -225,7 +225,7 @@ it('sums a players career stats correctly across multiple completed matches and 
     $response = $this->actingAs($player)->getJson("/api/social/users/{$player->id}/stat-summary");
 
     $response->assertOk();
-    $data = collect($response->json());
+    $data = collect($response->json('sports'));
     expect($data)->toHaveCount(2);
 
     $basketballEntry = $data->firstWhere('sport_name', 'Basketball');
@@ -236,6 +236,70 @@ it('sums a players career stats correctly across multiple completed matches and 
     $volleyballEntry = $data->firstWhere('sport_name', 'Volleyball');
     expect($volleyballEntry['matches_played'])->toBe(1);
     expect($volleyballEntry['totals']['kills'])->toBe(12);
+});
+
+it('rolls up win/loss records per sport and overall, and lists full match history', function () {
+    $basketball = Sport::create(['name' => 'Basketball', 'category' => 'team']);
+    $bFormat = SportFormat::create(['sport_id' => $basketball->id, 'name' => '5v5', 'players_per_side' => 5]);
+    $tennis = Sport::create(['name' => 'Tennis', 'category' => 'racket']);
+    $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $player = userWithRole('player');
+    $opponentCoach = userWithRole('coach');
+    $opponentPlayer = User::factory()->create();
+
+    // A won team match.
+    $bTournament1 = playerStatTournament($basketball, $bFormat, $organizer, $venueOrganizer);
+    $teamA1 = playerStatTeam($basketball, $bFormat, $player, 'Squad 1');
+    $teamB1 = playerStatTeam($basketball, $bFormat, $opponentCoach, 'Rivals 1');
+    $match1 = playerStatTeamMatch($bTournament1, $teamA1, $teamB1);
+    MatchPlayerStat::create(['match_id' => $match1->id, 'user_id' => $player->id, 'team_id' => $teamA1->id, 'sport_id' => $basketball->id, 'stats' => ['points' => 10]]);
+    $match1->update(['status' => 'completed', 'score_a' => 50, 'score_b' => 40, 'winner_team_id' => $teamA1->id]);
+
+    // A lost team match, same sport.
+    $bTournament2 = playerStatTournament($basketball, $bFormat, $organizer, $venueOrganizer);
+    $teamA2 = playerStatTeam($basketball, $bFormat, $player, 'Squad 2');
+    $teamB2 = playerStatTeam($basketball, $bFormat, $opponentCoach, 'Rivals 2');
+    $match2 = playerStatTeamMatch($bTournament2, $teamA2, $teamB2);
+    MatchPlayerStat::create(['match_id' => $match2->id, 'user_id' => $player->id, 'team_id' => $teamA2->id, 'sport_id' => $basketball->id, 'stats' => ['points' => 5]]);
+    $match2->update(['status' => 'completed', 'score_a' => 30, 'score_b' => 45, 'winner_team_id' => $teamB2->id]);
+
+    // A won individual match, different sport.
+    $tTournament = playerStatTournament($tennis, null, $organizer, $venueOrganizer, 'best_of_sets');
+    $tMatch = playerStatIndividualMatch($tTournament, $player, $opponentPlayer);
+    MatchPlayerStat::create(['match_id' => $tMatch->id, 'user_id' => $player->id, 'team_id' => null, 'sport_id' => $tennis->id, 'stats' => ['points_won' => 40]]);
+    $tMatch->update(['status' => 'completed', 'score_a' => 6, 'score_b' => 3, 'winner_id' => $player->id]);
+
+    $response = $this->actingAs($player)->getJson("/api/social/users/{$player->id}/stat-summary")->assertOk();
+
+    $basketballEntry = collect($response->json('sports'))->firstWhere('sport_name', 'Basketball');
+    expect($basketballEntry['wins'])->toBe(1);
+    expect($basketballEntry['losses'])->toBe(1);
+    expect($basketballEntry['win_rate'])->toBe(50);
+
+    $tennisEntry = collect($response->json('sports'))->firstWhere('sport_name', 'Tennis');
+    expect($tennisEntry['wins'])->toBe(1);
+    expect($tennisEntry['losses'])->toBe(0);
+    expect($tennisEntry['win_rate'])->toBe(100);
+
+    $response->assertJsonPath('overall.matches_played', 3);
+    $response->assertJsonPath('overall.wins', 2);
+    $response->assertJsonPath('overall.losses', 1);
+    expect($response->json('overall.win_rate'))->toBe(66.7);
+    expect($response->json('overall.by_sport'))->toHaveCount(2);
+
+    $history = collect($response->json('history'));
+    expect($history)->toHaveCount(3);
+    expect($history->pluck('result')->sort()->values()->all())->toBe(['loss', 'win', 'win']);
+
+    $wonBasketballGame = $history->firstWhere('match_id', $match1->id);
+    expect($wonBasketballGame['result'])->toBe('win');
+    expect($wonBasketballGame['opponent_name'])->toBe('Rivals 1');
+    expect($wonBasketballGame['tournament_name'])->toBe('Pentagon Cup');
+    expect($wonBasketballGame['score'])->toBe('50-40');
+
+    $tennisGame = $history->firstWhere('match_id', $tMatch->id);
+    expect($tennisGame['opponent_name'])->toBe($opponentPlayer->name);
 });
 
 it('404s the stat summary for a target user with neither the player nor coach role', function () {

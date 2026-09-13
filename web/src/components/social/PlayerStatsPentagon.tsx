@@ -1,7 +1,9 @@
 // Hand-rolled SVG radar chart — no charting library in this codebase (see
-// web/src/components/layout/icons.tsx's all-inline-SVG convention), and a
-// 5-axis pentagon is simple enough to compute directly with trigonometry
-// rather than pulling in a dependency for one chart type.
+// web/src/components/layout/icons.tsx's all-inline-SVG convention). A
+// REGULAR N-GON, same generalization as SkillEvaluationChart.tsx's — a
+// 5-axis per-sport stat set draws a pentagon, but the "overall win rate by
+// sport" chart (ProfilePage.tsx) has one axis per sport the player's
+// actually played, which isn't always 5.
 type PentagonAxis = { key: string; label: string; scale_max: number }
 
 const SIZE = 240
@@ -10,17 +12,27 @@ const RADIUS = SIZE * 0.34
 const LABEL_RADIUS = SIZE * 0.44
 const RING_SCALES = [0.33, 0.66, 1]
 
-function pointAt(index: number, scale: number): { x: number; y: number } {
+function pointAt(index: number, total: number, scale: number): { x: number; y: number } {
   // Start at the top (12 o'clock) and go clockwise, one vertex per axis.
-  const angle = index * ((2 * Math.PI) / 5) - Math.PI / 2
+  const angle = (index * 2 * Math.PI) / total - Math.PI / 2
   return {
     x: CENTER + RADIUS * scale * Math.cos(angle),
     y: CENTER + RADIUS * scale * Math.sin(angle),
   }
 }
 
-function polygonPoints(scales: number[]): string {
-  return scales.map((scale, i) => { const p = pointAt(i, scale); return `${p.x},${p.y}` }).join(' ')
+function polygonPoints(total: number, scale: number): string {
+  return Array.from({ length: total }, (_, i) => pointAt(i, total, scale))
+    .map((p) => `${p.x},${p.y}`)
+    .join(' ')
+}
+
+// Same edge-safe label anchoring as SkillEvaluationChart.tsx — a label
+// centered on a vertex near the left/right edge clips against the viewBox.
+function anchorFor(x: number): 'start' | 'middle' | 'end' {
+  const dx = x - CENTER
+  if (Math.abs(dx) < 8) return 'middle'
+  return dx > 0 ? 'start' : 'end'
 }
 
 export function PlayerStatsPentagon({
@@ -34,8 +46,9 @@ export function PlayerStatsPentagon({
   totals: Record<string, number>
   matchesPlayed: number
 }) {
-  if (axes.length === 0) return null
+  if (axes.length < 3) return null
 
+  const sides = axes.length
   // Clamped only for the polygon's shape — the label text below always
   // shows the real, unclamped career total.
   const dataScales = axes.map((axis) => Math.min(totals[axis.key] ?? 0, axis.scale_max) / axis.scale_max)
@@ -48,22 +61,27 @@ export function PlayerStatsPentagon({
       </p>
       <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width={SIZE} height={SIZE}>
         {RING_SCALES.map((scale) => (
-          <polygon key={scale} points={polygonPoints([scale, scale, scale, scale, scale])} fill="none" stroke="#e2e8f0" strokeWidth={1} />
+          <polygon key={scale} points={polygonPoints(sides, scale)} fill="none" stroke="#e2e8f0" strokeWidth={1} />
         ))}
         {axes.map((_, i) => {
-          const outer = pointAt(i, 1)
+          const outer = pointAt(i, sides, 1)
           return <line key={i} x1={CENTER} y1={CENTER} x2={outer.x} y2={outer.y} stroke="#e2e8f0" strokeWidth={1} />
         })}
-        <polygon points={polygonPoints(dataScales)} fill="rgb(13 148 136 / 0.25)" stroke="rgb(13 148 136)" strokeWidth={2} />
+        <polygon
+          points={dataScales.map((scale, i) => { const p = pointAt(i, sides, scale); return `${p.x},${p.y}` }).join(' ')}
+          fill="rgb(13 148 136 / 0.25)"
+          stroke="rgb(13 148 136)"
+          strokeWidth={2}
+        />
         {axes.map((axis, i) => {
-          const label = pointAt(i, LABEL_RADIUS / RADIUS)
+          const label = pointAt(i, sides, LABEL_RADIUS / RADIUS)
           const total = totals[axis.key] ?? 0
           return (
             <text
               key={axis.key}
               x={label.x}
               y={label.y}
-              textAnchor="middle"
+              textAnchor={anchorFor(label.x)}
               dominantBaseline="middle"
               className="fill-slate-600"
               style={{ fontSize: 10 }}
