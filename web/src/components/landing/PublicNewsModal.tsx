@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchNewsFeed, displayNewsTitle, type NewsItem } from '../../lib/newsApi'
 import { LiveRelayVideo } from '../newsfeed/LiveRelayVideo'
 import { LiveMatchScore } from '../newsfeed/LiveMatchScore'
+import { BracketView } from '../organizer/BracketView'
 import { NewsMediaGrid } from '../newsfeed/NewsMediaGrid'
 import { IconChevronLeft, IconHeart, IconMessageCircle, IconX } from '../layout/icons'
 
@@ -357,6 +358,18 @@ function ArticleDetail({ item, onBack }: { item: NewsItem; onBack: () => void })
       <p className="mt-5 whitespace-pre-line text-base leading-relaxed text-slate-700">{item.body}</p>
 
       {item.match && <LiveMatchScore match={item.match} />}
+
+      {/* A whole-bracket share (ShareBracketModal) tags tournament_id with
+          no match_id — a per-match share tags both and already gets its own
+          LiveMatchScore above. BracketView here is fully read-only (no
+          editing props set) and its bracket fetch is public/unauthenticated,
+          so it works the same for an anonymous visitor as for a logged-in
+          one. */}
+      {item.tournament && !item.match && (
+        <div className="mt-5">
+          <BracketView tournamentId={item.tournament.id} tournamentName={item.tournament.name} />
+        </div>
+      )}
 
       {liveStream && (
         <div className="mt-4">

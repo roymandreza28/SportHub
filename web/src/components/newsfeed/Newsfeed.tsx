@@ -12,6 +12,7 @@ import { NewsComments } from './NewsComments'
 import { NewsMediaGrid } from './NewsMediaGrid'
 import { LiveRelayVideo } from './LiveRelayVideo'
 import { LiveMatchScore } from './LiveMatchScore'
+import { BracketView } from '../organizer/BracketView'
 import { buttonPrimary, buttonSecondary, input, textarea } from '../../lib/formStyles'
 import { IconHeart, IconMessageCircle, IconShare, IconShieldCheck } from '../layout/icons'
 
@@ -202,6 +203,20 @@ export function Newsfeed() {
             {/* Title, details, live scoreboard, then live stream — in that
                 order, matching how a shared live game is meant to read. */}
             {item.match && <LiveMatchScore match={item.match} />}
+            {/* A whole-bracket share (ShareBracketModal) tags tournament_id
+                with no match_id — distinct from a per-match share, which
+                tags both (and already gets its own LiveMatchScore above, so
+                this doesn't also render for that case). BracketView here is
+                the exact same interactive component the organizer manages
+                the tournament from, just with every editing prop left
+                unset — no onSelectMatch/canScheduleMatches/canShareMatches,
+                so it's pure read-only spectating with its own
+                Bracket/Standings toggle and match-detail drill-down. */}
+            {item.tournament && !item.match && (
+              <div className="mt-3">
+                <BracketView tournamentId={item.tournament.id} tournamentName={item.tournament.name} />
+              </div>
+            )}
             {liveStream && (
               <div className="mt-3">
                 <LiveRelayVideo

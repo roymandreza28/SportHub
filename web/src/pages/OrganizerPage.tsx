@@ -419,6 +419,7 @@ export function OrganizerPage() {
                   }
                   canScheduleMatches={isMainOrganizer}
                   canShareMatches={isMainOrganizer}
+                  canShareBracket={isMainOrganizer}
                 />
               </>
             )}

@@ -5,6 +5,7 @@ import { echo } from '../../lib/echo'
 import { chip } from '../../lib/formStyles'
 import { MatchScheduleModal } from './MatchScheduleModal'
 import { ShareMatchModal } from './ShareMatchModal'
+import { ShareBracketModal } from './ShareBracketModal'
 import { TournamentStandingsView } from './TournamentStandingsView'
 import { IconCalendar, IconClipboard, IconShare } from '../layout/icons'
 
@@ -176,12 +177,14 @@ export function BracketView({
   onSelectMatch,
   canScheduleMatches,
   canShareMatches,
+  canShareBracket,
   isStatSheetEligible,
   onOpenStatSheet,
 }: {
   tournamentId: number
-  // Only needed when canShareMatches is set — used to prefill the shared
-  // post's text (e.g. "...in Round 2 of {tournamentName}").
+  // Used to prefill a shared post's text — a per-match share (e.g. "...in
+  // Round 2 of {tournamentName}") when canShareMatches is set, or the
+  // whole-bracket share's title/body when canShareBracket is set.
   tournamentName?: string
   // Only needed for the Standings tab's match-detail popup, to show a
   // best-of-sets match's set-by-set breakdown — omitted entirely (rather
@@ -195,6 +198,11 @@ export function BracketView({
   // Lets the main organizer post an ongoing or just-finished game to the
   // newsfeed/news page — same "main organizer only" scoping as scheduling.
   canShareMatches?: boolean
+  // Lets the main organizer post the WHOLE bracket (not one game) to the
+  // newsfeed — same scoping as canShareMatches, just a separate flag since
+  // sharing the bracket makes sense at any point (even before a single
+  // match has been played), unlike per-match sharing.
+  canShareBracket?: boolean
   // Coach-only: shows a "Stat Sheet" button on any match involving their own
   // team/registered player (computed by the caller — MatchStatSheetPolicy's
   // eligibility rule, re-derived client-side from data the coach already
@@ -226,6 +234,7 @@ export function BracketView({
   })
   const [schedulingMatch, setSchedulingMatch] = useState<BracketMatch | null>(null)
   const [sharingMatch, setSharingMatch] = useState<BracketMatch | null>(null)
+  const [sharingBracket, setSharingBracket] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
   // The bracket's actual rounds/matches live in here, at their natural
@@ -399,13 +408,25 @@ export function BracketView({
         </div>
       )}
 
-      <div className="flex gap-2">
-        <button type="button" className={chip(viewMode === 'bracket')} onClick={() => setViewMode('bracket')}>
-          Bracket
-        </button>
-        <button type="button" className={chip(viewMode === 'standings')} onClick={() => setViewMode('standings')}>
-          Standings
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex gap-2">
+          <button type="button" className={chip(viewMode === 'bracket')} onClick={() => setViewMode('bracket')}>
+            Bracket
+          </button>
+          <button type="button" className={chip(viewMode === 'standings')} onClick={() => setViewMode('standings')}>
+            Standings
+          </button>
+        </div>
+        {canShareBracket && (
+          <button
+            type="button"
+            onClick={() => setSharingBracket(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-700 hover:bg-teal-100"
+          >
+            <IconShare className="h-3.5 w-3.5" />
+            Share bracket
+          </button>
+        )}
       </div>
 
       {viewMode === 'standings' && (
@@ -529,6 +550,14 @@ export function BracketView({
           tournamentId={tournamentId}
           tournamentName={tournamentName ?? 'this tournament'}
           onClose={() => setSharingMatch(null)}
+        />
+      )}
+
+      {sharingBracket && (
+        <ShareBracketModal
+          tournamentId={tournamentId}
+          tournamentName={tournamentName ?? 'this tournament'}
+          onClose={() => setSharingBracket(false)}
         />
       )}
     </div>
