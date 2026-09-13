@@ -14,9 +14,9 @@ import { SocialShell } from '../components/layout/SocialShell'
 import { PostGrid } from '../components/social/PostGrid'
 import { PostComposer } from '../components/social/PostComposer'
 import { ProfileHeaderCard } from '../components/social/ProfileHeaderCard'
-import { PlayerStatsPentagon } from '../components/social/PlayerStatsPentagon'
+import { CareerStatsModal } from '../components/social/CareerStatsModal'
 import { SkillLevelBadge } from '../components/player/SkillLevelBadge'
-import { SkillEvaluationChart } from '../components/player/SkillEvaluationChart'
+import { SkillEvaluationModal } from '../components/player/SkillEvaluationModal'
 import { buttonDanger, buttonPrimary, buttonSecondary } from '../lib/formStyles'
 
 export function ProfilePage() {
@@ -42,11 +42,11 @@ export function ProfilePage() {
     queryFn: () => fetchPlayerStatSummary(id),
   })
 
-  // Both cards default collapsed to a compact summary — the full charts and
-  // match-by-match history are the "details" a viewer opts into, not the
-  // first thing they see landing on a profile.
-  const [skillsExpanded, setSkillsExpanded] = useState(false)
-  const [statsExpanded, setStatsExpanded] = useState(false)
+  // Both cards show only a compact summary inline — the full charts and
+  // match-by-match history are the "details" a viewer opts into via a
+  // modal, not something that pushes the rest of the sidebar down.
+  const [skillsModalOpen, setSkillsModalOpen] = useState(false)
+  const [statsModalOpen, setStatsModalOpen] = useState(false)
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ['social', 'profile', id] })
@@ -186,44 +186,21 @@ export function ProfilePage() {
               <h2 className="text-base font-bold text-slate-900">Skill Levels</h2>
               {user.skill_levels.length > 0 && (
                 <button
-                  onClick={() => setSkillsExpanded((v) => !v)}
+                  onClick={() => setSkillsModalOpen(true)}
                   className="shrink-0 text-xs font-semibold text-teal-600 hover:text-teal-700"
                 >
-                  {skillsExpanded ? 'Hide details ▾' : 'Show details ▸'}
+                  Show details ▸
                 </button>
               )}
             </div>
 
-            {user.skill_levels.length === 0 && <p className="mt-3 text-sm text-slate-400">No coach evaluations yet.</p>}
-
-            {user.skill_levels.length > 0 && !skillsExpanded && (
+            {user.skill_levels.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-400">No coach evaluations yet.</p>
+            ) : (
               <div className="mt-3 flex flex-wrap gap-2">
                 {user.skill_levels.map((sl) => (
                   <SkillLevelBadge key={sl.id} skillLevel={sl} />
                 ))}
-              </div>
-            )}
-
-            {user.skill_levels.length > 0 && skillsExpanded && (
-              <div className="mt-3 flex flex-col gap-4">
-                {user.skill_levels.map((sl) => {
-                  const attributes = sl.latest_evaluation?.criteria?.attributes
-                  return (
-                    <div key={sl.id} className="flex flex-col items-center gap-3">
-                      <SkillLevelBadge skillLevel={sl} />
-                      {/* Only once the coach actually filled in per-attribute
-                          ratings (not every evaluation does — see
-                          EvaluationForm.tsx) is there anything to chart. */}
-                      {attributes && Object.keys(attributes).length > 0 && (
-                        <SkillEvaluationChart
-                          sportName={sl.sport.name}
-                          attributes={attributes}
-                          caption={sl.coach ? `Evaluated by ${sl.coach.name}` : undefined}
-                        />
-                      )}
-                    </div>
-                  )
-                })}
               </div>
             )}
           </div>
@@ -233,10 +210,10 @@ export function ProfilePage() {
               <h2 className="text-base font-bold text-slate-900">Career Stats</h2>
               {!!statSummary?.sports.length && (
                 <button
-                  onClick={() => setStatsExpanded((v) => !v)}
+                  onClick={() => setStatsModalOpen(true)}
                   className="shrink-0 text-xs font-semibold text-teal-600 hover:text-teal-700"
                 >
-                  {statsExpanded ? 'Hide details ▾' : 'Show details ▸'}
+                  Show details ▸
                 </button>
               )}
             </div>
@@ -248,8 +225,6 @@ export function ProfilePage() {
               </p>
             )}
 
-            {/* The overall record stays visible even collapsed — a
-                one-line summary, not one of the "details" being hidden. */}
             {!!statSummary?.overall.matches_played && (
               <p className="mt-3 text-sm text-slate-700">
                 {statSummary.overall.wins}W&ndash;{statSummary.overall.losses}L{' '}
@@ -258,74 +233,6 @@ export function ProfilePage() {
                   {statSummary.overall.matches_played === 1 ? '' : 'es'})
                 </span>
               </p>
-            )}
-
-            {statsExpanded && (
-              <>
-                {!!statSummary?.overall.matches_played && statSummary.overall.by_sport.length >= 3 && (
-                  <div className="mt-3 flex flex-col items-center gap-1 border-b border-slate-100 pb-2">
-                    {/* Reuses PlayerStatsPentagon's same N-gon radar chart —
-                        one axis per sport actually played, showing that
-                        sport's win rate out of 100 — rather than a separate
-                        chart type. */}
-                    <PlayerStatsPentagon
-                      sportName="Win Rate by Sport"
-                      axes={statSummary.overall.by_sport.map((s) => ({ key: String(s.sport_id), label: s.sport_name, scale_max: 100 }))}
-                      totals={Object.fromEntries(statSummary.overall.by_sport.map((s) => [String(s.sport_id), s.win_rate]))}
-                      matchesPlayed={statSummary.overall.matches_played}
-                    />
-                  </div>
-                )}
-
-                {statSummary?.sports.map((entry) => (
-                  <div key={entry.sport_id} className="flex flex-col items-center">
-                    <PlayerStatsPentagon
-                      sportName={entry.sport_name}
-                      axes={entry.pentagon_fields}
-                      totals={entry.totals}
-                      matchesPlayed={entry.matches_played}
-                    />
-                    <p className="-mt-1 text-xs text-slate-400">
-                      {entry.wins}W&ndash;{entry.losses}L ({entry.win_rate}%)
-                    </p>
-                  </div>
-                ))}
-
-                {!!statSummary?.history.length && (
-                  <div className="mt-4 border-t border-slate-100 pt-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Match History</p>
-                    <ul className="mt-2 flex flex-col gap-2">
-                      {statSummary.history.map((h) => (
-                        <li key={h.match_id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-slate-800">
-                              {h.sport_name} vs {h.opponent_name}
-                            </p>
-                            <p className="truncate text-xs text-slate-400">
-                              {h.tournament_name ?? 'Tournament'}
-                              {h.date ? ` · ${new Date(h.date).toLocaleDateString()}` : ''}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            {h.score && <span className="text-xs text-slate-400">{h.score}</span>}
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                h.result === 'win'
-                                  ? 'bg-teal-100 text-teal-700'
-                                  : h.result === 'loss'
-                                    ? 'bg-rose-100 text-rose-700'
-                                    : 'bg-slate-100 text-slate-600'
-                              }`}
-                            >
-                              {h.result === 'win' ? 'W' : h.result === 'loss' ? 'L' : 'D'}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </>
             )}
           </div>
         </div>
@@ -341,6 +248,9 @@ export function ProfilePage() {
           <PostGrid posts={posts?.data ?? []} />
         </div>
       </div>
+
+      {skillsModalOpen && <SkillEvaluationModal skillLevels={user.skill_levels} onClose={() => setSkillsModalOpen(false)} />}
+      {statsModalOpen && statSummary && <CareerStatsModal statSummary={statSummary} onClose={() => setStatsModalOpen(false)} />}
     </SocialShell>
   )
 }
