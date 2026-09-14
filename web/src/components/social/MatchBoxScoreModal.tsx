@@ -13,6 +13,22 @@ function formatEvent(event: MatchRecord['events'][number]): string {
   return event.type
 }
 
+// The point in the GAME this happened, not the wall-clock time it was
+// logged — matches how a real box score reads ("Period 2 / 4 · 5:42"), not
+// a server timestamp nobody watching the game cares about. Only Basketball/
+// 3x3 matches ever have a period/clock (see MatchController::updateScore()'s
+// own comment) — every other sport falls back to the real timestamp, since
+// it has no equivalent "point in the game" concept to show instead.
+function formatEventTime(event: MatchRecord['events'][number]): string {
+  const { period_label: periodLabel, clock_seconds_remaining: secondsRemaining } = event.payload
+  if (typeof periodLabel === 'string' && typeof secondsRemaining === 'number') {
+    const m = Math.floor(secondsRemaining / 60)
+    const s = Math.round(secondsRemaining % 60)
+    return `${periodLabel} · ${m}:${s.toString().padStart(2, '0')}`
+  }
+  return new Date(event.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+}
+
 // One participant's full box score — every field the coach's stat sheet
 // tracks (see StatSheetFieldSets), not just the organizer-tracked subset
 // the career-stats pentagon uses. Roster mode gets one row per player;
@@ -133,9 +149,7 @@ export function MatchBoxScoreModal({ entry, onClose }: { entry: PlayerMatchHisto
               {record.events.map((event, i) => (
                 <div key={i} className="flex items-center justify-between gap-3 px-1.5 py-1 text-xs">
                   <span className="text-slate-600">{formatEvent(event)}</span>
-                  <span className="shrink-0 tabular-nums text-slate-400">
-                    {new Date(event.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+                  <span className="shrink-0 tabular-nums text-slate-400">{formatEventTime(event)}</span>
                 </div>
               ))}
             </div>

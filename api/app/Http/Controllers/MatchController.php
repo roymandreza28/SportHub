@@ -51,7 +51,17 @@ class MatchController extends Controller
         $matchEvent = MatchEvent::create([
             'match_id' => $match->id,
             'type' => 'point',
-            'payload' => ['score_a' => $match->score_a, 'score_b' => $match->score_b],
+            // period_label/clock_seconds_remaining come from whatever the
+            // clock was last synced to via updateClock() (only Basketball/
+            // 3x3 scoreboards ever call it — every other sport leaves both
+            // null) — close enough to "when in the game this happened" for
+            // a match log, without needing a tick-perfect clock snapshot.
+            'payload' => [
+                'score_a' => $match->score_a,
+                'score_b' => $match->score_b,
+                'period_label' => $match->clock_period_label,
+                'clock_seconds_remaining' => $match->clock_seconds_remaining,
+            ],
         ]);
 
         Broadcasting::safely(fn () => MatchEventCreated::dispatch($matchEvent));

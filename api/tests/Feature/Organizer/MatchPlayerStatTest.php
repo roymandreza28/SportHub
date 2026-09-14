@@ -312,3 +312,48 @@ it('404s the stat summary for a target user with neither the player nor coach ro
 
     $this->actingAs($viewer)->getJson("/api/social/users/{$organizer->id}/stat-summary")->assertStatus(404);
 });
+
+it('records a point events period and clock time from whatever the game clock was last synced to', function () {
+    $sport = Sport::create(['name' => 'Basketball', 'category' => 'team']);
+    $format = SportFormat::create(['sport_id' => $sport->id, 'name' => '5v5', 'players_per_side' => 5]);
+    $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $coachA = userWithRole('coach');
+    $coachB = userWithRole('coach');
+    $tournament = playerStatTournament($sport, $format, $organizer, $venueOrganizer);
+    $teamA = playerStatTeam($sport, $format, $coachA, 'Team A');
+    $teamB = playerStatTeam($sport, $format, $coachB, 'Team B');
+    $match = playerStatTeamMatch($tournament, $teamA, $teamB);
+
+    // Mirrors the real scoreboard: the clock syncs (a separate call) before
+    // a score update ever happens.
+    $match->update(['clock_period_label' => 'Period 3 / 4', 'clock_seconds_remaining' => 342]);
+
+    $this->actingAs($venueOrganizer)->patchJson("/api/matches/{$match->id}/score", [
+        'score_a' => 2, 'score_b' => 0, 'status' => 'live',
+    ])->assertOk();
+
+    $event = \App\Models\MatchEvent::where('match_id', $match->id)->latest()->first();
+    expect($event->payload)->toMatchArray([
+        'score_a' => 2, 'score_b' => 0, 'period_label' => 'Period 3 / 4', 'clock_seconds_remaining' => 342,
+    ]);
+});
+
+it('leaves a point events period and clock null for a sport with no game clock', function () {
+    $sport = Sport::create(['name' => 'Tennis', 'category' => 'racket']);
+    $format = SportFormat::create(['sport_id' => $sport->id, 'name' => 'Singles', 'players_per_side' => 1]);
+    $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $playerA = User::factory()->create();
+    $playerB = User::factory()->create();
+    $tournament = playerStatTournament($sport, $format, $organizer, $venueOrganizer);
+    $match = playerStatIndividualMatch($tournament, $playerA, $playerB);
+
+    $this->actingAs($venueOrganizer)->patchJson("/api/matches/{$match->id}/score", [
+        'score_a' => 1, 'score_b' => 0, 'status' => 'live',
+    ])->assertOk();
+
+    $event = \App\Models\MatchEvent::where('match_id', $match->id)->latest()->first();
+    expect($event->payload['period_label'])->toBeNull();
+    expect($event->payload['clock_seconds_remaining'])->toBeNull();
+});
