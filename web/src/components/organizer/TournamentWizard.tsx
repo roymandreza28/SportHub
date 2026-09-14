@@ -6,7 +6,8 @@ import {
   type ScoringType,
   type TournamentFormat,
 } from '../../lib/organizerApi'
-import { fetchSports, fetchSportFormats } from '../../lib/venueApi'
+import { fetchSports, fetchSportFormats, fetchMyVenues, fetchVenues } from '../../lib/venueApi'
+import { useAuth } from '../../lib/AuthContext'
 import { buttonPrimary, fieldGroup, input, label, select, textarea } from '../../lib/formStyles'
 
 const ALL_FORMATS: TournamentFormat[] = ['single_elimination', 'double_elimination', 'round_robin', 'group_stage', 'swiss']
@@ -97,8 +98,18 @@ const SCORING_OPTIONS: { value: string; label: string; scoringType: ScoringType;
 
 export function TournamentWizard() {
   const queryClient = useQueryClient()
+  const { hasRole } = useAuth()
+  // A venue facilitator can only ever hold their tournament at a venue they
+  // themselves registered (see TournamentController::ownVenueRule()) — the
+  // main organizer role keeps today's behavior, any active venue platform-
+  // wide, and picking one stays optional.
+  const isVenueFacilitator = hasRole('venue_facilitator')
   const { data: sports } = useQuery({ queryKey: ['sports'], queryFn: fetchSports })
   const { data: organizers } = useQuery({ queryKey: ['organizer', 'available-organizers'], queryFn: fetchAvailableOrganizers })
+  const { data: venues } = useQuery({
+    queryKey: isVenueFacilitator ? ['facilitator', 'venues'] : ['venues'],
+    queryFn: isVenueFacilitator ? fetchMyVenues : () => fetchVenues(),
+  })
 
   // Collapsed by default — the full form is a dozen-plus fields, which used
   // to sit permanently expanded above the tournament list every time this
@@ -111,6 +122,7 @@ export function TournamentWizard() {
   const [format, setFormat] = useState<TournamentFormat>('single_elimination')
   const [scoringChoice, setScoringChoice] = useState(SCORING_OPTIONS[0].value)
   const [startsAt, setStartsAt] = useState('')
+  const [venueId, setVenueId] = useState<number | ''>('')
   const [venueOrganizerId, setVenueOrganizerId] = useState<number | ''>('')
   const [livestreamOrganizerId, setLivestreamOrganizerId] = useState<number | ''>('')
   const [postTitle, setPostTitle] = useState('')
@@ -151,6 +163,7 @@ export function TournamentWizard() {
       name,
       format,
       starts_at: new Date(startsAt).toISOString(),
+      venue_id: venueId ? Number(venueId) : undefined,
       venue_organizer_id: venueOrganizerId ? Number(venueOrganizerId) : undefined,
       livestream_organizer_id: livestreamOrganizerId ? Number(livestreamOrganizerId) : undefined,
       scoring_type: scoring.scoringType,
@@ -260,6 +273,32 @@ export function TournamentWizard() {
           />
         </div>
         <div className={fieldGroup}>
+          <label className={label}>Venue{isVenueFacilitator ? ' *' : ''}</label>
+          <select
+            value={venueId}
+            onChange={(e) => setVenueId(e.target.value ? Number(e.target.value) : '')}
+            className={select}
+          >
+            <option value="">{isVenueFacilitator ? 'Choose a venue...' : 'No venue (choose later)'}</option>
+            {venues?.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+          {isVenueFacilitator ? (
+            venues && venues.length === 0 ? (
+              <p className="text-xs text-red-600">
+                You haven&apos;t registered a venue yet — add one from the Venues tab before creating a tournament.
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500">Required — you can only hold a tournament at a venue you&apos;ve registered.</p>
+            )
+          ) : (
+            <p className="text-xs text-slate-500">Optional — where this tournament will be held, if you already know.</p>
+          )}
+        </div>
+        <div className={fieldGroup}>
           <label className={label}>Match scoring</label>
           <select value={scoringChoice} onChange={(e) => setScoringChoice(e.target.value)} className={select}>
             {SCORING_OPTIONS.map((s) => (
@@ -363,6 +402,7 @@ export function TournamentWizard() {
             !startsAt ||
             !venueOrganizerId ||
             !livestreamOrganizerId ||
+            (isVenueFacilitator && !venueId) ||
             (sportRequiresTeam && !sportFormatId) ||
             createMutation.isPending
           }

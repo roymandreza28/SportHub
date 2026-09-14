@@ -6,6 +6,7 @@ use App\Models\Sport;
 use App\Models\SportFormat;
 use App\Models\Tournament;
 use App\Models\User;
+use App\Models\Venue;
 use App\Services\BracketService;
 use App\Services\NotificationService;
 use App\Support\NewsMediaStorage;
@@ -58,7 +59,17 @@ class TournamentController extends Controller
             'format' => ['required', 'in:single_elimination,double_elimination,round_robin,group_stage,swiss'],
             'starts_at' => ['required', 'date'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
-            'venue_id' => ['nullable', 'exists:venues,id'],
+            // A venue_facilitator must hold their tournament at a venue they
+            // themselves registered (see ownVenueRule()) — required for
+            // them specifically, since the whole point of them creating a
+            // tournament is to host it at their own place. The main
+            // organizer role keeps today's behavior: no venue required at
+            // all, any active venue if they do pick one.
+            'venue_id' => [
+                $request->user()->hasRole('venue_facilitator') ? 'required' : 'nullable',
+                'exists:venues,id',
+                $this->ownVenueRule($request->user()),
+            ],
             // Required at creation — every tournament must have a venue
             // organizer designated up front, since match scoring is their
             // exclusive responsibility (the main organizer who creates the
@@ -174,7 +185,7 @@ class TournamentController extends Controller
             'name' => ['sometimes', 'string', 'max:255'],
             'starts_at' => ['sometimes', 'date'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
-            'venue_id' => ['nullable', 'exists:venues,id'],
+            'venue_id' => ['nullable', 'exists:venues,id', $this->ownVenueRule($request->user())],
             // Every other transition now has its own dedicated endpoint
             // (proceed()/cancel(), and preparation is set automatically by
             // BracketService) — a raw PATCH can only ever open registration,
@@ -209,6 +220,20 @@ class TournamentController extends Controller
         return function (string $attribute, mixed $value, \Closure $fail) use ($role) {
             if ($value && ! User::find($value)?->hasRole($role)) {
                 $fail("The selected {$attribute} is not a {$role}.");
+            }
+        };
+    }
+
+    // The main organizer role can pick any active venue (or none) — this
+    // restriction only ever bites a venue_facilitator, who can only ever
+    // hold their tournament at a venue they themselves registered
+    // (Venue::facilitator_id === their own id), the same ownership check
+    // VenuePolicy already applies to every other venue-management action.
+    private function ownVenueRule(User $user): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) use ($user) {
+            if ($value && $user->hasRole('venue_facilitator') && ! Venue::where('id', $value)->where('facilitator_id', $user->id)->exists()) {
+                $fail('You can only hold a tournament at a venue you registered.');
             }
         };
     }

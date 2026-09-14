@@ -270,7 +270,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/matches/{match}/stat-sheet', [MatchStatSheetController::class, 'update']);
     });
 
-    Route::middleware('role:organizer|admin')->group(function () {
+    // venue_facilitator can create/run tournaments here too, same as the
+    // main organizer role (see RolesAndPermissionsSeeder's own comment on
+    // that role's 'manage tournaments'/'generate bracket' grant) — the
+    // venue they're allowed to hold one at is restricted server-side in
+    // TournamentController itself, not at the route/permission level.
+    Route::middleware('role:organizer|venue_facilitator|admin')->group(function () {
         Route::post('/tournaments', [TournamentController::class, 'store']);
         Route::patch('/tournaments/{tournament}', [TournamentController::class, 'update']);
         Route::post('/tournaments/{tournament}/generate-bracket', [TournamentController::class, 'generateBracket']);
@@ -290,7 +295,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::get('/organizers/available', [TournamentController::class, 'availableOrganizers'])
-        ->middleware('role:organizer|admin');
+        ->middleware('role:organizer|venue_facilitator|admin');
 
     // Venue organizers run the live scoreboard for whichever tournament they
     // were assigned to, alongside the main organizer role — scoped further

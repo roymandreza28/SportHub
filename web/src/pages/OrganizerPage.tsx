@@ -91,13 +91,21 @@ function TournamentPickerDropdown({
 export function OrganizerPage() {
   const { user, hasRole } = useAuth()
   const isMainOrganizer = hasRole('organizer')
-  const canScoreMatches = isMainOrganizer || hasRole('venue_organizer')
+  // A venue facilitator gets the exact same tournament create/manage/
+  // bracket powers as the main organizer role here — the one restriction
+  // (which venue they're allowed to pick) is enforced server-side in
+  // TournamentController, not in this page. They're never simultaneously
+  // 'organizer'/'venue_organizer'/'livestream_organizer' (see roles.ts'
+  // own ROLE_PRIORITY comment), so this never doubles up with those.
+  const isVenueFacilitator = hasRole('venue_facilitator')
+  const canManageTournaments = isMainOrganizer || isVenueFacilitator
+  const canScoreMatches = canManageTournaments || hasRole('venue_organizer')
   const canManageLivestreams = isMainOrganizer || hasRole('livestream_organizer')
 
   const NAV_ITEMS: NavItem[] = [
     { id: 'overview', label: 'Dashboard', icon: IconHome },
     ...(canScoreMatches
-      ? [{ id: 'tournaments', label: isMainOrganizer ? 'Tournaments' : 'Tournament to Facilitate', icon: IconTrophy }]
+      ? [{ id: 'tournaments', label: canManageTournaments ? 'Tournaments' : 'Tournament to Facilitate', icon: IconTrophy }]
       : []),
     // Newsfeed posting is open to the whole organizer family, not just the
     // main organizer — see NewsController/NewsPolicy's 'manage news'
@@ -163,11 +171,11 @@ export function OrganizerPage() {
   // echo.private() connection to the same channel — laravel-echo's `.leave()`
   // tears down the whole shared channel, so a second subscriber unmounting
   // here would silently kill the header's listeners too.
-  const { data: notifications } = useQuery({ queryKey: ['notifications'], queryFn: fetchNotifications, enabled: isMainOrganizer })
+  const { data: notifications } = useQuery({ queryKey: ['notifications'], queryFn: fetchNotifications, enabled: canManageTournaments })
   const [championModal, setChampionModal] = useState<{ id: number; name: string; championName: string | null } | null>(null)
 
   useEffect(() => {
-    if (!isMainOrganizer || championModal) return
+    if (!canManageTournaments || championModal) return
 
     const unread = (notifications ?? []).find((n) => n.type === 'tournament_champion_crowned' && !n.read_at)
     if (!unread) return
@@ -178,11 +186,17 @@ export function OrganizerPage() {
       championName: unread.data.champion_name != null ? String(unread.data.champion_name) : null,
     })
     markNotificationRead(unread.id).then(() => queryClient.invalidateQueries({ queryKey: ['notifications'] }))
-  }, [notifications, isMainOrganizer, championModal, queryClient])
+  }, [notifications, canManageTournaments, championModal, queryClient])
 
   const myTournaments = (tournaments ?? [])
     .filter((t) => {
       if (isMainOrganizer) return true
+      // Unlike the main organizer (who sees every tournament platform-
+      // wide, per today's existing behavior above), a venue facilitator
+      // only ever sees tournaments they themselves created — matches how
+      // every other permission this role has is already self-scoped (its
+      // own venues, its own bookings).
+      if (isVenueFacilitator) return t.organizer_id === user?.id
       if (hasRole('venue_organizer')) return t.venue_organizer_id === user?.id
       if (hasRole('livestream_organizer')) return t.livestream_organizer_id === user?.id
       return false
@@ -223,10 +237,16 @@ export function OrganizerPage() {
         <>
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-slate-900">
-              {isMainOrganizer ? 'Organizer' : canScoreMatches ? 'Venue Organizer' : 'Livestream Organizer'}
+              {isMainOrganizer
+                ? 'Organizer'
+                : isVenueFacilitator
+                  ? 'Venue Facilitator'
+                  : canScoreMatches
+                    ? 'Venue Organizer'
+                    : 'Livestream Organizer'}
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              {isMainOrganizer
+              {canManageTournaments
                 ? 'Tournaments, brackets, news, and livestreams.'
                 : canScoreMatches
                   ? 'Run the live scoreboard for any ongoing tournament.'
@@ -251,9 +271,9 @@ export function OrganizerPage() {
 
           {canScoreMatches && (
             <ListPreview
-              title={isMainOrganizer ? 'Your Tournaments' : 'Tournaments'}
-              description={isMainOrganizer ? "Every tournament you've created, most recent first." : "Every tournament you've been assigned to, most recent first."}
-              emptyText={isMainOrganizer ? 'No tournaments yet.' : 'No tournaments assigned to you yet.'}
+              title={canManageTournaments ? 'Your Tournaments' : 'Tournaments'}
+              description={canManageTournaments ? "Every tournament you've created, most recent first." : "Every tournament you've been assigned to, most recent first."}
+              emptyText={canManageTournaments ? 'No tournaments yet.' : 'No tournaments assigned to you yet.'}
               rows={myTournaments.map((t) => (
                 <ListRow
                   key={t.id}
@@ -267,7 +287,7 @@ export function OrganizerPage() {
                   onClick={() => setActive('tournaments')}
                   className="text-sm font-medium text-teal-600 hover:text-teal-700"
                 >
-                  {isMainOrganizer ? 'Create tournament' : 'Open scoreboard'} &rarr;
+                  {canManageTournaments ? 'Create tournament' : 'Open scoreboard'} &rarr;
                 </button>
               }
             />
@@ -277,18 +297,18 @@ export function OrganizerPage() {
 
       {active === 'tournaments' && (
         <Section
-          title={isMainOrganizer ? 'Tournaments' : 'Tournament to Facilitate'}
+          title={canManageTournaments ? 'Tournaments' : 'Tournament to Facilitate'}
           description={
-            isMainOrganizer
+            canManageTournaments
               ? 'Create a tournament and manage its bracket.'
               : 'Pick a tournament to run its live scoreboard.'
           }
         >
-          {isMainOrganizer && <TournamentWizard />}
+          {canManageTournaments && <TournamentWizard />}
 
-          <div className={isMainOrganizer ? 'mt-4 border-t border-slate-100 pt-4' : ''}>
+          <div className={canManageTournaments ? 'mt-4 border-t border-slate-100 pt-4' : ''}>
             <h3 className="mb-2 text-sm font-medium text-slate-700">
-              {isMainOrganizer ? 'Your tournaments' : 'Tournaments'}
+              {canManageTournaments ? 'Your tournaments' : 'Tournaments'}
             </h3>
             <TournamentPickerDropdown
               label="Active tournaments"
@@ -308,7 +328,7 @@ export function OrganizerPage() {
               <>
                 {(() => {
                   const selected = myTournaments.find((t) => t.id === selectedTournamentId)
-                  if (!isMainOrganizer || !selected) return null
+                  if (!canManageTournaments || !selected) return null
 
                   if (selected.status === 'draft') {
                     return (
@@ -386,21 +406,22 @@ export function OrganizerPage() {
                     instead.
                   </p>
                 )}
-                {/* The main organizer gets a read-only scoreboard VIEW —
-                    results are the outcome of matches facilitated by
-                    whichever venue organizer they designated, not something
-                    the main organizer scores themselves — while a venue
-                    organizer viewing their own "Tournament to Facilitate"
-                    tab keeps full click-to-score access. Scheduling
-                    matches, though, is the main organizer's job
-                    specifically — canScheduleMatches is the opposite gate
-                    from the editable half of onSelectMatch. */}
+                {/* The main organizer (and, identically, a venue facilitator
+                    managing their own tournament) gets a read-only
+                    scoreboard VIEW — results are the outcome of matches
+                    facilitated by whichever venue organizer they
+                    designated, not something they score themselves —
+                    while a venue organizer viewing their own "Tournament
+                    to Facilitate" tab keeps full click-to-score access.
+                    Scheduling matches, though, is the tournament manager's
+                    job specifically — canScheduleMatches is the opposite
+                    gate from the editable half of onSelectMatch. */}
                 <BracketView
                   tournamentId={selectedTournamentId}
                   tournamentName={myTournaments.find((t) => t.id === selectedTournamentId)?.name}
                   scoringType={myTournaments.find((t) => t.id === selectedTournamentId)?.scoring_type}
                   onSelectMatch={
-                    isMainOrganizer
+                    canManageTournaments
                       ? (match) => {
                           if (match.status === 'live' || match.status === 'completed') setViewingMatch(match)
                         }
@@ -417,15 +438,15 @@ export function OrganizerPage() {
                           }
                         }
                   }
-                  canScheduleMatches={isMainOrganizer}
-                  canShareMatches={isMainOrganizer}
-                  canShareBracket={isMainOrganizer}
+                  canScheduleMatches={canManageTournaments}
+                  canShareMatches={canManageTournaments}
+                  canShareBracket={canManageTournaments}
                 />
               </>
             )}
           </div>
 
-          {!isMainOrganizer && activeMatch && selectedTournamentId && (
+          {!canManageTournaments && activeMatch && selectedTournamentId && (
             <div className="mt-4 border-t border-slate-100 pt-4">
               <ScoreboardLive
                 match={activeMatch}

@@ -104,7 +104,7 @@ function App() {
                 <Route
                   path="/organizer"
                   element={
-                    <ProtectedRoute roles={['organizer', 'venue_organizer', 'livestream_organizer']}>
+                    <ProtectedRoute roles={['organizer', 'venue_organizer', 'livestream_organizer', 'venue_facilitator']}>
                       <OrganizerPage />
                     </ProtectedRoute>
                   }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchMyVenues, fetchVenueSchedule } from '../lib/venueApi'
 import {
@@ -11,7 +12,7 @@ import {
   StatusBadge,
   type NavItem,
 } from '../components/layout/DashboardShell'
-import { IconCalendar, IconChevronDown, IconClipboard, IconFileText, IconHome, IconMapPin } from '../components/layout/icons'
+import { IconCalendar, IconChevronDown, IconClipboard, IconFileText, IconHome, IconMapPin, IconTrophy } from '../components/layout/icons'
 import { VenueMap } from '../components/venue/VenueMap'
 import { VenueList } from '../components/venue/VenueList'
 import { CreateVenueModal } from '../components/venue/CreateVenueModal'
@@ -34,10 +35,17 @@ const NAV_ITEMS: NavItem[] = [
   // 'manage news' to venue_facilitator too (see RolesAndPermissionsSeeder),
   // and neither component assumes the organizer role.
   { id: 'news', label: 'News', icon: IconFileText },
+  // Not an in-page tab like the rest — handleNavigate() below sends this
+  // one to /organizer instead, which already has the full tournament
+  // create/bracket/schedule UI (also granted to this role — see
+  // RolesAndPermissionsSeeder's 'manage tournaments' comment) rather than
+  // duplicating that entire page's logic here.
+  { id: 'tournaments', label: 'Tournaments', icon: IconTrophy },
 ]
 
 export function FacilitatorPage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { data: venues, isLoading } = useQuery({ queryKey: ['facilitator', 'venues'], queryFn: fetchMyVenues })
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [active, setActive] = useTabParam(NAV_ITEMS[0].id)
@@ -48,6 +56,10 @@ export function FacilitatorPage() {
   // refetch whenever the facilitator actually looks at a tab that shows
   // those counts rather than trusting whatever was cached at page load.
   function handleNavigate(id: string) {
+    if (id === 'tournaments') {
+      navigate('/organizer?tab=tournaments')
+      return
+    }
     setActive(id)
     if (id === 'bookings' || id === 'schedule') {
       queryClient.invalidateQueries({ queryKey: ['facilitator', 'venues'] })
