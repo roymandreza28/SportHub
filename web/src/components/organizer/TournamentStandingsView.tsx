@@ -8,6 +8,7 @@ type ParticipantStanding = {
   id: number
   name: string
   wins: number
+  draws: number
   losses: number
   for: number
   against: number
@@ -66,6 +67,7 @@ export function TournamentStandingsView({
         id: participant.id,
         name: participant.name,
         wins: 0,
+        draws: 0,
         losses: 0,
         for: 0,
         against: 0,
@@ -74,19 +76,29 @@ export function TournamentStandingsView({
       entry.matches.push(match)
       // Only a completed match has a real result — a still-scheduled or
       // live game shows up in the participant's own match history below,
-      // just not counted toward their win/loss record yet.
+      // just not counted toward their record yet. A completed match with no
+      // winner (equal scores) is a draw, not a loss for both sides — this
+      // used to fall into the `else` branch below and silently count as a
+      // loss for BOTH participants.
       if (match.status === 'completed') {
         entry.for += forScore
         entry.against += againstScore
         if (match.winner?.id === participant.id) entry.wins += 1
-        else entry.losses += 1
+        else if (match.winner) entry.losses += 1
+        else entry.draws += 1
       }
       standingsMap.set(participant.id, entry)
     }
   }
 
+  // A draw is worth half a win for ranking purposes (the same 1/0.5/0
+  // points scheme the swiss pairing algorithm itself uses — see
+  // BracketService::swissStandings()) rather than not counting at all.
   const ranked = [...standingsMap.values()].sort(
-    (a, b) => b.wins - a.wins || a.losses - b.losses || b.for - b.against - (a.for - a.against)
+    (a, b) =>
+      (b.wins + b.draws * 0.5) - (a.wins + a.draws * 0.5) ||
+      a.losses - b.losses ||
+      b.for - b.against - (a.for - a.against)
   )
 
   if (ranked.length === 0) {
@@ -97,7 +109,7 @@ export function TournamentStandingsView({
     <div className="flex flex-col gap-2">
       {ranked.map((participant, i) => {
         const isExpanded = expandedId === participant.id
-        const played = participant.wins + participant.losses
+        const played = participant.wins + participant.draws + participant.losses
 
         return (
           <div key={participant.id} className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -120,6 +132,12 @@ export function TournamentStandingsView({
               <div className="flex shrink-0 items-center gap-3">
                 <span className="text-sm font-semibold tabular-nums">
                   <span className="text-teal-600">{participant.wins}W</span>
+                  {participant.draws > 0 && (
+                    <>
+                      <span className="text-slate-300"> – </span>
+                      <span className="text-amber-600">{participant.draws}D</span>
+                    </>
+                  )}
                   <span className="text-slate-300"> – </span>
                   <span className="text-red-500">{participant.losses}L</span>
                 </span>
@@ -146,7 +164,7 @@ export function TournamentStandingsView({
                           ? 'W'
                           : match.winner
                             ? 'L'
-                            : null
+                            : 'D'
 
                     return (
                       <button
@@ -161,7 +179,11 @@ export function TournamentStandingsView({
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           {result && (
-                            <span className={`font-bold ${result === 'W' ? 'text-teal-600' : 'text-red-500'}`}>
+                            <span
+                              className={`font-bold ${
+                                result === 'W' ? 'text-teal-600' : result === 'D' ? 'text-amber-600' : 'text-red-500'
+                              }`}
+                            >
                               {result}
                             </span>
                           )}

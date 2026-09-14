@@ -595,12 +595,18 @@ class BracketService
     }
 
     /**
-     * Pairs adjacent players in the given (standings-ordered, or shuffled for
-     * round 1) order. A pairing that's already played once gets one local
-     * swap attempt to reduce rematches — not a guarantee, but enough for a
-     * municipal-scale field without the cost of full backtracking. An odd
-     * field's bye goes to the lowest-ranked player who hasn't had one yet, so
-     * the same player never sits out twice while others never do.
+     * Walks down the given (standings-ordered, or shuffled for round 1)
+     * list from the top: takes the highest-remaining player and pairs them
+     * with the NEAREST player below them they haven't already played,
+     * searching the whole remaining pool rather than stopping at one
+     * adjacent swap — this is what actually keeps players grouped with
+     * others of similar performance while never repeating a pairing, as
+     * long as a fresh opponent exists anywhere in the pool. Only forces a
+     * rematch (against whoever's next in line) when the field is small
+     * enough relative to the round count that no fresh opponent is left at
+     * all — better than leaving someone unpaired. An odd field's bye goes
+     * to the lowest-ranked player who hasn't had one yet, so the same
+     * player never sits out twice while others never do.
      */
     private function pairSwissRound(Bracket $bracket, Collection $orderedIds, int $round, bool $teamMode = false): void
     {
@@ -625,18 +631,23 @@ class BracketService
             array_splice($remaining, $byeIndex, 1);
         }
 
-        $i = 0;
-        while ($i < count($remaining)) {
-            $a = $remaining[$i];
-            $b = $remaining[$i + 1] ?? null;
+        while (count($remaining) > 0) {
+            $p = array_shift($remaining);
 
-            if ($b !== null && isset($remaining[$i + 2]) && $pastPairs->contains($this->swissPairKey($a, $b))) {
-                [$remaining[$i + 1], $remaining[$i + 2]] = [$remaining[$i + 2], $remaining[$i + 1]];
-                $b = $remaining[$i + 1];
+            $idx = null;
+            foreach ($remaining as $j => $candidate) {
+                if (! $pastPairs->contains($this->swissPairKey($p, $candidate))) {
+                    $idx = $j;
+                    break;
+                }
             }
+            // No fresh opponent left anywhere in the pool — force a rematch
+            // against whoever's next rather than leave $p unpaired.
+            $idx ??= 0;
 
-            $pairs[] = [$a, $b];
-            $i += 2;
+            $opp = $remaining[$idx];
+            array_splice($remaining, $idx, 1);
+            $pairs[] = [$p, $opp];
         }
 
         foreach ($pairs as [$a, $b]) {
@@ -721,10 +732,16 @@ class BracketService
     }
 
     /**
-     * Wins first, then point differential, then points scored — same
-     * tiebreak chain as group_stage's rankGroup(), applied across every
-     * swiss-tagged match played so far (a bye counts as a win with no
-     * points either way).
+     * Points first (a win is 1, a draw — a completed match with equal
+     * scores and so no winner — is 0.5 each, same as a bye counting as a
+     * full win with no real opponent), then point differential, then points
+     * scored — same tiebreak chain as group_stage's rankGroup(), applied
+     * across every swiss-tagged match played so far. Crediting a draw as
+     * half a point rather than nothing matters here specifically because
+     * this ranking feeds the NEXT round's pairing — treating a draw as a
+     * loss would drop a player who tied a strong opponent down among
+     * players who lost outright, defeating the point of pairing by
+     * similar performance.
      */
     private function swissStandings(Bracket $bracket, bool $teamMode = false): array
     {
@@ -744,18 +761,20 @@ class BracketService
                     continue;
                 }
 
-                $stats[$playerId] ??= ['id' => $playerId, 'wins' => 0, 'for' => 0, 'against' => 0];
+                $stats[$playerId] ??= ['id' => $playerId, 'points' => 0.0, 'for' => 0, 'against' => 0];
                 $stats[$playerId]['for'] += $scoredFor;
                 $stats[$playerId]['against'] += $scoredAgainst;
                 if ($match->{$winnerField} === $playerId) {
-                    $stats[$playerId]['wins']++;
+                    $stats[$playerId]['points'] += 1;
+                } elseif ($match->{$winnerField} === null && $match->status === 'completed') {
+                    $stats[$playerId]['points'] += 0.5;
                 }
             }
         }
 
         $stats = array_values($stats);
 
-        usort($stats, fn ($a, $b) => $b['wins'] <=> $a['wins']
+        usort($stats, fn ($a, $b) => $b['points'] <=> $a['points']
             ?: ($b['for'] - $b['against']) <=> ($a['for'] - $a['against'])
             ?: $b['for'] <=> $a['for']
         );

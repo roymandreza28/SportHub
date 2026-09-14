@@ -717,6 +717,82 @@ it('gives an odd field a bye that counts as an automatic win, favoring whoever h
     expect($bye2->participant_a_id)->not->toBe($bye1->participant_a_id);
 });
 
+it('credits a draw as half a point for next-round pairing, not the same as a loss', function () {
+    // Regression: swissStandings() used to only increment a plain integer
+    // 'wins' counter, so a completed-but-tied match (equal scores, no
+    // winner) contributed nothing to either side — indistinguishable from
+    // an outright loss. That meant a player who drew a strong opponent
+    // could get paired against round 1's actual loser in round 2, instead
+    // of against another ~0.5-point player as Swiss pairing intends.
+    $tournament = makeTournament('swiss', 4);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    $round1 = $bracket->matches()->where('bracket_type', 'swiss')->where('round', 1)->get();
+    expect($round1)->toHaveCount(2);
+
+    // First match: decisive (a real winner and a real loser). Second match:
+    // a draw (equal scores -> completeMatch() derives winner_id as null).
+    completeMatch($service, $round1[0], 21, 10);
+    completeMatch($service, $round1[1], 15, 15);
+
+    $winnerId = $round1[0]->fresh()->winner_id;
+    $loserId = $round1[0]->fresh()->participant_a_id === $winnerId
+        ? $round1[0]->fresh()->participant_b_id
+        : $round1[0]->fresh()->participant_a_id;
+    $drawnIds = [$round1[1]->fresh()->participant_a_id, $round1[1]->fresh()->participant_b_id];
+
+    $round2 = $bracket->fresh()->matches()->where('bracket_type', 'swiss')->where('round', 2)->first();
+    expect($round2)->not->toBeNull();
+
+    // Round 1's winner (1.0 point) must be paired with one of the two
+    // drawn players (0.5 points each) in round 2, not with round 1's
+    // outright loser (0 points) — a fresh opponent (the drawn players)
+    // exists, so this is never a forced rematch either way.
+    $round2Ids = [$round2->participant_a_id, $round2->participant_b_id];
+    expect($round2Ids)->toContain($winnerId);
+    expect($round2Ids)->not->toContain($loserId);
+    expect(array_intersect($round2Ids, $drawnIds))->not->toBeEmpty();
+});
+
+it('finds a fresh opponent anywhere in the pool instead of settling for one adjacent swap', function () {
+    // Regression: the old pairing loop only tried swapping with the very
+    // next player in line when an adjacent pairing had already happened —
+    // if that swap partner had ALSO already played the top player, it gave
+    // up and paired them anyway. The reference greedy algorithm searches
+    // the whole remaining pool, so a fresh opponent gets found whenever one
+    // exists at all, however far down the list it is.
+    $tournament = makeTournament('swiss', 8);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    // Play every round but the last with the exact same score every time —
+    // ties every player's win count, so round-to-round pairing is
+    // driven purely by "who hasn't played whom yet", the scenario this
+    // fix targets. If a decisive-scoring format ever forced a preventable
+    // rematch, it would show up as a repeated pair across these rounds.
+    $totalRounds = (int) ceil(log(8, 2));
+    for ($round = 1; $round <= $totalRounds; $round++) {
+        $matches = $bracket->fresh()->matches()->where('bracket_type', 'swiss')->where('round', $round)->get();
+        foreach ($matches as $match) {
+            completeMatch($service, $match, 21, 10);
+        }
+    }
+
+    $allMatches = $bracket->fresh()->matches()->where('bracket_type', 'swiss')->get();
+    $pairKeys = $allMatches->map(function (GameMatch $m) {
+        $ids = [$m->participant_a_id, $m->participant_b_id];
+        sort($ids);
+
+        return implode('-', $ids);
+    });
+
+    // 8 players is exactly enough that every round should find a genuinely
+    // fresh opponent for everyone — no pair should repeat across the whole
+    // schedule.
+    expect($pairKeys)->toHaveCount($pairKeys->unique()->count());
+});
+
 it('advances to the next swiss round only once every match in the round is complete', function () {
     $tournament = makeTournament('swiss', 4);
     $service = app(BracketService::class);
