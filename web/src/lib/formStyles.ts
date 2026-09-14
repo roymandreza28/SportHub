@@ -30,7 +30,6 @@ export const buttonPrimary = `${buttonBase} bg-teal-600 text-pure-white shadow-s
 export const buttonSecondary = `${buttonBase} border border-slate-200 bg-white text-slate-700 shadow-xs hover:border-slate-300 hover:bg-slate-50`
 export const buttonDanger = `${buttonBase} bg-red-50 text-red-700 hover:bg-red-100`
 export const buttonSuccess = `${buttonBase} bg-green-600 text-white dark:text-[#1a1a1a] shadow-sm shadow-green-600/20 hover:bg-green-700 hover:shadow-md`
-export const buttonLive = `${buttonBase} bg-red-600 text-pure-white shadow-sm shadow-red-600/20 hover:bg-red-700 hover:shadow-md hover:shadow-red-600/25`
 export const buttonGhost = `inline-flex items-center gap-1 text-sm font-medium text-teal-600 transition-colors hover:text-teal-700`
 
 export const chip = (active: boolean) =>

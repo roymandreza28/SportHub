@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createLivestream, createNews, fetchBracket, fetchLivestreams, freshBracketMatch, type BracketMatch } from '../../lib/organizerApi'
-import { buttonLive, buttonPrimary, buttonSecondary, fieldGroup, input, label, textarea } from '../../lib/formStyles'
+import { createNews, fetchBracket, fetchLivestreams, freshBracketMatch, type BracketMatch } from '../../lib/organizerApi'
+import { buttonPrimary, buttonSecondary, fieldGroup, input, label, textarea } from '../../lib/formStyles'
 import { IconRadio } from '../layout/icons'
 
 type ShareMode = 'scoreboard' | 'stream' | 'both'
@@ -67,19 +67,11 @@ export function ShareMatchModal({
   tournamentName,
   match,
   onClose,
-  onGoLive,
 }: {
   tournamentId: number
   tournamentName: string
   match: BracketMatch
   onClose: () => void
-  // Lets whoever's sharing this game skip composing a newsfeed post
-  // entirely and instead start broadcasting it — see the "Go live" button
-  // below. Only passed by a caller that can also route the organizer into
-  // that match's scoreboard afterward (BracketView threads it through from
-  // OrganizerPage's own match-open routing), so it's absent for any caller
-  // with no scoreboard to proceed to.
-  onGoLive?: (match: BracketMatch) => void
 }) {
   const queryClient = useQueryClient()
 
@@ -159,20 +151,6 @@ export function ShareMatchModal({
 
   const aName = liveMatch.participant_a?.name ?? 'TBD'
   const bName = liveMatch.participant_b?.name ?? 'TBD'
-
-  // Skips composing a post entirely — creates (or reuses, per this match's
-  // own dedicated livestream row) the broadcast for this exact game, then
-  // hands off to onGoLive so the caller can route straight into its
-  // scoreboard, where the little broadcast window (ScoreboardLive) picks up
-  // this same livestream automatically.
-  const goLiveMutation = useMutation({
-    mutationFn: () => createLivestream({ match_id: match.id, tournament_id: tournamentId, title: `${aName} vs ${bName}` }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['livestreams'] })
-      onGoLive?.(match)
-      onClose()
-    },
-  })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -286,18 +264,8 @@ export function ShareMatchModal({
         </div>
 
         {mutation.isError && <p className="mt-3 text-xs text-red-600">Could not post — try again.</p>}
-        {goLiveMutation.isError && <p className="mt-3 text-xs text-red-600">Could not start the broadcast — try again.</p>}
 
-        <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
-          {onGoLive && liveMatch.status !== 'completed' && (
-            <button
-              onClick={() => goLiveMutation.mutate()}
-              disabled={goLiveMutation.isPending}
-              className={`${buttonLive} mr-auto`}
-            >
-              {goLiveMutation.isPending ? 'Starting...' : '🔴 Go live & score'}
-            </button>
-          )}
+        <div className="mt-5 flex justify-end gap-2">
           <button onClick={onClose} className={buttonSecondary}>
             Cancel
           </button>
