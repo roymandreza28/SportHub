@@ -150,7 +150,7 @@ export function TournamentRegistrationsBrowser<T extends RegistrationLike>({
       {viewingMatch && (
         <MatchScoreboardViewer
           match={viewingMatch}
-          tournament={{ name: selectedTournamentName }}
+          tournamentName={selectedTournamentName}
           onClose={() => setViewingMatch(null)}
         />
       )}

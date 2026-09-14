@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { echo } from '../../lib/echo'
-import { fetchLivestreams, type BracketMatch } from '../../lib/organizerApi'
-import { useAuth } from '../../lib/AuthContext'
-import { LivestreamMiniWindow } from './LivestreamMiniWindow'
+import type { BracketMatch } from '../../lib/organizerApi'
 
 // The spectator counterpart to the venue organizer's editable ScoreboardLive
 // — anyone who can already see a tournament's bracket (every role, plus the
@@ -25,30 +22,14 @@ type MatchStatusChangedPayload = {
 
 export function MatchScoreboardViewer({
   match,
-  tournament,
+  tournamentName,
   onClose,
 }: {
   match: BracketMatch
-  // Deliberately a minimal inline shape (not organizerApi's full Tournament
-  // type) — this is also used by a coach/player-facing caller
-  // (TournamentRegistrationsBrowser) that only ever has a lighter
-  // tournament shape on hand, with no organizer/livestream_organizer ids to
-  // give it (so canGoLive below just stays false there, and only the name
-  // display and any ALREADY-running broadcast preview are available).
-  tournament?: { name?: string; organizer_id?: number; livestream_organizer_id?: number }
+  tournamentName?: string
   onClose: () => void
 }) {
-  const { user } = useAuth()
   const [live, setLive] = useState(match)
-
-  // Same little broadcast window ScoreboardLive docks on the editable
-  // scoreboard — the main organizer lands here (read-only score view) once
-  // a venue organizer has been delegated scoring, but they may still be the
-  // one running the livestream, so this stays available regardless.
-  const { data: livestreams } = useQuery({ queryKey: ['livestreams'], queryFn: fetchLivestreams })
-  const livestream = (livestreams ?? []).find((l) => l.match_id === match.id) ?? null
-  const canGoLive =
-    !!user && !!tournament && (tournament.organizer_id === user.id || tournament.livestream_organizer_id === user.id)
 
   useEffect(() => {
     const channel = echo.channel(`match.${match.id}`)
@@ -76,66 +57,62 @@ export function MatchScoreboardViewer({
   const isCompleted = live.status === 'completed'
 
   return (
-    <>
-      <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/70 p-4" onClick={onClose}>
-        <div
-          className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                {tournament?.name ?? 'Tournament'} · Round {live.round}
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/70 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              {tournamentName ?? 'Tournament'} · Round {live.round}
+            </p>
+            {live.court && (
+              <p className="mt-0.5 text-xs text-slate-400">
+                {live.court.venue.name} ({live.court.name})
               </p>
-              {live.court && (
-                <p className="mt-0.5 text-xs text-slate-400">
-                  {live.court.venue.name} ({live.court.name})
-                </p>
-              )}
-            </div>
-            <button
-              onClick={onClose}
-              className="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50"
-            >
-              Close
-            </button>
+            )}
           </div>
-
-          {isLive && (
-            <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-600" /> LIVE
-            </span>
-          )}
-
-          <div className="mt-4 flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-              <span className={`truncate text-base ${live.winner?.id === live.participant_a?.id ? 'font-bold text-teal-700' : 'font-medium text-slate-800'}`}>
-                {aName}
-              </span>
-              {!live.won_by_default && <span className="text-2xl font-black tabular-nums text-slate-900">{live.score_a}</span>}
-            </div>
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-              <span className={`truncate text-base ${live.winner?.id === live.participant_b?.id ? 'font-bold text-teal-700' : 'font-medium text-slate-800'}`}>
-                {bName}
-              </span>
-              {!live.won_by_default && <span className="text-2xl font-black tabular-nums text-slate-900">{live.score_b}</span>}
-            </div>
-          </div>
-
-          {live.won_by_default && live.winner && (
-            <p className="mt-3 text-center text-sm font-medium text-slate-500">{live.winner.name} won by default.</p>
-          )}
-          {isCompleted && !live.won_by_default && live.winner && (
-            <p className="mt-3 text-center text-sm font-semibold text-teal-700">{live.winner.name} wins!</p>
-          )}
-
-          <p className="mt-4 text-center text-xs text-slate-400">
-            View only — scores are updated live by the venue organizer running this game.
-          </p>
+          <button
+            onClick={onClose}
+            className="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50"
+          >
+            Close
+          </button>
         </div>
-      </div>
 
-      <LivestreamMiniWindow match={match} livestream={livestream} canGoLive={canGoLive} />
-    </>
+        {isLive && (
+          <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-600" /> LIVE
+          </span>
+        )}
+
+        <div className="mt-4 flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+            <span className={`truncate text-base ${live.winner?.id === live.participant_a?.id ? 'font-bold text-teal-700' : 'font-medium text-slate-800'}`}>
+              {aName}
+            </span>
+            {!live.won_by_default && <span className="text-2xl font-black tabular-nums text-slate-900">{live.score_a}</span>}
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+            <span className={`truncate text-base ${live.winner?.id === live.participant_b?.id ? 'font-bold text-teal-700' : 'font-medium text-slate-800'}`}>
+              {bName}
+            </span>
+            {!live.won_by_default && <span className="text-2xl font-black tabular-nums text-slate-900">{live.score_b}</span>}
+          </div>
+        </div>
+
+        {live.won_by_default && live.winner && (
+          <p className="mt-3 text-center text-sm font-medium text-slate-500">{live.winner.name} won by default.</p>
+        )}
+        {isCompleted && !live.won_by_default && live.winner && (
+          <p className="mt-3 text-center text-sm font-semibold text-teal-700">{live.winner.name} wins!</p>
+        )}
+
+        <p className="mt-4 text-center text-xs text-slate-400">
+          View only — scores are updated live by the venue organizer running this game.
+        </p>
+      </div>
+    </div>
   )
 }

@@ -216,47 +216,29 @@ it('denies the main organizer from scoring a match in their own tournament — t
     $this->actingAs($owner)->getJson("/api/tournaments/{$tournament->id}/bracket")->assertOk();
 });
 
-it('lets the main organizer create a tournament with no venue organizer or livestream organizer assigned at all', function () {
+it('requires a venue organizer and livestream organizer to be assigned when creating a tournament', function () {
     $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
     $sport = Sport::create(['name' => 'Chess']);
 
-    $response = $this->actingAs($organizer)->postJson('/api/tournaments', [
+    $this->actingAs($organizer)->postJson('/api/tournaments', [
         'sport_id' => $sport->id,
-        'name' => 'Self-Run Cup',
+        'name' => 'Missing Staff Cup',
         'format' => 'round_robin',
         'starts_at' => now()->addWeek()->toIso8601String(),
-        // venue_organizer_id/livestream_organizer_id both omitted on purpose
-        // — the organizer runs the scoreboard and any broadcast themselves.
-    ])->assertCreated();
+        'livestream_organizer_id' => $livestreamOrganizer->id,
+        // venue_organizer_id omitted on purpose
+    ])->assertStatus(422);
 
-    expect($response->json('venue_organizer_id'))->toBeNull();
-    expect($response->json('livestream_organizer_id'))->toBeNull();
-});
-
-it('lets the main organizer score their own tournaments match once no venue organizer is assigned', function () {
-    $owner = userWithRole('organizer');
-    $sport = Sport::create(['name' => 'Chess']);
-
-    $tournament = Tournament::create([
-        'organizer_id' => $owner->id,
+    $this->actingAs($organizer)->postJson('/api/tournaments', [
         'sport_id' => $sport->id,
-        'name' => 'Self-Run Cup',
+        'name' => 'Missing Staff Cup',
         'format' => 'round_robin',
-        'starts_at' => now()->addWeek(),
-        'status' => 'registration',
-        // venue_organizer_id left null.
-    ]);
-
-    foreach (range(1, 2) as $i) {
-        $player = userWithRole('player');
-        TournamentRegistration::create(['tournament_id' => $tournament->id, 'user_id' => $player->id, 'status' => 'pending']);
-    }
-
-    $this->actingAs($owner)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
-    $matchId = $tournament->fresh()->bracket->matches->first()->id;
-
-    $this->actingAs($owner)->patchJson("/api/matches/{$matchId}/score", ['score_a' => 1, 'score_b' => 0, 'status' => 'completed'])
-        ->assertOk();
+        'starts_at' => now()->addWeek()->toIso8601String(),
+        'venue_organizer_id' => $venueOrganizer->id,
+        // livestream_organizer_id omitted on purpose
+    ])->assertStatus(422);
 });
 
 it('publishes news and creates a livestream tied to a tournament the organizer owns', function () {
@@ -563,7 +545,6 @@ it('lets the assigned venue organizer declare a match won by default, completing
 it('denies declaring a match won by default to anyone other than the assigned venue organizer', function () {
     $owner = userWithRole('organizer');
     $venueOrganizer = userWithRole('venue_organizer');
-    $unrelatedVenueOrganizer = userWithRole('venue_organizer');
     $sport = Sport::create(['name' => 'Squash']);
 
     $tournament = Tournament::create([
@@ -573,9 +554,6 @@ it('denies declaring a match won by default to anyone other than the assigned ve
         'format' => 'round_robin',
         'starts_at' => now()->addWeek(),
         'status' => 'registration',
-        // Delegated to a venue organizer — once one is assigned, scoring
-        // (and forfeit) is exclusively theirs, not even the main organizer's.
-        'venue_organizer_id' => $venueOrganizer->id,
     ]);
 
     foreach (range(1, 2) as $i) {
@@ -586,40 +564,13 @@ it('denies declaring a match won by default to anyone other than the assigned ve
     $this->actingAs($owner)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
     $matchId = $tournament->fresh()->bracket->matches->first()->id;
 
-    $this->actingAs($unrelatedVenueOrganizer)->postJson("/api/matches/{$matchId}/forfeit", [
+    $this->actingAs($venueOrganizer)->postJson("/api/matches/{$matchId}/forfeit", [
         'winner_side' => 'a',
     ])->assertForbidden();
 
     $this->actingAs($owner)->postJson("/api/matches/{$matchId}/forfeit", [
         'winner_side' => 'a',
     ])->assertForbidden();
-});
-
-it('lets the main organizer declare a match won by default once no venue organizer is assigned', function () {
-    $owner = userWithRole('organizer');
-    $sport = Sport::create(['name' => 'Squash']);
-
-    $tournament = Tournament::create([
-        'organizer_id' => $owner->id,
-        'sport_id' => $sport->id,
-        'name' => 'Self-Run Forfeit Cup',
-        'format' => 'round_robin',
-        'starts_at' => now()->addWeek(),
-        'status' => 'registration',
-        // venue_organizer_id left null.
-    ]);
-
-    foreach (range(1, 2) as $i) {
-        $player = userWithRole('player');
-        TournamentRegistration::create(['tournament_id' => $tournament->id, 'user_id' => $player->id, 'status' => 'pending']);
-    }
-
-    $this->actingAs($owner)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
-    $matchId = $tournament->fresh()->bracket->matches->first()->id;
-
-    $this->actingAs($owner)->postJson("/api/matches/{$matchId}/forfeit", [
-        'winner_side' => 'a',
-    ])->assertOk();
 });
 
 it('rejects declaring a match already completed as won by default', function () {
