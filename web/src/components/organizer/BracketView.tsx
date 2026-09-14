@@ -180,6 +180,7 @@ export function BracketView({
   canShareBracket,
   isStatSheetEligible,
   onOpenStatSheet,
+  onGoLive,
 }: {
   tournamentId: number
   // Used to prefill a shared post's text — a per-match share (e.g. "...in
@@ -211,6 +212,12 @@ export function BracketView({
   // player-facing or organizer-family callers.
   isStatSheetEligible?: (match: BracketMatch) => boolean
   onOpenStatSheet?: (match: BracketMatch) => void
+  // Lets ShareMatchModal's "Go live & score" button hand off to the same
+  // match-open routing onSelectMatch itself uses (OrganizerPage's own
+  // openMatch) — starting the broadcast and jumping into the scoreboard in
+  // one action, rather than two separate ones. Absent for any caller with
+  // no scoreboard route to send the organizer to (e.g. a coach/player view).
+  onGoLive?: (match: BracketMatch) => void
 }) {
   // 'bracket' (the existing tree/grid view) or 'standings' (a flat,
   // ranked list — every participant with their win/loss record, each
@@ -550,6 +557,7 @@ export function BracketView({
           tournamentId={tournamentId}
           tournamentName={tournamentName ?? 'this tournament'}
           onClose={() => setSharingMatch(null)}
+          onGoLive={onGoLive}
         />
       )}
 
