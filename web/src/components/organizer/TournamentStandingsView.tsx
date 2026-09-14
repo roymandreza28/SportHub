@@ -29,7 +29,10 @@ type ParticipantStanding = {
 // possession of 1st; the rest of that tied group falls to 2nd, still tied
 // with each other. Every other tied group (2nd, 3rd, ...) is left alone —
 // there's no "runner-up champion" to resolve, so no score tiebreak is
-// applied there.
+// applied there. Ranks are DENSE (1, 2, 3, 3, 3, 4, ...), not "standard
+// competition" ranking (1, 2, 3, 3, 3, 6, ...) — a 3-way tie for 3rd is
+// followed by 4th, not 6th; nobody's position number jumps just because
+// of how many people they're tied with.
 function rankStandings(participants: ParticipantStanding[]): { participant: ParticipantStanding; rank: number }[] {
   const winPoints = (p: ParticipantStanding) => p.wins + p.draws * 0.5
 
@@ -51,7 +54,7 @@ function rankStandings(participants: ParticipantStanding[]): { participant: Part
     // rank increment despite equal records — that tie was already broken
     // by score above. Every later equal-record boundary stays tied.
     const championBoundary = i === 1 && sameRecord
-    ranks.push(sameRecord && !championBoundary ? ranks[i - 1] : i + 1)
+    ranks.push(sameRecord && !championBoundary ? ranks[i - 1] : ranks[i - 1] + 1)
   }
 
   return sorted.map((participant, i) => ({ participant, rank: ranks[i] }))
