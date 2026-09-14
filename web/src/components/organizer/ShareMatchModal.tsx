@@ -4,6 +4,14 @@ import { createNews, fetchBracket, fetchLivestreams, freshBracketMatch, type Bra
 import { buttonPrimary, buttonSecondary, fieldGroup, input, label, textarea } from '../../lib/formStyles'
 import { IconRadio } from '../layout/icons'
 
+type ShareMode = 'scoreboard' | 'stream' | 'both'
+
+const MODE_OPTIONS: { value: ShareMode; label: string }[] = [
+  { value: 'scoreboard', label: 'Scoreboard' },
+  { value: 'stream', label: 'Live video' },
+  { value: 'both', label: 'Both' },
+]
+
 // The main organizer's bracket grid only refreshes on match COMPLETION
 // (BracketUpdated/RoundAdvanced) — a still-live match's score can be stale
 // on screen if a venue organizer has been tapping points since the page
@@ -90,6 +98,13 @@ export function ShareMatchModal({
   const [edited, setEdited] = useState(false)
   const [selectedStreamId, setSelectedStreamId] = useState<number | null>(null)
   const [streamChoiceMade, setStreamChoiceMade] = useState(false)
+  // What the post actually embeds — 'stream' omits match_id entirely (no
+  // scoreboard card at all, just the video), 'scoreboard' omits
+  // livestream_id (today's original default), 'both' sends both. Defaults
+  // to 'scoreboard' — switches to 'both' the instant a stream gets
+  // auto-picked below, same "only change what the organizer would've
+  // wanted anyway" spirit as the pre-selection itself.
+  const [mode, setMode] = useState<ShareMode>('scoreboard')
 
   // Pre-select automatically the instant there's exactly one live broadcast
   // to choose from (the common case) — still fully visible/overridable
@@ -97,7 +112,10 @@ export function ShareMatchModal({
   useEffect(() => {
     if (streamChoiceMade) return
     const liveOnly = candidateStreams.filter((l) => l.status === 'live')
-    if (liveOnly.length === 1) setSelectedStreamId(liveOnly[0].id)
+    if (liveOnly.length === 1) {
+      setSelectedStreamId(liveOnly[0].id)
+      setMode('both')
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidateStreams.length, streamChoiceMade])
 
@@ -119,8 +137,8 @@ export function ShareMatchModal({
         title,
         body,
         tournament_id: tournamentId,
-        match_id: match.id,
-        livestream_id: selectedStreamId ?? undefined,
+        match_id: mode === 'stream' ? undefined : match.id,
+        livestream_id: mode === 'scoreboard' ? undefined : (selectedStreamId ?? undefined),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['newsfeed'] })
@@ -172,42 +190,73 @@ export function ShareMatchModal({
             <div className={fieldGroup}>
               <label className={label}>
                 <IconRadio className="mr-1 inline h-3.5 w-3.5" />
-                Livestream broadcast of this game
+                Share as
               </label>
-              <div className="flex flex-col gap-1.5">
-                {candidateStreams.map((stream) => (
+              <div className="flex gap-1.5">
+                {MODE_OPTIONS.map((option) => (
                   <button
-                    key={stream.id}
+                    key={option.value}
                     type="button"
                     onClick={() => {
-                      setSelectedStreamId((id) => (id === stream.id ? null : stream.id))
-                      setStreamChoiceMade(true)
+                      setMode(option.value)
+                      // Nothing to actually pick when there's only one
+                      // candidate — save the extra click.
+                      if (option.value !== 'scoreboard' && !selectedStreamId && candidateStreams.length === 1) {
+                        setSelectedStreamId(candidateStreams[0].id)
+                        setStreamChoiceMade(true)
+                      }
                     }}
-                    className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${
-                      selectedStreamId === stream.id
+                    className={`flex-1 rounded-lg border px-3 py-2 text-center text-sm font-medium transition ${
+                      mode === option.value
                         ? 'border-teal-300 bg-teal-50 text-teal-800'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="min-w-0 truncate">
-                      {stream.title}
-                      {stream.broadcaster && <span className="text-slate-400"> — {stream.broadcaster.name}</span>}
-                    </span>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                        stream.status === 'live' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'
-                      }`}
-                    >
-                      {stream.status}
-                    </span>
+                    {option.label}
                   </button>
                 ))}
               </div>
-              {selectedStreamId && (
-                <p className="mt-1 text-xs text-slate-500">
-                  The post will show the live scoreboard and this broadcast together.
-                </p>
+
+              {mode !== 'scoreboard' && (
+                <>
+                  <p className="mt-3 text-xs font-medium text-slate-600">Which broadcast?</p>
+                  <div className="flex flex-col gap-1.5">
+                    {candidateStreams.map((stream) => (
+                      <button
+                        key={stream.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedStreamId((id) => (id === stream.id ? null : stream.id))
+                          setStreamChoiceMade(true)
+                        }}
+                        className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${
+                          selectedStreamId === stream.id
+                            ? 'border-teal-300 bg-teal-50 text-teal-800'
+                            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="min-w-0 truncate">
+                          {stream.title}
+                          {stream.broadcaster && <span className="text-slate-400"> — {stream.broadcaster.name}</span>}
+                        </span>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                            stream.status === 'live' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          {stream.status}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
+
+              <p className="mt-2 text-xs text-slate-500">
+                {mode === 'scoreboard' && 'The post will show the live scoreboard only.'}
+                {mode === 'stream' && (selectedStreamId ? 'The post will show only the live video, no scoreboard.' : 'Pick a broadcast above.')}
+                {mode === 'both' && (selectedStreamId ? 'The post will show the live scoreboard and this broadcast together.' : 'Pick a broadcast above.')}
+              </p>
             </div>
           )}
         </div>
@@ -218,7 +267,11 @@ export function ShareMatchModal({
           <button onClick={onClose} className={buttonSecondary}>
             Cancel
           </button>
-          <button onClick={() => mutation.mutate()} disabled={!title || !body || mutation.isPending} className={buttonPrimary}>
+          <button
+            onClick={() => mutation.mutate()}
+            disabled={!title || !body || (mode !== 'scoreboard' && !selectedStreamId) || mutation.isPending}
+            className={buttonPrimary}
+          >
             {mutation.isPending ? 'Posting...' : 'Post to newsfeed'}
           </button>
         </div>
