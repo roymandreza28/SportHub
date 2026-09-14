@@ -289,6 +289,71 @@ function computeDoubleEliminationConnectors(
   return edges
 }
 
+type SwissRoundBucket = { label: string; matches: BracketMatch[] }
+type SwissRound = { round: number; buckets: SwissRoundBucket[] }
+
+// Groups each swiss round's matches by the record its players were
+// carrying INTO that round (wins-losses from every earlier round) — the
+// same layout convention as a standard Swiss-stage bracket graphic: a
+// column per round, sub-divided into labeled rows ("2-0", "1-1", "0-2", ...)
+// for whichever record tier landed there, since real Swiss pairing already
+// groups same-record players together. This only reorganizes DISPLAY —
+// it doesn't change who plays whom, which the backend already decided (see
+// BracketService::pairSwissRound()) — so it just re-derives, from the
+// match results already on hand, the record each match's players carried
+// in, the same running tally a real standings table keeps. Draws don't
+// move the win/loss count either way, matching how a completed-but-tied
+// match already behaves elsewhere in this file.
+function computeSwissRecordBuckets(matches: BracketMatch[]): SwissRound[] {
+  const swissMatches = matches.filter((m) => m.bracket_type === 'swiss')
+  const rounds = [...new Set(swissMatches.map((m) => m.round))].sort((a, b) => a - b)
+  const record = new Map<number, { wins: number; losses: number }>()
+
+  const recordLabel = (id: number) => {
+    const r = record.get(id) ?? { wins: 0, losses: 0 }
+    return `${r.wins}-${r.losses}`
+  }
+
+  const result: SwissRound[] = []
+
+  for (const round of rounds) {
+    const roundMatches = swissMatches.filter((m) => m.round === round).sort((a, b) => a.id - b.id)
+    const bucketsByLabel = new Map<string, BracketMatch[]>()
+
+    for (const match of roundMatches) {
+      const aId = match.participant_a?.id
+      const label = aId != null ? recordLabel(aId) : 'TBD'
+      const arr = bucketsByLabel.get(label) ?? []
+      arr.push(match)
+      bucketsByLabel.set(label, arr)
+    }
+
+    // Most wins first — mirrors the reference layout's top-to-bottom order
+    // (2-0 above 1-1 above 0-2).
+    const buckets = [...bucketsByLabel.entries()]
+      .sort(([a], [b]) => Number(b.split('-')[0]) - Number(a.split('-')[0]))
+      .map(([label, bucketMatches]) => ({ label, matches: bucketMatches }))
+
+    result.push({ round, buckets })
+
+    // Fold this round's actual results into the running tally before
+    // computing the next round's bucket labels.
+    for (const match of roundMatches) {
+      if (match.status !== 'completed') continue
+
+      for (const participant of [match.participant_a, match.participant_b]) {
+        if (!participant) continue
+        const r = record.get(participant.id) ?? { wins: 0, losses: 0 }
+        if (match.winner?.id === participant.id) r.wins += 1
+        else if (match.winner) r.losses += 1
+        record.set(participant.id, r)
+      }
+    }
+  }
+
+  return result
+}
+
 export function BracketView({
   tournamentId,
   tournamentName,
@@ -410,6 +475,12 @@ export function BracketView({
   // "show the flow of the tournament".
   const isDoubleElimination = bracket?.format === 'double_elimination'
 
+  // Swiss gets its own record-bucketed layout (a column per round, each
+  // subdivided into labeled rows for whichever win-loss record landed
+  // there — "2-0", "1-1", "0-2", ...) instead of one flat list of matches
+  // per round — see computeSwissRecordBuckets's own doc comment.
+  const isSwiss = bracket?.format === 'swiss'
+
   // Public channel — spectators watching the bracket see round advances and
   // score-driven bracket changes live, without a manual refresh.
   useEffect(() => {
@@ -438,6 +509,9 @@ export function BracketView({
     () => groupDoubleEliminationMatches(structure.flat()),
     [structure]
   )
+
+  // Only computed/used when isSwiss — see computeSwissRecordBuckets.
+  const swissRounds = useMemo(() => computeSwissRecordBuckets(structure.flat()), [structure])
 
   // Measures each visible match card relative to the scrollable bracket
   // container and draws an elbowed connector + arrowhead from every match
@@ -719,6 +793,28 @@ export function BracketView({
                   {renderMatchCard(finalMatch)}
                 </div>
               )}
+            </div>
+          ) : isSwiss ? (
+            <div
+              ref={contentRef}
+              className="flex w-max items-start gap-8"
+              style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
+            >
+              {swissRounds.map(({ round, buckets }) => (
+                <div key={round} className="flex flex-col gap-6">
+                  <h4 className="text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Round {round}
+                  </h4>
+                  {buckets.map((bucket) => (
+                    <div key={bucket.label} className="flex flex-col gap-2">
+                      <h5 className="text-center text-[10px] font-bold uppercase tracking-wide text-teal-600">
+                        {bucket.label}
+                      </h5>
+                      <div className="flex flex-col gap-4">{bucket.matches.map((match) => renderMatchCard(match))}</div>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           ) : (
             <div
