@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { updateMatchScore, updateMatchSets, type BracketMatch, type SetScore, type Tournament } from '../../lib/organizerApi'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { fetchLivestreams, updateMatchScore, updateMatchSets, type BracketMatch, type SetScore, type Tournament } from '../../lib/organizerApi'
 import { echo } from '../../lib/echo'
+import { useAuth } from '../../lib/AuthContext'
 import { buttonPrimary, buttonSecondary, buttonSuccess } from '../../lib/formStyles'
 import { BasketballScoreboard } from './BasketballScoreboard'
 import { Basketball3x3Scoreboard } from './Basketball3x3Scoreboard'
@@ -11,6 +12,7 @@ import { PickleballScoreboard } from './PickleballScoreboard'
 import { TableTennisScoreboard } from './TableTennisScoreboard'
 import { TennisScoreboard } from './TennisScoreboard'
 import { BowlingScoreboard } from './BowlingScoreboard'
+import { LivestreamMiniWindow } from './LivestreamMiniWindow'
 
 type LiveUpdate = { score_a: number; score_b: number; status?: string }
 
@@ -252,6 +254,28 @@ export function ScoreboardLive({
   tournament?: Tournament
   onClose: () => void
 }) {
+  const { user } = useAuth()
+  // Same ['livestreams'] cache OrganizerPage's own top-level query already
+  // populates — this just reads it back, no extra request in practice.
+  const { data: livestreams } = useQuery({ queryKey: ['livestreams'], queryFn: fetchLivestreams })
+  const livestream = (livestreams ?? []).find((l) => l.match_id === match.id) ?? null
+  // Mirrors LivestreamController::store()'s own authorization check exactly
+  // (tournament owner or its assigned livestream_organizer), rather than a
+  // role name — stays correct for a venue facilitator, who holds "manage
+  // livestreams" via a direct permission grant rather than the
+  // 'livestream_organizer' role itself.
+  const canGoLive =
+    !!user && !!tournament && (tournament.organizer_id === user.id || tournament.livestream_organizer_id === user.id)
+
+  return (
+    <>
+      {renderScoreboard(match, tournamentId, tournament, onClose)}
+      <LivestreamMiniWindow match={match} livestream={livestream} canGoLive={canGoLive} />
+    </>
+  )
+}
+
+function renderScoreboard(match: BracketMatch, tournamentId: number, tournament: Tournament | undefined, onClose: () => void) {
   // Basketball and volleyball get sport-accurate scoreboards; every other
   // sport keeps the generic single-score/best-of-sets boards below. The rich
   // quarters/clock/foul-bonus basketball board assumes NBA/FIBA-style 5v5

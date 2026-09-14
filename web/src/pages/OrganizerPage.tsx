@@ -100,7 +100,13 @@ export function OrganizerPage() {
   const isVenueFacilitator = hasRole('venue_facilitator')
   const canManageTournaments = isMainOrganizer || isVenueFacilitator
   const canScoreMatches = canManageTournaments || hasRole('venue_organizer')
-  const canManageLivestreams = isMainOrganizer || hasRole('livestream_organizer')
+  // A venue facilitator holds 'manage livestreams' via a direct permission
+  // grant (LivestreamPolicy::create checks $user->can(...), not a role
+  // name — see RolesAndPermissionsSeeder), not the 'livestream_organizer'
+  // role itself, so this needs its own OR clause rather than falling out of
+  // hasRole('livestream_organizer') the way it does for a real livestream
+  // organizer account.
+  const canManageLivestreams = isMainOrganizer || isVenueFacilitator || hasRole('livestream_organizer')
 
   const NAV_ITEMS: NavItem[] = [
     { id: 'overview', label: 'Dashboard', icon: IconHome },
@@ -149,6 +155,26 @@ export function OrganizerPage() {
   // The main organizer's read-only counterpart to the venue organizer's
   // editable scoreboard above — see MatchScoreboardViewer.
   const [viewingMatch, setViewingMatch] = useState<BracketMatch | null>(null)
+
+  // Shared by both the match card's own onClick and ShareMatchModal's "Go
+  // live & score" button (via onGoLive below) — the same "which screen does
+  // this match open into" decision either way, so going live and clicking
+  // straight into a match land in the same place.
+  function openMatch(match: BracketMatch) {
+    if (isMainOrganizer) {
+      if (match.status === 'live' || match.status === 'completed') setViewingMatch(match)
+      return
+    }
+    // A still-scheduled game with both sides determined gets the
+    // win-by-default/start-game choice first; a match already live/completed
+    // (re-opening the scoreboard, e.g. after closing it) skips straight to
+    // the scoreboard as before.
+    if (match.status === 'scheduled' && match.participant_a_id && match.participant_b_id) {
+      setPendingMatch(match)
+    } else {
+      setActiveMatchId(match.id)
+    }
+  }
 
   // The organizer's "close registration early" option — the same action
   // BracketService::autoStartExpired() performs automatically once starts_at
@@ -425,24 +451,8 @@ export function OrganizerPage() {
                   tournamentId={selectedTournamentId}
                   tournamentName={myTournaments.find((t) => t.id === selectedTournamentId)?.name}
                   scoringType={myTournaments.find((t) => t.id === selectedTournamentId)?.scoring_type}
-                  onSelectMatch={
-                    isMainOrganizer
-                      ? (match) => {
-                          if (match.status === 'live' || match.status === 'completed') setViewingMatch(match)
-                        }
-                      : (match) => {
-                          // A still-scheduled game with both sides determined
-                          // gets the win-by-default/start-game choice first;
-                          // a match already live/completed (re-opening the
-                          // scoreboard, e.g. after closing it) skips straight
-                          // to the scoreboard as before.
-                          if (match.status === 'scheduled' && match.participant_a_id && match.participant_b_id) {
-                            setPendingMatch(match)
-                          } else {
-                            setActiveMatchId(match.id)
-                          }
-                        }
-                  }
+                  onSelectMatch={openMatch}
+                  onGoLive={canManageLivestreams ? openMatch : undefined}
                   canScheduleMatches={canManageTournaments}
                   canShareMatches={canManageTournaments}
                   canShareBracket={canManageTournaments}
