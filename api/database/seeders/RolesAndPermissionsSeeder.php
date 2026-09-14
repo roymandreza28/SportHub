@@ -22,13 +22,14 @@ class RolesAndPermissionsSeeder extends Seeder
         // Can also create and run tournaments, same as 'organizer' —
         // TournamentController::store()/update() additionally restrict
         // which venue_id they're allowed to pick to one they themselves
-        // registered (facilitator_id === their own id); everything else
-        // about tournament management (bracket generation, proceed/cancel,
-        // scheduling matches to a court) works identically to the main
-        // organizer role. Deliberately excludes 'update match score' and
-        // 'manage livestreams' — those stay the separate venue_organizer/
-        // livestream_organizer roles' job, exactly as they are for a
-        // tournament the main organizer role creates.
+        // registered (facilitator_id === their own id). Unlike the main
+        // organizer role, a venue facilitator has no separate venue-
+        // organizer/livestream-organizer staff to assign — they fill both
+        // of those jobs themselves (TournamentController auto-assigns
+        // venue_organizer_id/livestream_organizer_id to their own id, see
+        // its own comment), so this role needs 'update match score' and
+        // 'manage livestreams' too, which the main organizer role never
+        // needs directly (it always assigns those to someone else).
         'venue_facilitator' => [
             'manage venues',
             'manage courts',
@@ -37,6 +38,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage news',
             'manage tournaments',
             'generate bracket',
+            'update match score',
+            'manage livestreams',
         ],
         // Scores/fouls/timeouts for any organizer's ongoing tournament —
         // deliberately excludes 'manage tournaments'/'generate bracket' so

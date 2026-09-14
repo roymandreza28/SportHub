@@ -406,22 +406,27 @@ export function OrganizerPage() {
                     instead.
                   </p>
                 )}
-                {/* The main organizer (and, identically, a venue facilitator
-                    managing their own tournament) gets a read-only
-                    scoreboard VIEW — results are the outcome of matches
-                    facilitated by whichever venue organizer they
-                    designated, not something they score themselves —
-                    while a venue organizer viewing their own "Tournament
-                    to Facilitate" tab keeps full click-to-score access.
-                    Scheduling matches, though, is the tournament manager's
-                    job specifically — canScheduleMatches is the opposite
-                    gate from the editable half of onSelectMatch. */}
+                {/* The main organizer gets a read-only scoreboard VIEW —
+                    results are the outcome of matches facilitated by
+                    whichever venue organizer they designated, not something
+                    the main organizer scores themselves. A venue
+                    facilitator is different: they have no separate venue
+                    organizer to designate (see TournamentController::
+                    store()'s own comment — they're auto-assigned to that
+                    job themselves), so they keep full click-to-score access
+                    same as a real venue organizer would, even though they
+                    also get the main-organizer-style management actions
+                    above (bracket generation, proceed/cancel). Scheduling
+                    matches, though, is the tournament manager's job
+                    specifically — canScheduleMatches stays keyed off
+                    canManageTournaments, not this narrower read-only-vs-
+                    editable split. */}
                 <BracketView
                   tournamentId={selectedTournamentId}
                   tournamentName={myTournaments.find((t) => t.id === selectedTournamentId)?.name}
                   scoringType={myTournaments.find((t) => t.id === selectedTournamentId)?.scoring_type}
                   onSelectMatch={
-                    canManageTournaments
+                    isMainOrganizer
                       ? (match) => {
                           if (match.status === 'live' || match.status === 'completed') setViewingMatch(match)
                         }
@@ -446,7 +451,7 @@ export function OrganizerPage() {
             )}
           </div>
 
-          {!canManageTournaments && activeMatch && selectedTournamentId && (
+          {!isMainOrganizer && activeMatch && selectedTournamentId && (
             <div className="mt-4 border-t border-slate-100 pt-4">
               <ScoreboardLive
                 match={activeMatch}

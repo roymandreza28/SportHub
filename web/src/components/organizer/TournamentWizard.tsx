@@ -105,7 +105,13 @@ export function TournamentWizard() {
   // wide, and picking one stays optional.
   const isVenueFacilitator = hasRole('venue_facilitator')
   const { data: sports } = useQuery({ queryKey: ['sports'], queryFn: fetchSports })
-  const { data: organizers } = useQuery({ queryKey: ['organizer', 'available-organizers'], queryFn: fetchAvailableOrganizers })
+  // A facilitator fills the venue/livestream organizer jobs themselves
+  // (see TournamentController::store()) — no need to fetch who else could.
+  const { data: organizers } = useQuery({
+    queryKey: ['organizer', 'available-organizers'],
+    queryFn: fetchAvailableOrganizers,
+    enabled: !isVenueFacilitator,
+  })
   const { data: venues } = useQuery({
     queryKey: isVenueFacilitator ? ['facilitator', 'venues'] : ['venues'],
     queryFn: isVenueFacilitator ? fetchMyVenues : () => fetchVenues(),
@@ -164,8 +170,10 @@ export function TournamentWizard() {
       format,
       starts_at: new Date(startsAt).toISOString(),
       venue_id: venueId ? Number(venueId) : undefined,
-      venue_organizer_id: venueOrganizerId ? Number(venueOrganizerId) : undefined,
-      livestream_organizer_id: livestreamOrganizerId ? Number(livestreamOrganizerId) : undefined,
+      // A facilitator never sends these — the backend auto-assigns them
+      // to their own id regardless (see TournamentController::store()).
+      venue_organizer_id: isVenueFacilitator ? undefined : venueOrganizerId ? Number(venueOrganizerId) : undefined,
+      livestream_organizer_id: isVenueFacilitator ? undefined : livestreamOrganizerId ? Number(livestreamOrganizerId) : undefined,
       scoring_type: scoring.scoringType,
       sets_to_win: scoring.setsToWin,
       post_title: postTitle || undefined,
@@ -308,50 +316,61 @@ export function TournamentWizard() {
             ))}
           </select>
         </div>
-        <div className={fieldGroup}>
-          <label className={label}>Venue organizer (scoreboard) *</label>
-          <select
-            value={venueOrganizerId}
-            onChange={(e) => setVenueOrganizerId(e.target.value ? Number(e.target.value) : '')}
-            className={select}
-          >
-            <option value="">Choose a venue organizer...</option>
-            {organizers?.venue_organizers.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
-          {organizers && organizers.venue_organizers.length === 0 && (
-            <p className="text-xs text-red-600">
-              No venue organizer accounts exist yet — ask an admin to create one before you can create a tournament.
+        {isVenueFacilitator ? (
+          <div className={`${fieldGroup} sm:col-span-2`}>
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              You&apos;ll run the live scoreboard and any livestream for this tournament yourself — there&apos;s no
+              separate venue/livestream organizer to assign.
             </p>
-          )}
-          <p className="text-xs text-slate-500">
-            Required — scoring is always run by the venue organizer you assign here, not by you.
-          </p>
-        </div>
-        <div className={fieldGroup}>
-          <label className={label}>Livestream organizer *</label>
-          <select
-            value={livestreamOrganizerId}
-            onChange={(e) => setLivestreamOrganizerId(e.target.value ? Number(e.target.value) : '')}
-            className={select}
-          >
-            <option value="">Choose a livestream organizer...</option>
-            {organizers?.livestream_organizers.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
-          {organizers && organizers.livestream_organizers.length === 0 && (
-            <p className="text-xs text-red-600">
-              No livestream organizer accounts exist yet — ask an admin to create one before you can create a
-              tournament.
-            </p>
-          )}
-        </div>
+          </div>
+        ) : (
+          <>
+            <div className={fieldGroup}>
+              <label className={label}>Venue organizer (scoreboard) *</label>
+              <select
+                value={venueOrganizerId}
+                onChange={(e) => setVenueOrganizerId(e.target.value ? Number(e.target.value) : '')}
+                className={select}
+              >
+                <option value="">Choose a venue organizer...</option>
+                {organizers?.venue_organizers.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+              {organizers && organizers.venue_organizers.length === 0 && (
+                <p className="text-xs text-red-600">
+                  No venue organizer accounts exist yet — ask an admin to create one before you can create a tournament.
+                </p>
+              )}
+              <p className="text-xs text-slate-500">
+                Required — scoring is always run by the venue organizer you assign here, not by you.
+              </p>
+            </div>
+            <div className={fieldGroup}>
+              <label className={label}>Livestream organizer *</label>
+              <select
+                value={livestreamOrganizerId}
+                onChange={(e) => setLivestreamOrganizerId(e.target.value ? Number(e.target.value) : '')}
+                className={select}
+              >
+                <option value="">Choose a livestream organizer...</option>
+                {organizers?.livestream_organizers.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+              {organizers && organizers.livestream_organizers.length === 0 && (
+                <p className="text-xs text-red-600">
+                  No livestream organizer accounts exist yet — ask an admin to create one before you can create a
+                  tournament.
+                </p>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="max-w-xl border-t border-slate-200 pt-4">
@@ -400,9 +419,7 @@ export function TournamentWizard() {
             !sportId ||
             !name ||
             !startsAt ||
-            !venueOrganizerId ||
-            !livestreamOrganizerId ||
-            (isVenueFacilitator && !venueId) ||
+            (isVenueFacilitator ? !venueId : !venueOrganizerId || !livestreamOrganizerId) ||
             (sportRequiresTeam && !sportFormatId) ||
             createMutation.isPending
           }

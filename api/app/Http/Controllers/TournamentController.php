@@ -70,12 +70,25 @@ class TournamentController extends Controller
                 'exists:venues,id',
                 $this->ownVenueRule($request->user()),
             ],
-            // Required at creation — every tournament must have a venue
-            // organizer designated up front, since match scoring is their
-            // exclusive responsibility (the main organizer who creates the
-            // tournament never scores it themselves; see MatchPolicy).
-            'venue_organizer_id' => ['required', 'exists:users,id', $this->hasRoleRule('venue_organizer')],
-            'livestream_organizer_id' => ['required', 'exists:users,id', $this->hasRoleRule('livestream_organizer')],
+            // Required at creation for the main organizer role — every one
+            // of their tournaments must have a venue organizer designated
+            // up front, since match scoring is that person's exclusive
+            // responsibility (the main organizer who creates the
+            // tournament never scores it themselves; see MatchPolicy). A
+            // venue_facilitator has no separate staff to assign here at
+            // all — these two fields are silently overridden to their own
+            // id below, so the request doesn't need to (and isn't asked
+            // to) supply them.
+            'venue_organizer_id' => [
+                $request->user()->hasRole('venue_facilitator') ? 'sometimes' : 'required',
+                'exists:users,id',
+                $this->hasRoleRule('venue_organizer'),
+            ],
+            'livestream_organizer_id' => [
+                $request->user()->hasRole('venue_facilitator') ? 'sometimes' : 'required',
+                'exists:users,id',
+                $this->hasRoleRule('livestream_organizer'),
+            ],
             'scoring_type' => ['sometimes', 'in:single_score,best_of_sets'],
             'sets_to_win' => ['required_if:scoring_type,best_of_sets', 'nullable', 'integer', 'min:2', 'max:4'],
             // Optional linked newsfeed announcement — mirrors NewsController::store()'s
@@ -93,6 +106,17 @@ class TournamentController extends Controller
         ]);
 
         $this->validateSportFormat($data);
+
+        // A venue facilitator fills the venue-organizer/livestream-
+        // organizer jobs themselves rather than assigning someone else to
+        // them — overridden here rather than trusted from the request, the
+        // same "never trust the client for what the server already knows"
+        // principle as everywhere else server-derived (e.g. MatchController
+        // ::upsertPlayerStats()'s team_id).
+        if ($request->user()->hasRole('venue_facilitator')) {
+            $data['venue_organizer_id'] = $request->user()->id;
+            $data['livestream_organizer_id'] = $request->user()->id;
+        }
 
         $tournament = DB::transaction(function () use ($request, $data) {
             $tournament = $request->user()->organizedTournaments()->create([
@@ -131,10 +155,13 @@ class TournamentController extends Controller
     // creation (required fields, so always fires there) and when update()
     // hands the role to someone new. Re-saving the same assignee (or an
     // update that doesn't touch these fields at all) intentionally stays
-    // silent so accepting/re-editing a tournament doesn't re-notify.
+    // silent so accepting/re-editing a tournament doesn't re-notify. Also
+    // silent when the assignee is the tournament's own creator — a venue
+    // facilitator auto-assigned to their own tournament shouldn't get a
+    // "you were assigned to a tournament" notification about themselves.
     private function notifyAssignment(Tournament $tournament, string $field, ?int $newUserId): void
     {
-        if (! $newUserId) {
+        if (! $newUserId || $newUserId === $tournament->organizer_id) {
             return;
         }
 
@@ -195,6 +222,13 @@ class TournamentController extends Controller
             'venue_organizer_id' => ['nullable', 'exists:users,id', $this->hasRoleRule('venue_organizer')],
             'livestream_organizer_id' => ['nullable', 'exists:users,id', $this->hasRoleRule('livestream_organizer')],
         ]);
+
+        // A venue facilitator always fills these jobs themselves (see
+        // store()'s own comment) — never something they can hand off to
+        // someone else via an update either.
+        if ($request->user()->hasRole('venue_facilitator')) {
+            unset($data['venue_organizer_id'], $data['livestream_organizer_id']);
+        }
 
         $previousVenueOrganizerId = $tournament->venue_organizer_id;
         $previousLivestreamOrganizerId = $tournament->livestream_organizer_id;

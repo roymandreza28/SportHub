@@ -300,7 +300,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Venue organizers run the live scoreboard for whichever tournament they
     // were assigned to, alongside the main organizer role — scoped further
     // by MatchPolicy::updateScore() to that specific tournament assignment.
-    Route::middleware('role:organizer|venue_organizer|admin')->group(function () {
+    // venue_facilitator included too — they're auto-assigned as their own
+    // tournaments' venue organizer (see TournamentController::store()),
+    // having no separate staff to hand scoring off to.
+    Route::middleware('role:organizer|venue_organizer|venue_facilitator|admin')->group(function () {
         Route::patch('/matches/{match}/score', [MatchController::class, 'updateScore']);
         Route::patch('/matches/{match}/clock', [MatchController::class, 'updateClock']);
         Route::post('/matches/{match}/forfeit', [MatchController::class, 'forfeit']);
@@ -310,8 +313,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Livestream organizers feed camera footage into whichever tournament's
     // stream they were assigned to, alongside the main organizer role —
     // scoped further by LivestreamController::store() and LivestreamPolicy
-    // to that specific tournament assignment.
-    Route::middleware('role:organizer|livestream_organizer|admin')->group(function () {
+    // to that specific tournament assignment. venue_facilitator included
+    // too, same reasoning as the match-scoring group above.
+    Route::middleware('role:organizer|livestream_organizer|venue_facilitator|admin')->group(function () {
         Route::post('/livestreams', [LivestreamController::class, 'store']);
         Route::patch('/livestreams/{livestream}', [LivestreamController::class, 'update']);
         Route::delete('/livestreams/{livestream}', [LivestreamController::class, 'destroy']);

@@ -13,7 +13,33 @@ function facilitatorVenue(\App\Models\User $facilitator, string $name = 'My Gym'
     ]);
 }
 
-it('lets a venue facilitator create a tournament at their own registered venue', function () {
+it('lets a venue facilitator create a tournament at their own registered venue, auto-assigned as its own venue/livestream organizer', function () {
+    $facilitator = userWithRole('venue_facilitator');
+    $venue = facilitatorVenue($facilitator);
+    $sport = Sport::create(['name' => 'Basketball']);
+
+    // Deliberately doesn't send venue_organizer_id/livestream_organizer_id
+    // at all — a facilitator has no separate staff to pick.
+    $response = $this->actingAs($facilitator)->postJson('/api/tournaments', [
+        'sport_id' => $sport->id,
+        'name' => 'Gym Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek()->toIso8601String(),
+        'venue_id' => $venue->id,
+    ])->assertCreated();
+
+    $tournament = Tournament::find($response->json('id'));
+    expect($tournament)
+        ->organizer_id->toBe($facilitator->id)
+        ->venue_id->toBe($venue->id)
+        ->venue_organizer_id->toBe($facilitator->id)
+        ->livestream_organizer_id->toBe($facilitator->id);
+
+    // No "you were assigned" self-notification.
+    expect(\App\Models\Notification::where('user_id', $facilitator->id)->where('type', 'tournament_assigned')->exists())->toBeFalse();
+});
+
+it('ignores an explicit venue/livestream organizer a facilitator tries to assign, overriding it to themselves', function () {
     $facilitator = userWithRole('venue_facilitator');
     $venueOrganizer = userWithRole('venue_organizer');
     $livestreamOrganizer = userWithRole('livestream_organizer');
@@ -31,14 +57,38 @@ it('lets a venue facilitator create a tournament at their own registered venue',
     ])->assertCreated();
 
     expect(Tournament::find($response->json('id')))
-        ->organizer_id->toBe($facilitator->id)
-        ->venue_id->toBe($venue->id);
+        ->venue_organizer_id->toBe($facilitator->id)
+        ->livestream_organizer_id->toBe($facilitator->id);
+});
+
+it('lets a venue facilitator score matches and manage a livestream for their own tournament', function () {
+    $facilitator = userWithRole('venue_facilitator');
+    $venue = facilitatorVenue($facilitator);
+    $sport = Sport::create(['name' => 'Basketball']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $facilitator->id, 'sport_id' => $sport->id, 'venue_id' => $venue->id,
+        'venue_organizer_id' => $facilitator->id, 'livestream_organizer_id' => $facilitator->id,
+        'name' => 'Gym Cup', 'format' => 'single_elimination', 'starts_at' => now()->addWeek(), 'status' => 'ongoing',
+    ]);
+    $bracket = \App\Models\Bracket::create(['tournament_id' => $tournament->id, 'structure' => [], 'current_round' => 1]);
+    $match = \App\Models\GameMatch::create([
+        'bracket_id' => $bracket->id, 'round' => 1, 'status' => 'scheduled',
+        'participant_a_id' => userWithRole('player')->id, 'participant_b_id' => userWithRole('player')->id,
+    ]);
+
+    $this->actingAs($facilitator)->patchJson("/api/matches/{$match->id}/score", [
+        'score_a' => 10, 'score_b' => 5, 'status' => 'live',
+    ])->assertOk();
+
+    $this->actingAs($facilitator)->postJson('/api/livestreams', [
+        'tournament_id' => $tournament->id, 'title' => 'Gym Cup Live',
+        'platform' => 'youtube', 'embed_url' => 'https://youtube.com/watch?v=x',
+    ])->assertCreated();
 });
 
 it('requires a venue facilitator to specify a venue at all', function () {
     $facilitator = userWithRole('venue_facilitator');
-    $venueOrganizer = userWithRole('venue_organizer');
-    $livestreamOrganizer = userWithRole('livestream_organizer');
     $sport = Sport::create(['name' => 'Basketball']);
 
     $this->actingAs($facilitator)->postJson('/api/tournaments', [
@@ -46,16 +96,12 @@ it('requires a venue facilitator to specify a venue at all', function () {
         'name' => 'Gym Cup',
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek()->toIso8601String(),
-        'venue_organizer_id' => $venueOrganizer->id,
-        'livestream_organizer_id' => $livestreamOrganizer->id,
     ])->assertStatus(422)->assertJsonValidationErrors('venue_id');
 });
 
 it('denies a venue facilitator from holding a tournament at a venue they do not own', function () {
     $facilitator = userWithRole('venue_facilitator');
     $otherFacilitator = userWithRole('venue_facilitator');
-    $venueOrganizer = userWithRole('venue_organizer');
-    $livestreamOrganizer = userWithRole('livestream_organizer');
     $otherVenue = facilitatorVenue($otherFacilitator, 'Someone Elses Gym');
     $sport = Sport::create(['name' => 'Basketball']);
 
@@ -65,8 +111,6 @@ it('denies a venue facilitator from holding a tournament at a venue they do not 
         'format' => 'single_elimination',
         'starts_at' => now()->addWeek()->toIso8601String(),
         'venue_id' => $otherVenue->id,
-        'venue_organizer_id' => $venueOrganizer->id,
-        'livestream_organizer_id' => $livestreamOrganizer->id,
     ])->assertStatus(422)->assertJsonValidationErrors('venue_id');
 });
 
