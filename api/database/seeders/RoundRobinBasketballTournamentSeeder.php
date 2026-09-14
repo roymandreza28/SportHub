@@ -19,14 +19,17 @@ use Illuminate\Support\Collection;
 
 // A main-organizer Basketball 5v5 tournament in ROUND_ROBIN format — same
 // full-detail treatment as FullDetailBasketballTournamentSeeder, exercising
-// this format instead. Note: BracketService::generateRoundRobin() puts
-// every fixture in a single 'round' value (there's no real per-round
-// schedule the way elimination formats have, and advanceWinner() is a
-// no-op for round_robin — see its own comment) — so "sitting at the final"
-// here means every fixture EXCEPT the last-created one is played out, that
-// one left scheduled as the round robin's final remaining game. 4 teams (the
-// minimum requested), a full 6-game round robin (every team plays every
-// other team once).
+// this format instead. BracketService::generateRoundRobin() now schedules a
+// real circle-method fixture list (N-1 rounds for N teams, nobody playing
+// twice in the same round — see its own doc comment); with 4 teams that's 3
+// rounds of 2 games each. Rounds 1-2 are completed with full box scores;
+// round 3 (the round robin's own final round of fixtures) is left
+// scheduled — "already at the final round" without the tournament actually
+// being over, same framing as every sibling seeder in this file group.
+// advanceWinner() is still a no-op for round_robin (no bracket to advance,
+// just a standings table — see its own comment), so nothing here depends on
+// it beyond the box-score/stat-sheet/match-log side effects
+// simulateDetailedMatch() already produces.
 class RoundRobinBasketballTournamentSeeder extends Seeder
 {
     private const COACH_EMAILS = ['coach1@sporthub.test', 'coach2@sporthub.test', 'coach3@sporthub.test', 'coach4@sporthub.test'];
@@ -100,23 +103,20 @@ class RoundRobinBasketballTournamentSeeder extends Seeder
 
         $bracket = $bracketService->generate($tournament);
 
-        // Every one of the 6 round-robin fixtures is generated up front —
-        // play out all but the last, leaving that one scheduled as the
-        // final remaining game of the round robin.
-        $fixtures = GameMatch::where('bracket_id', $bracket->id)->orderBy('id')->get();
-        $finalFixture = $fixtures->last();
+        // 4 teams -> 3 real rounds (2 games each) from the circle-method
+        // schedule. Play out every round except the last, leaving that
+        // final round's games scheduled.
+        $lastRound = GameMatch::where('bracket_id', $bracket->id)->max('round');
 
-        foreach ($fixtures as $match) {
-            if ($match->id === $finalFixture->id) {
-                continue;
-            }
-
+        $earlierFixtures = GameMatch::where('bracket_id', $bracket->id)->where('round', '<', $lastRound)->orderBy('round')->orderBy('id')->get();
+        foreach ($earlierFixtures as $match) {
             $this->simulateDetailedMatch($match, $bracketService);
         }
 
-        $finalFixture->update(['scheduled_at' => now()->addMinutes(10), 'court_id' => $court->id]);
+        GameMatch::where('bracket_id', $bracket->id)->where('round', $lastRound)
+            ->update(['scheduled_at' => now()->addMinutes(10), 'court_id' => $court->id]);
 
-        $this->command?->info("Seeded '{$tournament->name}' (id {$tournament->id}) — round robin, 4 teams, {$players->count()} players, 5 of 6 fixtures completed with full box scores/stat sheets/match logs, final fixture pending.");
+        $this->command?->info("Seeded '{$tournament->name}' (id {$tournament->id}) — round robin, 4 teams, {$players->count()} players, rounds 1-".($lastRound - 1)." completed with full box scores/stat sheets/match logs, final round ({$lastRound}) pending.");
     }
 
     /** @param  Collection<int, User>  $roster */

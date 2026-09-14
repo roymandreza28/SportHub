@@ -390,6 +390,17 @@ export function BracketView({
   // left-to-right layout.
   const isPyramid = bracket?.format === 'single_elimination'
 
+  // isTreeRound() below only looks at bracket_type/group_number, which is
+  // exactly how a plain round_robin match looks too (neither is ever set
+  // for it) — without this extra check, a real round_robin schedule (now
+  // that it's genuinely spread across N-1 rounds instead of one, see
+  // BracketService::generateRoundRobin()'s circle-method rewrite) would get
+  // bogus "winner advances to next round" tree connector lines drawn
+  // between fixtures that have no such relationship at all, and misleading
+  // Quarterfinals/Semifinals/Final labels wherever a round's match count
+  // happens to coincide with eliminationRoundLabel's cases.
+  const isRoundRobin = bracket?.format === 'round_robin'
+
   // Double elimination gets its own two-track layout (winners bracket row
   // on top, losers bracket row below, grand final off to the side) instead
   // of the flat per-round-number columns every other format uses — a flat
@@ -479,7 +490,7 @@ export function BracketView({
 
       if (isDoubleElimination) {
         computeDoubleEliminationConnectors(structure.flat()).forEach((e) => pushHorizontal(e.from, e.to, e.dashed))
-      } else {
+      } else if (!isRoundRobin) {
         for (let r = 0; r < structure.length - 1; r++) {
           const round = structure[r]
           const nextRound = structure[r + 1]
@@ -540,7 +551,7 @@ export function BracketView({
     // recomputes the same scale from the same natural sizes, so setScale
     // is a no-op and nothing triggers a third run.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [structure, isPyramid, isDoubleElimination, scale])
+  }, [structure, isPyramid, isDoubleElimination, isRoundRobin, scale])
 
   if (isLoading) return <p className="text-sm text-slate-500">Loading bracket...</p>
   // A bracket row can exist with no structure yet if generation failed
@@ -737,7 +748,7 @@ export function BracketView({
                         : 'text-center text-xs font-semibold uppercase tracking-wide text-slate-500'
                     }
                   >
-                    {isTreeRound(round) ? eliminationRoundLabel(round.length, i) : `Round ${i + 1}`}
+                    {!isRoundRobin && isTreeRound(round) ? eliminationRoundLabel(round.length, i) : `Round ${i + 1}`}
                   </h4>
                   {round.map((match) => renderMatchCard(match))}
                 </div>

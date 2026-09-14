@@ -159,27 +159,76 @@ it('propagates a scored winner into the next round and completes the tournament 
     expect($tournament->fresh()->status)->toBe('completed');
 });
 
-it('generates all-pairs round-robin matches with no byes', function () {
+it('generates a real circle-method round-robin schedule with no byes', function () {
     $tournament = makeTournament('round_robin', 4);
     $bracket = app(BracketService::class)->generate($tournament);
 
-    // 4 players -> C(4,2) = 6 matches, all round 1, no nulls.
+    // 4 players -> N-1 = 3 real rounds of 2 matches each (nobody plays twice
+    // in the same round), C(4,2) = 6 matches total, every pair exactly once.
     $matches = $bracket->matches;
     expect($matches)->toHaveCount(6);
-    expect($matches->every(fn (GameMatch $m) => $m->round === 1))->toBeTrue();
+    expect($matches->pluck('round')->unique()->sort()->values()->all())->toBe([1, 2, 3]);
     expect($matches->every(fn (GameMatch $m) => $m->participant_a_id && $m->participant_b_id))->toBeTrue();
+
+    foreach ($matches->groupBy('round') as $roundMatches) {
+        expect($roundMatches)->toHaveCount(2);
+        $playersInRound = $roundMatches->flatMap(fn (GameMatch $m) => [$m->participant_a_id, $m->participant_b_id]);
+        expect($playersInRound->unique())->toHaveCount(4);
+    }
+
+    $pairs = $matches->map(fn (GameMatch $m) => collect([$m->participant_a_id, $m->participant_b_id])->sort()->values()->all())->unique();
+    expect($pairs)->toHaveCount(6);
 });
 
-it('generates all-pairs round-robin matches with team columns set and no byes, for a team tournament', function () {
+it('generates a real circle-method round-robin schedule with team columns set and no byes, for a team tournament', function () {
     $tournament = makeTeamTournament('round_robin', 4);
     $bracket = app(BracketService::class)->generate($tournament);
 
-    // 4 teams -> C(4,2) = 6 matches, all round 1, no nulls.
+    // 4 teams -> N-1 = 3 real rounds of 2 matches each, C(4,2) = 6 matches
+    // total, every pair exactly once.
     $matches = $bracket->matches;
     expect($matches)->toHaveCount(6);
-    expect($matches->every(fn (GameMatch $m) => $m->round === 1))->toBeTrue();
+    expect($matches->pluck('round')->unique()->sort()->values()->all())->toBe([1, 2, 3]);
     expect($matches->every(fn (GameMatch $m) => $m->participant_a_team_id && $m->participant_b_team_id))->toBeTrue();
     expect($matches->every(fn (GameMatch $m) => is_null($m->participant_a_id) && is_null($m->participant_b_id)))->toBeTrue();
+
+    foreach ($matches->groupBy('round') as $roundMatches) {
+        expect($roundMatches)->toHaveCount(2);
+        $teamsInRound = $roundMatches->flatMap(fn (GameMatch $m) => [$m->participant_a_team_id, $m->participant_b_team_id]);
+        expect($teamsInRound->unique())->toHaveCount(4);
+    }
+
+    $pairs = $matches->map(fn (GameMatch $m) => collect([$m->participant_a_team_id, $m->participant_b_team_id])->sort()->values()->all())->unique();
+    expect($pairs)->toHaveCount(6);
+});
+
+it('gives every player exactly one bye round in an odd-numbered round robin', function () {
+    $tournament = makeTournament('round_robin', 5);
+    $bracket = app(BracketService::class)->generate($tournament);
+
+    // 5 players -> padded to 6 slots -> 5 real rounds, one bye per round
+    // (2 matches instead of the even-count's usual floor(6/2)=3, since one
+    // slot per round is the bye and produces no match), 5 players x 1 bye
+    // each = 5 total byes across the schedule, C(5,2)=10 matches.
+    $matches = $bracket->matches;
+    expect($matches)->toHaveCount(10);
+    expect($matches->pluck('round')->unique()->sort()->values()->all())->toBe([1, 2, 3, 4, 5]);
+
+    foreach ($matches->groupBy('round') as $roundMatches) {
+        expect($roundMatches)->toHaveCount(2);
+    }
+
+    $pairs = $matches->map(fn (GameMatch $m) => collect([$m->participant_a_id, $m->participant_b_id])->sort()->values()->all())->unique();
+    expect($pairs)->toHaveCount(10);
+
+    // Every one of the 5 players sat out exactly one round (5 rounds x 4
+    // playing players = 20 player-slots filled, 25 possible - 20 = 5 sit-outs,
+    // one per player).
+    $playerIds = $tournament->registrations()->pluck('user_id');
+    foreach ($playerIds as $playerId) {
+        $appearances = $matches->filter(fn (GameMatch $m) => $m->participant_a_id === $playerId || $m->participant_b_id === $playerId)->count();
+        expect($appearances)->toBe(4); // plays every other of the 4 remaining players once
+    }
 });
 
 it('rebuilds structure as a jsonb-ready array grouped by round', function () {
@@ -231,14 +280,16 @@ it('splits players into balanced groups of at most 4 and round-robins within eac
 
     $matches = $bracket->matches;
     expect($matches->every(fn (GameMatch $m) => $m->group_number !== null))->toBeTrue();
-    expect($matches->every(fn (GameMatch $m) => $m->round === 1))->toBeTrue();
 
     $byGroup = $matches->groupBy('group_number');
     expect($byGroup)->toHaveCount(3); // ceil(9/4) = 3 groups
 
-    // 9 players across 3 groups deals to sizes 3/3/3 -> C(3,2)=3 matches each.
+    // 9 players across 3 groups deals to sizes 3/3/3 -> C(3,2)=3 matches each,
+    // each group's own circle-method schedule padding 3 players to 4 slots
+    // -> 3 real rounds, one real match per round (the 4th "player" is a bye).
     foreach ($byGroup as $groupMatches) {
         expect($groupMatches)->toHaveCount(3);
+        expect($groupMatches->pluck('round')->unique()->sort()->values()->all())->toBe([1, 2, 3]);
     }
 });
 
@@ -255,10 +306,15 @@ it('starts a knockout stage automatically once every group match is completed', 
     }
 
     $knockoutMatches = $bracket->fresh()->matches()->whereNull('group_number')->get();
-    // 2 groups -> top 2 each -> 4 qualifiers -> single elimination bracket of 2 rounds.
+    // 2 groups -> top 2 each -> 4 qualifiers -> single elimination bracket of
+    // 2 rounds, starting the round right after the group phase's own last
+    // real round (4-player groups get a real 3-round circle-method schedule
+    // now, not just round 1 — see maybeStartGroupKnockout()'s own
+    // max('round')+1 starting point).
+    $maxGroupRound = $groupMatches->max('round');
     expect($knockoutMatches)->toHaveCount(3);
-    expect($knockoutMatches->where('round', 2))->toHaveCount(2);
-    expect($knockoutMatches->where('round', 3))->toHaveCount(1);
+    expect($knockoutMatches->where('round', $maxGroupRound + 1))->toHaveCount(2);
+    expect($knockoutMatches->where('round', $maxGroupRound + 2))->toHaveCount(1);
 });
 
 it('completes a group_stage tournament by ranking the group then playing the knockout through', function () {
@@ -323,10 +379,12 @@ it('starts a knockout stage automatically once every group match is completed, f
     }
 
     $knockoutMatches = $bracket->fresh()->matches()->whereNull('group_number')->get();
-    // 2 groups -> top 2 each -> 4 qualifiers -> single elimination bracket of 2 rounds.
+    // 2 groups -> top 2 each -> 4 qualifiers -> single elimination bracket of
+    // 2 rounds, starting right after the group phase's own last real round.
+    $maxGroupRound = $groupMatches->max('round');
     expect($knockoutMatches)->toHaveCount(3);
-    expect($knockoutMatches->where('round', 2))->toHaveCount(2);
-    expect($knockoutMatches->where('round', 3))->toHaveCount(1);
+    expect($knockoutMatches->where('round', $maxGroupRound + 1))->toHaveCount(2);
+    expect($knockoutMatches->where('round', $maxGroupRound + 2))->toHaveCount(1);
     expect($knockoutMatches->every(fn (GameMatch $m) => is_null($m->participant_a_id) && is_null($m->participant_b_id)))->toBeTrue();
 });
 

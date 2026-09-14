@@ -86,22 +86,73 @@ class BracketService
         return $bracket;
     }
 
+    // The "circle method" — see circleMethodRounds() below for the actual
+    // algorithm. $round is the STARTING round number (group_stage calls this
+    // once per group, each starting back at 1 and distinguished from each
+    // other purely by $groupNumber, not by round — see generateGroupStage()),
+    // so every real round this produces is offset from that starting point.
     protected function generateRoundRobin(Bracket $bracket, Collection $playerIds, ?int $groupNumber = null, int $round = 1, bool $teamMode = false): void
     {
         $aField = $teamMode ? 'participant_a_team_id' : 'participant_a_id';
         $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
 
-        for ($i = 0; $i < $playerIds->count(); $i++) {
-            for ($j = $i + 1; $j < $playerIds->count(); $j++) {
+        foreach ($this->circleMethodRounds($playerIds->values()->all()) as $offset => $roundPairs) {
+            foreach ($roundPairs as [$a, $b]) {
+                // A bye slot (odd player count) has nobody real on one side —
+                // there's no match to schedule, just a round that player sits
+                // out. See circleMethodRounds()'s own comment.
+                if ($a === null || $b === null) {
+                    continue;
+                }
+
                 $bracket->matches()->create([
-                    'round' => $round,
+                    'round' => $round + $offset,
                     'group_number' => $groupNumber,
-                    $aField => $playerIds[$i],
-                    $bField => $playerIds[$j],
+                    $aField => $a,
+                    $bField => $b,
                     'status' => 'scheduled',
                 ]);
             }
         }
+    }
+
+    /**
+     * Arranges all N players around a circle (padding with a null bye to
+     * make N even), fixes one player in place, and for each of N-1 rounds
+     * pairs whoever's sitting opposite each other before rotating everyone
+     * EXCEPT the fixed player by one position. The fixed player cycles past
+     * every other player exactly once, and the opposite-pairing rule means
+     * the rotating players never repeat a matchup either — so every one of
+     * the N(N-1)/2 possible pairs appears exactly once across the whole
+     * schedule, by construction, with no lookups or backtracking needed.
+     *
+     * @param  array<int, int>  $ids
+     * @return array<int, array<int, array{0: int|null, 1: int|null}>> N-1 rounds, each a list of [a, b] pairs — a bye is represented as null
+     */
+    private function circleMethodRounds(array $ids): array
+    {
+        $arr = $ids;
+        if (count($arr) % 2 !== 0) {
+            $arr[] = null;
+        }
+        $n = count($arr);
+        $rounds = [];
+        $rot = $arr;
+
+        for ($r = 0; $r < $n - 1; $r++) {
+            $roundPairs = [];
+            for ($i = 0; $i < intdiv($n, 2); $i++) {
+                $roundPairs[] = [$rot[$i], $rot[$n - 1 - $i]];
+            }
+            $rounds[] = $roundPairs;
+
+            $fixed = $rot[0];
+            $rest = array_slice($rot, 1);
+            array_unshift($rest, array_pop($rest));
+            $rot = array_merge([$fixed], $rest);
+        }
+
+        return $rounds;
     }
 
     // ---- Group stage: round-robin pools, then a single-elimination knockout ----
