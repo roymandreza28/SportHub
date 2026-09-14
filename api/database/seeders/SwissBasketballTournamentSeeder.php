@@ -19,14 +19,15 @@ use Illuminate\Support\Collection;
 
 // A main-organizer Basketball 5v5 tournament in SWISS format — same
 // full-detail treatment as FullDetailBasketballTournamentSeeder, exercising
-// this format instead. 4 teams (the minimum requested) means exactly 2
-// Swiss rounds (see BracketService::totalSwissRounds() — ceil(log2(4))).
-// Round 1 (2 matches) is completed with full box scores; completing its
-// last match auto-pairs round 2 by then-current standings (see
-// maybeAdvanceSwissRound()) — that final round's 2 matches are left
-// scheduled, both already paired — "already at the final round" without
-// the tournament actually being over, same framing as every sibling seeder
-// in this file group.
+// this format instead. 4 teams (the minimum requested) means 3 Swiss
+// rounds — ceil(log2(4)) = 2 mathematically-minimum rounds, plus one more
+// for a more reliable final ranking (see BracketService::totalSwissRounds()'s
+// own doc comment). Rounds 1-2 are completed with full box scores;
+// completing each round's last match auto-pairs the next by then-current
+// standings (see maybeAdvanceSwissRound()) — the final round (3) is left
+// scheduled, already paired — "already at the final round" without the
+// tournament actually being over, same framing as every sibling seeder in
+// this file group.
 class SwissBasketballTournamentSeeder extends Seeder
 {
     private const COACH_EMAILS = ['coach1@sporthub.test', 'coach2@sporthub.test', 'coach3@sporthub.test', 'coach4@sporthub.test'];
@@ -100,21 +101,23 @@ class SwissBasketballTournamentSeeder extends Seeder
 
         $bracket = $bracketService->generate($tournament);
 
-        // Round 1 (2 matches) — completing the last one auto-pairs round 2
-        // by then-current standings.
-        $round1 = GameMatch::where('bracket_id', $bracket->id)->where('bracket_type', 'swiss')->where('round', 1)->orderBy('id')->get();
-        foreach ($round1 as $match) {
-            $this->simulateDetailedMatch($match, $bracketService);
+        // Rounds 1-2 (2 matches each) — completing each round's last match
+        // auto-pairs the next by then-current standings.
+        foreach ([1, 2] as $round) {
+            $matches = GameMatch::where('bracket_id', $bracket->id)->where('bracket_type', 'swiss')->where('round', $round)->orderBy('id')->get();
+            foreach ($matches as $match) {
+                $this->simulateDetailedMatch($match, $bracketService);
+            }
         }
 
-        // Round 2 — the final Swiss round (totalSwissRounds(4) === 2),
-        // auto-paired above. Both matches left scheduled.
-        $round2 = GameMatch::where('bracket_id', $bracket->id)->where('bracket_type', 'swiss')->where('round', 2)->orderBy('id')->get();
-        foreach ($round2 as $match) {
+        // Round 3 — the final Swiss round (totalSwissRounds(4) === 3),
+        // auto-paired above. Left scheduled.
+        $finalRound = GameMatch::where('bracket_id', $bracket->id)->where('bracket_type', 'swiss')->where('round', 3)->orderBy('id')->get();
+        foreach ($finalRound as $match) {
             $match->update(['scheduled_at' => now()->addMinutes(10), 'court_id' => $court->id]);
         }
 
-        $this->command?->info("Seeded '{$tournament->name}' (id {$tournament->id}) — swiss, 4 teams, {$players->count()} players, round 1 completed with full box scores/stat sheets/match logs, final round (round 2) pending.");
+        $this->command?->info("Seeded '{$tournament->name}' (id {$tournament->id}) — swiss, 4 teams, {$players->count()} players, rounds 1-2 completed with full box scores/stat sheets/match logs, final round (round 3) pending.");
     }
 
     /** @param  Collection<int, User>  $roster */

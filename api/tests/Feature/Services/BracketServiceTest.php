@@ -9,6 +9,15 @@ use App\Models\TournamentRegistration;
 use App\Models\User;
 use App\Services\BracketService;
 
+/** Order-independent key for an unordered pair of participant ids. */
+function pairKey(int $a, int $b): string
+{
+    $ids = [$a, $b];
+    sort($ids);
+
+    return implode('-', $ids);
+}
+
 function makeTournament(string $format, int $playerCount): Tournament
 {
     $organizer = User::factory()->create();
@@ -249,6 +258,50 @@ it('records a completed round-robin matchs winner in the bracket structure snaps
     expect($structureMatch['status'])->toBe('completed');
     expect($structureMatch['winner_id'])->toBe($match->participant_a_id);
     expect($structureMatch['winner']['id'])->toBe($match->participant_a_id);
+});
+
+it('crowns a champion once every round-robin fixture is played', function () {
+    $tournament = makeTournament('round_robin', 4);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    expect($tournament->fresh()->status)->not->toBe('completed');
+
+    foreach ($bracket->matches as $match) {
+        completeMatch($service, $match, 21, 10); // participant_a always wins
+    }
+
+    expect($tournament->fresh()->status)->toBe('completed');
+    expect($tournament->fresh()->champion_id)->not->toBeNull();
+});
+
+it('breaks a round-robin tie by highest total score across the whole schedule, not an arbitrary order', function () {
+    $tournament = makeTournament('round_robin', 4);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    $ids = $tournament->registrations()->pluck('user_id')->values()->all();
+    [$p1, $p2, $p3, $p4] = $ids;
+
+    // p1 and p2 both finish 2-1 (tied on wins) — p1 scores 70 total across
+    // its 3 games, p2 scores only 45, so p1 must be crowned champion over
+    // p2 despite the identical win count.
+    $results = [
+        pairKey($p1, $p2) => [$p2 => 20, $p1 => 10], // p2 beats p1
+        pairKey($p1, $p3) => [$p1 => 30, $p3 => 10], // p1 beats p3
+        pairKey($p1, $p4) => [$p1 => 30, $p4 => 10], // p1 beats p4
+        pairKey($p2, $p3) => [$p2 => 15, $p3 => 10], // p2 beats p3
+        pairKey($p2, $p4) => [$p4 => 25, $p2 => 10], // p4 beats p2
+        pairKey($p3, $p4) => [$p3 => 20, $p4 => 15], // p3 beats p4
+    ];
+
+    foreach ($bracket->matches as $match) {
+        $scores = $results[pairKey($match->participant_a_id, $match->participant_b_id)];
+        completeMatch($service, $match, $scores[$match->participant_a_id], $scores[$match->participant_b_id]);
+    }
+
+    expect($tournament->fresh()->status)->toBe('completed');
+    expect($tournament->fresh()->champion_id)->toBe($p1);
 });
 
 it('rebuilds structure as a jsonb-ready array grouped by round', function () {
@@ -771,6 +824,15 @@ it('finds a fresh opponent anywhere in the pool instead of settling for one adja
     // driven purely by "who hasn't played whom yet", the scenario this
     // fix targets. If a decisive-scoring format ever forced a preventable
     // rematch, it would show up as a repeated pair across these rounds.
+    // Exactly the mathematical minimum (ceil(log2(8)) = 3), not
+    // BracketService's own totalSwissRounds() — that now runs one round
+    // beyond the minimum for a more reliable ranking (see its own doc
+    // comment), which for a field this size can legitimately force one
+    // repeat pairing once every fresh option in the tier is exhausted; that
+    // extra-round tradeoff is exercised by its own test elsewhere. This
+    // test isolates the actual regression it targets: within the
+    // mathematically-guaranteed-clean minimum, zero repeats should ever
+    // happen.
     $totalRounds = (int) ceil(log(8, 2));
     for ($round = 1; $round <= $totalRounds; $round++) {
         $matches = $bracket->fresh()->matches()->where('bracket_type', 'swiss')->where('round', $round)->get();
@@ -779,7 +841,7 @@ it('finds a fresh opponent anywhere in the pool instead of settling for one adja
         }
     }
 
-    $allMatches = $bracket->fresh()->matches()->where('bracket_type', 'swiss')->get();
+    $allMatches = $bracket->fresh()->matches()->where('bracket_type', 'swiss')->whereIn('round', range(1, $totalRounds))->get();
     $pairKeys = $allMatches->map(function (GameMatch $m) {
         $ids = [$m->participant_a_id, $m->participant_b_id];
         sort($ids);
@@ -787,9 +849,9 @@ it('finds a fresh opponent anywhere in the pool instead of settling for one adja
         return implode('-', $ids);
     });
 
-    // 8 players is exactly enough that every round should find a genuinely
-    // fresh opponent for everyone — no pair should repeat across the whole
-    // schedule.
+    // 8 players is exactly enough that every one of these 3 rounds should
+    // find a genuinely fresh opponent for everyone — no pair should repeat
+    // within the minimum schedule.
     expect($pairKeys)->toHaveCount($pairKeys->unique()->count());
 });
 
@@ -810,8 +872,8 @@ it('advances to the next swiss round only once every match in the round is compl
     expect($bracket->fresh()->matches()->where('bracket_type', 'swiss')->where('round', 2)->exists())->toBeTrue();
 });
 
-it('runs ceil(log2(playerCount)) rounds then completes with standings reflecting every result', function () {
-    $tournament = makeTournament('swiss', 8); // ceil(log2(8)) = 3 rounds
+it('runs one round beyond ceil(log2(playerCount)) then completes with standings reflecting every result', function () {
+    $tournament = makeTournament('swiss', 8); // ceil(log2(8)) = 3, +1 reliability round = 4
     $service = app(BracketService::class);
     $bracket = $service->generate($tournament);
 
@@ -835,11 +897,11 @@ it('runs ceil(log2(playerCount)) rounds then completes with standings reflecting
         $roundsPlayed++;
     }
 
-    expect($roundsPlayed)->toBe(3);
+    expect($roundsPlayed)->toBe(4);
     expect($tournament->fresh()->status)->toBe('completed');
 
     $maxRound = $bracket->fresh()->matches()->where('bracket_type', 'swiss')->max('round');
-    expect($maxRound)->toBe(3);
+    expect($maxRound)->toBe(4);
 });
 
 it('completes a swiss tournament immediately when only one player is registered', function () {
@@ -910,8 +972,8 @@ it('gives an odd team field a bye that counts as an automatic win, favoring whoe
     expect($bye2->participant_a_team_id)->not->toBe($bye1->participant_a_team_id);
 });
 
-it('runs ceil(log2(teamCount)) rounds then completes a team swiss tournament with team columns populated throughout', function () {
-    $tournament = makeTeamTournament('swiss', 8); // ceil(log2(8)) = 3 rounds
+it('runs one round beyond ceil(log2(teamCount)) then completes a team swiss tournament with team columns populated throughout', function () {
+    $tournament = makeTeamTournament('swiss', 8); // ceil(log2(8)) = 3, +1 reliability round = 4
     $service = app(BracketService::class);
     $bracket = $service->generate($tournament);
 
@@ -935,12 +997,12 @@ it('runs ceil(log2(teamCount)) rounds then completes a team swiss tournament wit
         $roundsPlayed++;
     }
 
-    expect($roundsPlayed)->toBe(3);
+    expect($roundsPlayed)->toBe(4);
     expect($tournament->fresh()->status)->toBe('completed');
     expect($tournament->fresh()->champion_team_id)->not->toBeNull();
 
     $maxRound = $bracket->fresh()->matches()->where('bracket_type', 'swiss')->max('round');
-    expect($maxRound)->toBe(3);
+    expect($maxRound)->toBe(4);
 
     // Individual columns must never populate anywhere across the whole run.
     $allSwissMatches = $bracket->fresh()->matches()->where('bracket_type', 'swiss')->get();

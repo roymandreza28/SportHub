@@ -589,9 +589,23 @@ class BracketService
         }
     }
 
+    // ceil(log2(N)) is the mathematical minimum — enough rounds that a
+    // perfect scorer is guaranteed unique — but one extra round beyond
+    // that gives a materially more reliable final ranking, especially once
+    // draws are possible: a draw in what would have been the very last
+    // round can otherwise leave two players tied for first with no
+    // further play left to separate them. See the algorithm reference's
+    // own "real events often run a couple of rounds beyond that minimum"
+    // note. Skipped for a field of 1 (or 0) — with nobody to actually play
+    // an extra round against, it would just be another pointless bye
+    // rather than a more reliable ranking.
     private function totalSwissRounds(int $playerCount): int
     {
-        return max(1, (int) ceil(log(max($playerCount, 2), 2)));
+        if ($playerCount <= 1) {
+            return 1;
+        }
+
+        return max(1, (int) ceil(log($playerCount, 2))) + 1;
     }
 
     /**
@@ -832,6 +846,16 @@ class BracketService
             $bracket->update(['structure' => $this->buildStructure($bracket)]);
             Broadcasting::safely(fn () => BracketUpdated::dispatch($bracket->fresh()));
 
+            // Every fixture played -> crown a champion, same as every other
+            // format does once there's nothing left to play. determineChampion()
+            // breaks a tied win count by total score across the whole
+            // schedule (see its own doc comment) — the only tiebreak a
+            // round robin actually needs, since nobody's eliminated and
+            // there's no decisive final match to fall back on.
+            if (! $bracket->matches()->where('status', '!=', 'completed')->exists()) {
+                $this->completeTournament($tournament);
+            }
+
             return;
         }
 
@@ -905,18 +929,30 @@ class BracketService
     // Most match wins across the whole bracket — for single/double-
     // elimination this always lands on exactly the final's winner (you
     // can't reach the final without winning every prior match), so one
-    // formula covers every format without branching on it. Ties (possible in
-    // round-robin/swiss) resolve to whichever id sorts first — a known,
-    // acceptable simplification rather than a full tiebreak chain.
+    // formula covers every format without branching on it. Ties are only
+    // realistically possible in round_robin/swiss (an elimination bracket's
+    // winner always has strictly the most wins by construction) — broken by
+    // whoever scored the most points total across every game they played,
+    // not an arbitrary id order.
     private function determineChampion(Tournament $tournament): array
     {
         $isTeam = $tournament->sport_format_id !== null;
+        $aField = $isTeam ? 'participant_a_team_id' : 'participant_a_id';
+        $bField = $isTeam ? 'participant_b_team_id' : 'participant_b_id';
+
         $wins = [];
+        $totalScore = [];
 
         foreach ($tournament->bracket->matches()->where('status', 'completed')->get() as $match) {
             $winnerId = $isTeam ? $match->winner_team_id : $match->winner_id;
             if ($winnerId !== null) {
                 $wins[$winnerId] = ($wins[$winnerId] ?? 0) + 1;
+            }
+
+            foreach ([[$match->{$aField}, $match->score_a], [$match->{$bField}, $match->score_b]] as [$participantId, $score]) {
+                if ($participantId !== null) {
+                    $totalScore[$participantId] = ($totalScore[$participantId] ?? 0) + $score;
+                }
             }
         }
 
@@ -924,8 +960,19 @@ class BracketService
             return ['user_id' => null, 'team_id' => null, 'name' => null];
         }
 
-        arsort($wins);
-        $championId = array_key_first($wins);
+        $championId = null;
+        $bestWins = -1;
+        $bestScore = -1;
+
+        foreach ($wins as $id => $winCount) {
+            $score = $totalScore[$id] ?? 0;
+            if ($winCount > $bestWins || ($winCount === $bestWins && $score > $bestScore)) {
+                $championId = $id;
+                $bestWins = $winCount;
+                $bestScore = $score;
+            }
+        }
+
         $champion = $isTeam ? Team::find($championId) : User::find($championId);
 
         return $isTeam
