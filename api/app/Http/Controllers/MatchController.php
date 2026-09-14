@@ -16,6 +16,7 @@ use App\Services\BracketService;
 use App\Support\Broadcasting;
 use App\Support\MatchParticipants;
 use App\Support\PlayerStatFieldSets;
+use App\Support\StatSheetFieldSets;
 use Illuminate\Http\Request;
 
 class MatchController extends Controller
@@ -294,7 +295,40 @@ class MatchController extends Controller
                 'payload' => $event->payload,
                 'created_at' => $event->created_at,
             ])->values(),
+            'stat_sheets' => $this->fullStatSheets($match),
         ];
+    }
+
+    // The coach's full post-game box score (attempts, boards, assists/
+    // steals/blocks/turnovers — everything beyond player_stats' organizer-
+    // tracked subset above) — only surfaced once the match is completed (a
+    // sheet still being filled in isn't finalized, and this endpoint is
+    // public), and only for sports with a stat sheet configured at all. One
+    // entry per team (roster mode, e.g. Basketball/Volleyball) or per
+    // individual participant (summary mode, the racquet sports).
+    private function fullStatSheets(GameMatch $match): array
+    {
+        if ($match->status !== 'completed') {
+            return [];
+        }
+
+        $tournament = $match->bracket->tournament;
+        $fieldSet = StatSheetFieldSets::for($tournament->sport->name, $tournament->sportFormat?->name);
+        if (! $fieldSet) {
+            return [];
+        }
+
+        return MatchStatSheet::where('match_id', $match->id)
+            ->with(['team:id,name', 'user:id,name'])
+            ->get()
+            ->map(fn (MatchStatSheet $sheet) => [
+                'participant_name' => $sheet->team?->name ?? $sheet->user?->name,
+                'mode' => $fieldSet['mode'],
+                'fields' => $fieldSet['fields'],
+                'data' => $sheet->data,
+            ])
+            ->values()
+            ->all();
     }
 
     private function respond(GameMatch $match)

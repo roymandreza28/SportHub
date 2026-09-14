@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { PlayerStatSummary } from '../../lib/socialApi'
+import type { PlayerMatchHistoryEntry, PlayerStatSummary } from '../../lib/socialApi'
 import { buttonSecondary } from '../../lib/formStyles'
 import { PlayerStatsPentagon } from './PlayerStatsPentagon'
+import { MatchBoxScoreModal } from './MatchBoxScoreModal'
 
 // The full career-stats detail (win-rate-by-sport pentagon, each sport's own
 // stat pentagon, and the match-by-match history) — ProfilePage.tsx's Career
@@ -9,6 +11,8 @@ import { PlayerStatsPentagon } from './PlayerStatsPentagon'
 // details" instead of expanding inline, since there can be several
 // pentagons plus a long match list to show at once.
 export function CareerStatsModal({ statSummary, onClose }: { statSummary: PlayerStatSummary; onClose: () => void }) {
+  const [selectedMatch, setSelectedMatch] = useState<PlayerMatchHistoryEntry | null>(null)
+
   return createPortal(
     <div className="fixed inset-0 z-30 flex items-center justify-center overflow-hidden bg-slate-950/60 p-4">
       <div
@@ -60,36 +64,43 @@ export function CareerStatsModal({ statSummary, onClose }: { statSummary: Player
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Match History</p>
             <ul className="mt-2 flex flex-col gap-2">
               {statSummary.history.map((h) => (
-                <li key={h.match_id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-800">
-                      {h.sport_name} vs {h.opponent_name}
-                    </p>
-                    <p className="truncate text-xs text-slate-400">
-                      {h.tournament_name ?? 'Tournament'}
-                      {h.date ? ` · ${new Date(h.date).toLocaleDateString()}` : ''}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {h.score && <span className="text-xs text-slate-400">{h.score}</span>}
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        h.result === 'win'
-                          ? 'bg-teal-100 text-teal-700'
-                          : h.result === 'loss'
-                            ? 'bg-rose-100 text-rose-700'
-                            : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {h.result === 'win' ? 'W' : h.result === 'loss' ? 'L' : 'D'}
-                    </span>
-                  </div>
+                <li key={h.match_id}>
+                  <button
+                    onClick={() => setSelectedMatch(h)}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2 text-left transition hover:border-teal-200 hover:bg-teal-50/40"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-800">
+                        {h.sport_name} vs {h.opponent_name}
+                      </p>
+                      <p className="truncate text-xs text-slate-400">
+                        {h.tournament_name ?? 'Tournament'}
+                        {h.date ? ` · ${new Date(h.date).toLocaleDateString()}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {h.score && <span className="text-xs text-slate-400">{h.score}</span>}
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          h.result === 'win'
+                            ? 'bg-teal-100 text-teal-700'
+                            : h.result === 'loss'
+                              ? 'bg-rose-100 text-rose-700'
+                              : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {h.result === 'win' ? 'W' : h.result === 'loss' ? 'L' : 'D'}
+                      </span>
+                    </div>
+                  </button>
                 </li>
               ))}
             </ul>
           </div>
         )}
       </div>
+
+      {selectedMatch && <MatchBoxScoreModal entry={selectedMatch} onClose={() => setSelectedMatch(null)} />}
     </div>,
     document.body
   )

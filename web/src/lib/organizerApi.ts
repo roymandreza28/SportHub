@@ -264,12 +264,32 @@ export type MatchPlayerStatRecord = {
 
 export type MatchEventRecord = { type: string; payload: Record<string, unknown>; created_at: string }
 
+// The coach's full post-game box score — everything beyond stat_fields'
+// organizer-tracked subset above (attempts, boards, assists/steals/blocks/
+// turnovers). Only present once the match is completed and a coach filled
+// one in — see MatchController::fullStatSheets(). 'roster' mode (team
+// sports) carries one row per player in `data.rows`; 'summary' mode (the
+// racquet sports) carries one aggregate line in `data.values`.
+export type MatchStatSheetRecord = {
+  participant_name: string | null
+  mode: 'roster' | 'summary'
+  fields: { key: string; label: string }[]
+  data: {
+    rows?: { player_id: number; name: string; jersey_number: string; notes: string; stats: Record<string, number> }[]
+    values?: Record<string, number>
+    further_comments: string | null
+    recorded_by: string | null
+    signed: string | null
+  }
+}
+
 export type MatchRecord = {
   team_a: MatchRosterTeam | null
   team_b: MatchRosterTeam | null
   stat_fields: MatchStatField[]
   player_stats: MatchPlayerStatRecord[]
   events: MatchEventRecord[]
+  stat_sheets: MatchStatSheetRecord[]
 }
 
 // Backs the Standings tab's match-detail popup — public/unauthenticated,
