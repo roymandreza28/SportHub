@@ -5,7 +5,7 @@ import resourceTimeGridPlugin from '@fullcalendar/resource-timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import type { DateSelectArg } from '@fullcalendar/core'
 import { fetchVenueAvailability, calculateVenueRent, formatPeso, type Venue } from '../../lib/venueApi'
-import { renderResourceLaneLabel, laneColumnClassNames, LaneGroupBanner } from '../../lib/resourceLaneLabel'
+import { renderResourceLaneLabel, laneColumnClassNames, LaneGroupBanner, isLaneResource } from '../../lib/resourceLaneLabel'
 import { createVenueRegistration, type CreatedVenueRegistration } from '../../lib/playerApi'
 import { useChatUI } from '../../lib/ChatUIContext'
 import { buttonGhost, buttonPrimary, input } from '../../lib/formStyles'
@@ -93,6 +93,14 @@ export function VenueRegistrationForm({ venue }: { venue: Venue }) {
 
   const hasFixedHours = Boolean(venue.opens_at && venue.closes_at)
 
+  // See VenueScheduleCalendar's identical comment — resource-timegrid
+  // stretches every non-lane column to fill 100% of its container, which
+  // squeezes illegibly thin on a phone. A per-court minimum plus an outer
+  // horizontal scroll keeps every column tappable instead.
+  const laneCount = resources.filter((r) => isLaneResource(r.title)).length
+  const courtCount = resources.length - laneCount
+  const minCalendarWidth = 64 + courtCount * 130 + laneCount * 36
+
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -103,31 +111,33 @@ export function VenueRegistrationForm({ venue }: { venue: Venue }) {
         </p>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200">
-        <LaneGroupBanner resources={resources}>
-          <FullCalendar
-            schedulerLicenseKey="CC-Attribution-NonCommercial-NoDerivatives"
-            plugins={[resourceTimeGridPlugin, interactionPlugin]}
-            initialView="resourceTimeGridDay"
-            resources={resources}
-            events={busyEvents}
-            selectable
-            select={handleSelect}
-            height="auto"
-            headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
-            resourceLabelContent={renderResourceLaneLabel}
-            resourceLabelClassNames={laneColumnClassNames}
-            resourceLaneClassNames={laneColumnClassNames}
-            {...(hasFixedHours
-              ? {
-                  businessHours: { daysOfWeek: [0, 1, 2, 3, 4, 5, 6], startTime: venue.opens_at!, endTime: venue.closes_at! },
-                  selectConstraint: 'businessHours',
-                  slotMinTime: venue.opens_at!,
-                  slotMaxTime: venue.closes_at!,
-                }
-              : {})}
-          />
-        </LaneGroupBanner>
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <div style={{ minWidth: minCalendarWidth }}>
+          <LaneGroupBanner resources={resources}>
+            <FullCalendar
+              schedulerLicenseKey="CC-Attribution-NonCommercial-NoDerivatives"
+              plugins={[resourceTimeGridPlugin, interactionPlugin]}
+              initialView="resourceTimeGridDay"
+              resources={resources}
+              events={busyEvents}
+              selectable
+              select={handleSelect}
+              height="auto"
+              headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
+              resourceLabelContent={renderResourceLaneLabel}
+              resourceLabelClassNames={laneColumnClassNames}
+              resourceLaneClassNames={laneColumnClassNames}
+              {...(hasFixedHours
+                ? {
+                    businessHours: { daysOfWeek: [0, 1, 2, 3, 4, 5, 6], startTime: venue.opens_at!, endTime: venue.closes_at! },
+                    selectConstraint: 'businessHours',
+                    slotMinTime: venue.opens_at!,
+                    slotMaxTime: venue.closes_at!,
+                  }
+                : {})}
+            />
+          </LaneGroupBanner>
+        </div>
       </div>
 
       {selectedCourt?.block_hours && selectedCourt.block_price && (

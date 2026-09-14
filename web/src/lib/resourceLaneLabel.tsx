@@ -32,6 +32,15 @@ export function laneColumnClassNames(arg: ResourceLabelContentArg | ResourceLane
   return LANE_PATTERN.test(arg.resource.title) ? ['fc-lane-col'] : []
 }
 
+// Exposed so a caller sizing the calendar for mobile (see
+// VenueScheduleCalendar's minCalendarWidth) can tell a fixed-width lane
+// column apart from a regular court that needs real room — without this,
+// a bowling venue's 20 narrow lanes would each get budgeted as if they
+// were a full-size court.
+export function isLaneResource(title: string): boolean {
+  return LANE_PATTERN.test(title)
+}
+
 type LaneGroupSegment = { group: string; top: number; left: number; width: number }
 
 // FullCalendar's resource-timegrid has no concept of a header cell spanning
