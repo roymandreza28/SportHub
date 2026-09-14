@@ -107,6 +107,12 @@ export function freshBracketMatch(bracket: Bracket | undefined, matchId: number)
     status: fresh.status,
     score_a: fresh.score_a,
     score_b: fresh.score_b,
+    // structureMatch (bracket.structure, built by
+    // BracketService::buildStructure()) never carries per-set scores at
+    // all — without this, a best-of-sets match's real point-by-point detail
+    // (MatchDetailModal's "Set scores" breakdown) silently never rendered
+    // anywhere in the app, no matter how much set data the backend had.
+    sets: fresh.sets,
     won_by_default: fresh.won_by_default,
     participant_a_team_id: fresh.participant_a_team_id,
     participant_b_team_id: fresh.participant_b_team_id,

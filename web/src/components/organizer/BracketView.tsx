@@ -734,7 +734,12 @@ export function BracketView({
       </div>
 
       {viewMode === 'standings' && (
-        <TournamentStandingsView structure={structure} tournamentName={tournamentName} scoringType={scoringType} />
+        <TournamentStandingsView
+          structure={structure}
+          tournamentName={tournamentName}
+          scoringType={scoringType}
+          format={bracket.format}
+        />
       )}
 
       <div

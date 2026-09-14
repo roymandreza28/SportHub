@@ -304,6 +304,59 @@ it('breaks a round-robin tie by highest total score across the whole schedule, n
     expect($tournament->fresh()->champion_id)->toBe($p1);
 });
 
+it('breaks a round-robin tie using real per-set points, not sets won, for a best-of-sets tournament', function () {
+    $tournament = makeTournament('round_robin', 4);
+    $tournament->update(['scoring_type' => 'best_of_sets', 'sets_to_win' => 2]);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    $ids = $tournament->registrations()->pluck('user_id')->values()->all();
+    [$p1, $p2, $p3, $p4] = $ids;
+
+    // p1 and p2 both finish 2-1 (tied on wins). Under the OLD (buggy)
+    // tiebreak — summing score_a/score_b, which for a best-of-sets match
+    // are SETS WON, not points — p2 would win: p1 is swept 0-2 by p2 (0
+    // sets won there), while p2 at least takes one set off p4 before
+    // losing (1 set won there), giving p2 one more "won set" overall than
+    // p1 (5 vs 4). But p1's real point totals across every set played are
+    // far higher (big, high-scoring wins over p3/p4 and a close loss to
+    // p2, vs. p2's low-scoring, low-margin wins), so the fixed tiebreak —
+    // summing real per-set points from $match->sets — must crown p1
+    // instead.
+    $setsByPair = [
+        pairKey($p1, $p3) => [[$p1 => 25, $p3 => 5], [$p1 => 25, $p3 => 5]], // p1 wins 2-0
+        pairKey($p1, $p4) => [[$p1 => 25, $p4 => 5], [$p1 => 25, $p4 => 5]], // p1 wins 2-0
+        pairKey($p1, $p2) => [[$p1 => 19, $p2 => 21], [$p1 => 19, $p2 => 21]], // p2 wins 2-0, close sets
+        pairKey($p2, $p3) => [[$p2 => 3, $p3 => 1], [$p2 => 3, $p3 => 1]], // p2 wins 2-0, low-margin
+        pairKey($p2, $p4) => [[$p2 => 3, $p4 => 1], [$p2 => 1, $p4 => 3], [$p2 => 1, $p4 => 3]], // p4 wins 2-1
+        pairKey($p3, $p4) => [[$p3 => 21, $p4 => 15], [$p3 => 21, $p4 => 15]], // p3 wins 2-0
+    ];
+
+    foreach ($bracket->matches as $match) {
+        $key = pairKey($match->participant_a_id, $match->participant_b_id);
+        $sets = collect($setsByPair[$key])->map(fn ($set) => [
+            'score_a' => $set[$match->participant_a_id],
+            'score_b' => $set[$match->participant_b_id],
+        ])->all();
+
+        $setsWonA = collect($sets)->filter(fn ($s) => $s['score_a'] > $s['score_b'])->count();
+        $setsWonB = collect($sets)->filter(fn ($s) => $s['score_b'] > $s['score_a'])->count();
+        $winnerId = $setsWonA > $setsWonB ? $match->participant_a_id : $match->participant_b_id;
+
+        $match->update([
+            'sets' => $sets,
+            'score_a' => $setsWonA,
+            'score_b' => $setsWonB,
+            'status' => 'completed',
+            'winner_id' => $winnerId,
+        ]);
+        $service->advanceWinner($match->fresh());
+    }
+
+    expect($tournament->fresh()->status)->toBe('completed');
+    expect($tournament->fresh()->champion_id)->toBe($p1);
+});
+
 it('rebuilds structure as a jsonb-ready array grouped by round', function () {
     $tournament = makeTournament('single_elimination', 4);
     $bracket = app(BracketService::class)->generate($tournament);

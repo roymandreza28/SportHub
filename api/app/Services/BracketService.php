@@ -949,7 +949,9 @@ class BracketService
                 $wins[$winnerId] = ($wins[$winnerId] ?? 0) + 1;
             }
 
-            foreach ([[$match->{$aField}, $match->score_a], [$match->{$bField}, $match->score_b]] as [$participantId, $score]) {
+            [$scoreA, $scoreB] = $this->realPointTotals($match, $tournament);
+
+            foreach ([[$match->{$aField}, $scoreA], [$match->{$bField}, $scoreB]] as [$participantId, $score]) {
                 if ($participantId !== null) {
                     $totalScore[$participantId] = ($totalScore[$participantId] ?? 0) + $score;
                 }
@@ -978,6 +980,33 @@ class BracketService
         return $isTeam
             ? ['user_id' => null, 'team_id' => $championId, 'name' => $champion?->name]
             : ['user_id' => $championId, 'team_id' => null, 'name' => $champion?->name];
+    }
+
+    /**
+     * A best_of_sets match's score_a/score_b columns are SETS WON (e.g. a
+     * 2-1 badminton match), not real points — using them for "most total
+     * points scored" would really just be counting games won a second time.
+     * The actual point values live per-set in $match->sets, so this sums
+     * those instead whenever they're available. single_score tournaments
+     * have no such gap: score_a/score_b already ARE the real points.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function realPointTotals(GameMatch $match, Tournament $tournament): array
+    {
+        if ($tournament->scoring_type === 'best_of_sets' && ! empty($match->sets)) {
+            $totalA = 0;
+            $totalB = 0;
+
+            foreach ($match->sets as $set) {
+                $totalA += (int) ($set['score_a'] ?? 0);
+                $totalB += (int) ($set['score_b'] ?? 0);
+            }
+
+            return [$totalA, $totalB];
+        }
+
+        return [$match->score_a, $match->score_b];
     }
 
     // Every registrant gets notified, not just the two players in the match
