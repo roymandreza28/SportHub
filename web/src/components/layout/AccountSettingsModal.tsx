@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useMutation } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { useAuth } from '../../lib/AuthContext'
-import { updateOwnPassword } from '../../lib/accountApi'
+import { updateOwnPassword, updateOwnProfile } from '../../lib/accountApi'
 import { buttonPrimary, buttonSecondary, fieldGroup, input, label } from '../../lib/formStyles'
 import {
   disablePushNotifications,
@@ -25,17 +25,42 @@ function extractErrorMessage(error: unknown): string {
 }
 
 export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
-  const { user } = useAuth()
+  const { user, refreshUser } = useAuth()
   const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
   const [pushState, setPushState] = useState<PushPermissionState>('unsupported')
   const [pushSubscribed, setPushSubscribed] = useState(false)
   const [pushBusy, setPushBusy] = useState(false)
 
+  // Basic details — everything EXCEPT email/password/role/verification,
+  // which either have their own dedicated section below (password) or no
+  // self-service edit at all (see AuthController::updateProfile()'s own
+  // comment on why those are excluded). Seeded from the current user once,
+  // not kept in sync afterward — the modal fully unmounts/remounts each
+  // time it's opened (see UserMenu's `{settingsOpen && <AccountSettingsModal
+  // .../>}`), so reopening it after a save already reflects the fresh value.
+  const [firstName, setFirstName] = useState(user?.first_name ?? '')
+  const [middleName, setMiddleName] = useState(user?.middle_name ?? '')
+  const [lastName, setLastName] = useState(user?.last_name ?? '')
+  const [phone, setPhone] = useState(user?.phone ?? '')
+  const [address, setAddress] = useState(user?.address ?? '')
+
   useEffect(() => {
     setPushState(getPushPermissionState())
     hasActivePushSubscription().then(setPushSubscribed)
   }, [])
+
+  const profileMutation = useMutation({
+    mutationFn: () =>
+      updateOwnProfile({
+        first_name: firstName,
+        middle_name: middleName,
+        last_name: lastName,
+        phone,
+        address,
+      }),
+    onSuccess: () => refreshUser(),
+  })
 
   const mutation = useMutation({
     mutationFn: () => updateOwnPassword(currentPassword, password),
@@ -74,9 +99,76 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
   // strip near the top instead of centering it on the page.
   return createPortal(
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/60 p-4">
-      <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-xl bg-white p-6 shadow-2xl">
         <h3 className="text-base font-bold text-slate-900">Account settings</h3>
         <p className="mt-1 text-xs text-slate-500">{user?.name} — {user?.email}</p>
+
+        <div className="mt-4 flex flex-col gap-3 border-b border-slate-100 pb-4">
+          <p className={label}>Basic details</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className={fieldGroup}>
+              <label className={label}>First name</label>
+              <input
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className={input}
+              />
+            </div>
+            <div className={fieldGroup}>
+              <label className={label}>Last name</label>
+              <input
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className={input}
+              />
+            </div>
+          </div>
+          <div className={fieldGroup}>
+            <label className={label}>Middle name</label>
+            <input
+              type="text"
+              placeholder="Optional"
+              value={middleName}
+              onChange={(e) => setMiddleName(e.target.value)}
+              className={input}
+            />
+          </div>
+          <div className={fieldGroup}>
+            <label className={label}>Mobile number</label>
+            <input
+              type="tel"
+              placeholder="09XX XXX XXXX"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className={input}
+            />
+          </div>
+          <div className={fieldGroup}>
+            <label className={label}>Address</label>
+            <input
+              type="text"
+              placeholder="House/street, barangay, city"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              className={input}
+            />
+          </div>
+
+          {profileMutation.isError && (
+            <p className="text-xs text-red-600">{extractErrorMessage(profileMutation.error)}</p>
+          )}
+          {profileMutation.isSuccess && <p className="text-xs text-green-700">Details updated.</p>}
+
+          <button
+            onClick={() => profileMutation.mutate()}
+            disabled={!firstName || !lastName || profileMutation.isPending}
+            className={`${buttonPrimary} self-start`}
+          >
+            {profileMutation.isPending ? 'Saving...' : 'Save details'}
+          </button>
+        </div>
 
         <div className="mt-4 flex flex-col gap-3">
           <div className={fieldGroup}>
