@@ -15,12 +15,20 @@ class MatchPolicy
             return false;
         }
 
-        // Scoring is the assigned venue organizer's job alone — not the main
-        // organizer's, even for a tournament they created themselves. Every
-        // tournament requires a venue organizer at creation (see
-        // TournamentController::store()), so there's no "nobody can score
-        // it" gap this would otherwise open up.
-        return $gameMatch->bracket->tournament->venue_organizer_id === $user->id;
+        $tournament = $gameMatch->bracket->tournament;
+
+        // Once a venue organizer is assigned, scoring is exclusively their
+        // job — not the main organizer's, even for a tournament they
+        // created themselves, so two people are never both trying to score
+        // the same game. venue_organizer_id is optional now (see
+        // TournamentController::store()), though — when nothing was
+        // assigned, the main organizer runs the scoreboard themselves
+        // instead of leaving no one able to.
+        if ($tournament->venue_organizer_id !== null) {
+            return $tournament->venue_organizer_id === $user->id;
+        }
+
+        return $tournament->organizer_id === $user->id;
     }
 
     // Setting the date/time/court is the main organizer's job — distinct

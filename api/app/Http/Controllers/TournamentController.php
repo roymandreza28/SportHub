@@ -70,22 +70,23 @@ class TournamentController extends Controller
                 'exists:venues,id',
                 $this->ownVenueRule($request->user()),
             ],
-            // Required at creation for the main organizer role — every one
-            // of their tournaments must have a venue organizer designated
-            // up front, since match scoring is that person's exclusive
-            // responsibility (the main organizer who creates the
-            // tournament never scores it themselves; see MatchPolicy). A
-            // venue_facilitator has no separate staff to assign here at
-            // all — these two fields are silently overridden to their own
-            // id below, so the request doesn't need to (and isn't asked
-            // to) supply them.
+            // Optional for the main organizer role — leaving either (or
+            // both) unset means the main organizer runs that job
+            // themselves instead of delegating it (see MatchPolicy::
+            // updateScore()'s fallback to organizer_id when no
+            // venue_organizer is assigned, and LivestreamController::
+            // store()'s organizer_id branch, which already worked this way
+            // even before this changed). A venue_facilitator has no
+            // separate staff to assign here at all — these two fields are
+            // silently overridden to their own id below regardless of what
+            // (if anything) the request supplies.
             'venue_organizer_id' => [
-                $request->user()->hasRole('venue_facilitator') ? 'sometimes' : 'required',
+                'sometimes',
                 'exists:users,id',
                 $this->hasRoleRule('venue_organizer'),
             ],
             'livestream_organizer_id' => [
-                $request->user()->hasRole('venue_facilitator') ? 'sometimes' : 'required',
+                'sometimes',
                 'exists:users,id',
                 $this->hasRoleRule('livestream_organizer'),
             ],

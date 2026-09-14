@@ -161,7 +161,16 @@ export function OrganizerPage() {
   // this match open into" decision either way, so going live and clicking
   // straight into a match land in the same place.
   function openMatch(match: BracketMatch) {
-    if (isMainOrganizer) {
+    const tournament = myTournaments.find((t) => t.id === selectedTournamentId)
+    // A main organizer runs the scoreboard themselves once no venue
+    // organizer has been delegated that job for this tournament — mirrors
+    // MatchPolicy::updateScore()'s own organizer_id fallback exactly, so
+    // this never opens a scoreboard the backend would then 403 on. Once a
+    // venue organizer IS assigned, scoring stays exclusively theirs and the
+    // main organizer keeps the read-only viewer, same as before.
+    const organizerRunsItThemselves = isMainOrganizer && tournament != null && tournament.venue_organizer_id == null
+
+    if (isMainOrganizer && !organizerRunsItThemselves) {
       if (match.status === 'live' || match.status === 'completed') setViewingMatch(match)
       return
     }
@@ -487,7 +496,7 @@ export function OrganizerPage() {
           {viewingMatch && (
             <MatchScoreboardViewer
               match={viewingMatch}
-              tournamentName={myTournaments.find((t) => t.id === selectedTournamentId)?.name}
+              tournament={myTournaments.find((t) => t.id === selectedTournamentId)}
               onClose={() => setViewingMatch(null)}
             />
           )}
