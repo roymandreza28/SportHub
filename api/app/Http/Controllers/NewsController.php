@@ -186,17 +186,25 @@ class NewsController extends Controller
             // the same way LivestreamController::publish() does the other
             // way around (news_id), so it renders with the same LIVE badge
             // + embedded player. An explicit pick from ShareMatchModal's
-            // picker always wins; failing that, a lone still-unlinked live
-            // stream on the match's tournament is linked automatically so
-            // sharing still works with zero extra clicks in the common case
-            // of exactly one broadcast running.
+            // picker always wins; failing that, prefer a stream tied to
+            // THIS specific match (several courts can each be live in the
+            // same tournament now), falling back to a tournament-wide
+            // stream with no match of its own — so sharing still works with
+            // zero extra clicks in the common case of exactly one broadcast
+            // running, without ever grabbing a different court's feed.
             if ($pickedLivestream) {
                 $pickedLivestream->update(['news_id' => $news->id]);
             } elseif ($match) {
-                Livestream::where('tournament_id', $match->bracket->tournament_id)
+                $matchLivestream = Livestream::where('match_id', $match->id)
                     ->where('status', 'live')
                     ->whereNull('news_id')
-                    ->first()
+                    ->first();
+
+                ($matchLivestream ?? Livestream::where('tournament_id', $match->bracket->tournament_id)
+                    ->whereNull('match_id')
+                    ->where('status', 'live')
+                    ->whereNull('news_id')
+                    ->first())
                     ?->update(['news_id' => $news->id]);
             }
 

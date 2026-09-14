@@ -131,6 +131,11 @@ export type LivestreamItem = {
   title: string
   status: 'scheduled' | 'live' | 'ended'
   tournament_id: number | null
+  // Which specific game this broadcast is for — several courts can each be
+  // live at once in the same tournament now, so a stream is no longer
+  // necessarily "the" broadcast for its whole tournament. Null still means
+  // a legacy/whole-tournament stream with no single game of its own.
+  match_id: number | null
   news_id: number | null
   // Set once the broadcaster's device has uploaded its MediaRecorder
   // capture of the broadcast (see uploadLivestreamRecording) — lets a
@@ -138,6 +143,7 @@ export type LivestreamItem = {
   recording_url: string | null
   broadcaster: { id: number; name: string } | null
   tournament: { id: number; organizer_id: number } | null
+  match: { id: number; participant_a_team_id: number | null; participant_b_team_id: number | null } | null
 }
 
 export type ChatMessageItem = {
@@ -390,6 +396,7 @@ export async function fetchLivestream(id: number) {
 export async function createLivestream(input: {
   title: string
   tournament_id?: number
+  match_id?: number
   news_id?: number
 }) {
   const { data } = await api.post<LivestreamItem>('/api/livestreams', input)

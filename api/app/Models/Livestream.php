@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Storage;
 class Livestream extends Model
 {
     protected $fillable = [
-        'news_id', 'tournament_id', 'title', 'broadcaster_id', 'chat_channel_name', 'status', 'recording_path',
+        'news_id', 'tournament_id', 'match_id', 'title', 'broadcaster_id', 'chat_channel_name', 'status', 'recording_path',
     ];
 
     protected $appends = ['recording_url'];
@@ -34,6 +34,11 @@ class Livestream extends Model
     public function tournament(): BelongsTo
     {
         return $this->belongsTo(Tournament::class);
+    }
+
+    public function match(): BelongsTo
+    {
+        return $this->belongsTo(GameMatch::class, 'match_id');
     }
 
     public function broadcaster(): BelongsTo

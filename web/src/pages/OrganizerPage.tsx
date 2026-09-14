@@ -506,17 +506,33 @@ export function OrganizerPage() {
 
           <div className="mt-4 border-t border-slate-100 pt-4">
             <div className="mb-3 flex flex-wrap gap-2">
-              {myLivestreams.map((l) => (
-                <button
-                  key={l.id}
-                  onClick={() => setSelectedLivestreamId(l.id)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    selectedLivestreamId === l.id ? 'bg-teal-600 text-pure-white' : 'bg-slate-100 text-slate-600'
-                  }`}
-                >
-                  {l.title}
-                </button>
-              ))}
+              {myLivestreams.map((l) => {
+                // A tournament can have several of these live at once now
+                // (one per court) — tag each button with its tournament and
+                // whether it's tied to one specific game, so they're
+                // distinguishable beyond just the organizer-chosen title.
+                const tournamentName = myTournaments.find((t) => t.id === l.tournament_id)?.name
+                return (
+                  <button
+                    key={l.id}
+                    onClick={() => setSelectedLivestreamId(l.id)}
+                    className={`flex flex-col items-start rounded-lg px-3 py-1.5 text-left text-xs font-medium ${
+                      selectedLivestreamId === l.id ? 'bg-teal-600 text-pure-white' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {l.status === 'live' && <span className="h-1.5 w-1.5 rounded-full bg-red-500" />}
+                      {l.title}
+                    </span>
+                    {tournamentName && (
+                      <span className={`text-[10px] font-normal ${selectedLivestreamId === l.id ? 'text-teal-100' : 'text-slate-400'}`}>
+                        {tournamentName}
+                        {l.match_id !== null ? ' — one game' : ' — whole tournament'}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
             {selectedLivestream && (
               <div className="flex flex-col gap-3">

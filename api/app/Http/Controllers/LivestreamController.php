@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\PublicSignalRelayed;
 use App\Events\WebRTCSignalSent;
+use App\Models\GameMatch;
 use App\Models\Livestream;
 use App\Models\News;
 use App\Models\Tournament;
@@ -17,13 +18,13 @@ class LivestreamController extends Controller
 {
     public function index()
     {
-        return Livestream::with(['broadcaster:id,name', 'tournament:id,organizer_id'])
+        return Livestream::with(['broadcaster:id,name', 'tournament:id,organizer_id', 'match:id,participant_a_team_id,participant_b_team_id'])
             ->orderByDesc('created_at')->get();
     }
 
     public function show(Livestream $livestream)
     {
-        return $livestream->load(['broadcaster:id,name', 'tournament:id,organizer_id']);
+        return $livestream->load(['broadcaster:id,name', 'tournament:id,organizer_id', 'match:id,participant_a_team_id,participant_b_team_id']);
     }
 
     public function store(Request $request)
@@ -33,14 +34,31 @@ class LivestreamController extends Controller
         $data = $request->validate([
             'news_id' => ['nullable', 'exists:news,id'],
             'tournament_id' => ['nullable', 'exists:tournaments,id'],
+            'match_id' => ['nullable', 'exists:matches,id'],
             'title' => ['required', 'string', 'max:255'],
         ]);
 
         $user = $request->user();
         $broadcasterId = $user->id;
+        $tournament = null;
+
+        // Matches have no tournament_id column of their own (see
+        // GameMatch->bracket->tournament) — a match-scoped stream always
+        // resolves ITS tournament through the match, and that resolved id is
+        // what gets persisted below, regardless of any tournament_id the
+        // client also sent. Keeping tournament_id populated this way means
+        // every consumer that only ever checked livestream.tournament_id /
+        // tournament->organizer_id (LivestreamPolicy, publish(), the
+        // broadcaster/viewer components) keeps working unchanged.
+        if (! empty($data['match_id'])) {
+            $match = GameMatch::with('bracket.tournament')->findOrFail($data['match_id']);
+            $tournament = $match->bracket->tournament;
+            abort_unless($tournament !== null, 404);
+            $data['tournament_id'] = $tournament->id;
+        }
 
         if (! empty($data['tournament_id'])) {
-            $tournament = Tournament::findOrFail($data['tournament_id']);
+            $tournament = $tournament ?? Tournament::findOrFail($data['tournament_id']);
             abort_unless(
                 $tournament->organizer_id === $user->id || $tournament->livestream_organizer_id === $user->id,
                 403
@@ -55,23 +73,27 @@ class LivestreamController extends Controller
             abort_unless(News::findOrFail($data['news_id'])->author_id === $user->id, 403);
         }
 
-        // A tournament is "one game" — going live again for it (after ending
-        // the first broadcast, a dropped-connection retry, a second half)
-        // reuses that SAME row instead of leaving the old one's recording
-        // sitting next to a new row. News::livestreams() has no way to know
-        // which of several rows for the same tournament is the "real" one to
-        // show a viewer, so there must only ever be one per tournament — and
-        // reusing the row is also what makes uploadRecording()'s existing
-        // replace-in-place behavior actually override the old footage
-        // instead of just adding a second, orphaned recording. A livestream
-        // with no tournament has no natural "same game" key, so it still
-        // gets a fresh row every time.
-        if (! empty($data['tournament_id'])) {
-            $existing = Livestream::where('tournament_id', $data['tournament_id'])->first();
+        // One livestream per GAME now, not per tournament — several courts
+        // running at once in the same tournament can each have their own
+        // broadcast. Going live again for the SAME match (after ending the
+        // first broadcast, a dropped-connection retry, a second half) still
+        // reuses that match's existing row instead of leaving the old one's
+        // recording sitting next to a new row — same reuse rationale the
+        // tournament-wide key always had, just keyed one level down. A
+        // stream created with no match_id at all (a legacy whole-tournament
+        // broadcast, or one not tied to any bracket) keeps being keyed by
+        // tournament_id; one with neither key always gets a fresh row.
+        $uniqueKey = ! empty($data['match_id'])
+            ? ['match_id' => $data['match_id']]
+            : (! empty($data['tournament_id']) ? ['tournament_id' => $data['tournament_id']] : null);
+
+        if ($uniqueKey !== null) {
+            $existing = Livestream::where($uniqueKey)->first();
 
             $livestream = Livestream::updateOrCreate(
-                ['tournament_id' => $data['tournament_id']],
+                $uniqueKey,
                 [
+                    'tournament_id' => $data['tournament_id'] ?? $existing?->tournament_id,
                     // Keeps whichever News post this game was already
                     // published under (if any) linked to the new broadcast,
                     // rather than wiping the connection a prior publish()
@@ -79,7 +101,7 @@ class LivestreamController extends Controller
                     'news_id' => $data['news_id'] ?? $existing?->news_id,
                     'title' => $data['title'],
                     'broadcaster_id' => $broadcasterId,
-                    'chat_channel_name' => 'livestream.'.Str::random(12),
+                    'chat_channel_name' => $existing?->chat_channel_name ?? 'livestream.'.Str::random(12),
                     'status' => 'scheduled',
                 ]
             );
@@ -92,7 +114,7 @@ class LivestreamController extends Controller
             ]);
         }
 
-        return response()->json($livestream->load(['broadcaster:id,name', 'tournament:id,organizer_id']), 201);
+        return response()->json($livestream->load(['broadcaster:id,name', 'tournament:id,organizer_id', 'match:id,participant_a_team_id,participant_b_team_id']), 201);
     }
 
     public function update(Request $request, Livestream $livestream)

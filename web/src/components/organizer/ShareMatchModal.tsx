@@ -82,14 +82,16 @@ export function ShareMatchModal({
   })
   const liveMatch = freshBracketMatch(bracket, match.id) ?? match
 
-  // Candidates for the "link a livestream" picker below — every broadcast
-  // this tournament has that isn't already over. Left as an explicit choice
-  // rather than silently auto-picking, since a tournament can have more
-  // than one court/feed running (e.g. one per livestream organizer) and
-  // guessing wrong would link the post to the wrong game's video.
+  // Candidates for the "link a livestream" picker below. A stream tied to
+  // THIS specific match always wins — several courts can each be live at
+  // once in the same tournament now, so a tournament-wide match is only
+  // ever offered as a fallback when nothing is scoped to this exact game,
+  // never mixed in alongside a real match-specific candidate (that would
+  // let the wrong court's feed get linked to this post).
   const { data: livestreams } = useQuery({ queryKey: ['livestreams'], queryFn: fetchLivestreams })
-  const candidateStreams = (livestreams ?? [])
-    .filter((l) => l.tournament_id === tournamentId && l.status !== 'ended')
+  const openForTournament = (livestreams ?? []).filter((l) => l.tournament_id === tournamentId && l.status !== 'ended')
+  const matchScoped = openForTournament.filter((l) => l.match_id === match.id)
+  const candidateStreams = (matchScoped.length > 0 ? matchScoped : openForTournament.filter((l) => l.match_id === null))
     .sort((a, b) => (a.status === 'live' ? -1 : 1) - (b.status === 'live' ? -1 : 1))
 
   const initial = prefillFor(liveMatch, tournamentName, liveMatch.round)

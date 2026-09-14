@@ -758,6 +758,116 @@ it('denies creating a livestream tied to a tournament the organizer does not own
     ])->assertForbidden();
 });
 
+// ---- Per-game livestreams (several courts live at once in one tournament) ----
+
+it('lets two different matches in the same tournament each get their own livestream', function () {
+    $owner = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Handball']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id, 'sport_id' => $sport->id,
+        'name' => 'Multi-Court Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'registration',
+    ]);
+
+    foreach (range(1, 4) as $i) {
+        $player = userWithRole('player');
+        TournamentRegistration::create(['tournament_id' => $tournament->id, 'user_id' => $player->id, 'status' => 'pending']);
+    }
+
+    $this->actingAs($owner)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
+    $matches = $tournament->fresh()->bracket->matches;
+    [$matchA, $matchB] = [$matches[0], $matches[1]];
+
+    $streamA = $this->actingAs($owner)->postJson('/api/livestreams', [
+        'match_id' => $matchA->id, 'title' => 'Court 1 feed',
+    ])->assertCreated()->json();
+
+    $streamB = $this->actingAs($owner)->postJson('/api/livestreams', [
+        'match_id' => $matchB->id, 'title' => 'Court 2 feed',
+    ])->assertCreated()->json();
+
+    expect($streamA['id'])->not->toBe($streamB['id']);
+    expect($streamA['match_id'])->toBe($matchA->id);
+    expect($streamB['match_id'])->toBe($matchB->id);
+    // tournament_id is auto-derived from the match, not left blank, so
+    // everything that only ever checked tournament_id (policy, publish(),
+    // the broadcaster/viewer components) keeps working unchanged.
+    expect($streamA['tournament_id'])->toBe($tournament->id);
+    expect($streamB['tournament_id'])->toBe($tournament->id);
+});
+
+it('reuses the same livestream row when going live again for the same match, not a sibling match', function () {
+    $owner = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Handball']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id, 'sport_id' => $sport->id,
+        'name' => 'Reuse Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'registration',
+    ]);
+
+    foreach (range(1, 4) as $i) {
+        $player = userWithRole('player');
+        TournamentRegistration::create(['tournament_id' => $tournament->id, 'user_id' => $player->id, 'status' => 'pending']);
+    }
+
+    $this->actingAs($owner)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
+    $matches = $tournament->fresh()->bracket->matches;
+    [$matchA, $matchB] = [$matches[0], $matches[1]];
+
+    $first = $this->actingAs($owner)->postJson('/api/livestreams', [
+        'match_id' => $matchA->id, 'title' => 'Court 1 feed',
+    ])->assertCreated()->json();
+
+    $again = $this->actingAs($owner)->postJson('/api/livestreams', [
+        'match_id' => $matchA->id, 'title' => 'Court 1 feed (retry)',
+    ])->assertCreated()->json();
+
+    $sibling = $this->actingAs($owner)->postJson('/api/livestreams', [
+        'match_id' => $matchB->id, 'title' => 'Court 2 feed',
+    ])->assertCreated()->json();
+
+    expect($again['id'])->toBe($first['id']);
+    expect($sibling['id'])->not->toBe($first['id']);
+    expect(Livestream::where('tournament_id', $tournament->id)->count())->toBe(2);
+});
+
+it("links a match's own livestream over a sibling live broadcast when sharing that match", function () {
+    $owner = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Handball']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $owner->id, 'sport_id' => $sport->id,
+        'name' => 'Two Courts Cup', 'format' => 'round_robin', 'starts_at' => now()->addWeek(), 'status' => 'registration',
+    ]);
+
+    foreach (range(1, 4) as $i) {
+        $player = userWithRole('player');
+        TournamentRegistration::create(['tournament_id' => $tournament->id, 'user_id' => $player->id, 'status' => 'pending']);
+    }
+
+    $this->actingAs($owner)->postJson("/api/tournaments/{$tournament->id}/generate-bracket")->assertCreated();
+    $matches = $tournament->fresh()->bracket->matches;
+    [$matchA, $matchB] = [$matches[0], $matches[1]];
+    $matchA->update(['status' => 'live']);
+
+    $streamA = Livestream::create([
+        'tournament_id' => $tournament->id, 'match_id' => $matchA->id,
+        'title' => 'Court 1 feed', 'broadcaster_id' => $owner->id, 'status' => 'live',
+    ]);
+    $streamB = Livestream::create([
+        'tournament_id' => $tournament->id, 'match_id' => $matchB->id,
+        'title' => 'Court 2 feed', 'broadcaster_id' => $owner->id, 'status' => 'live',
+    ]);
+
+    $response = $this->actingAs($owner)->postJson('/api/news', [
+        'title' => 'Live from court 1!', 'body' => 'Body', 'tournament_id' => $tournament->id, 'match_id' => $matchA->id,
+    ])->assertCreated();
+
+    expect($response->json('livestreams.0.id'))->toBe($streamA->id);
+    expect($streamA->fresh()->news_id)->toBe($response->json('id'));
+    expect($streamB->fresh()->news_id)->toBeNull();
+});
+
 // ---- Best-of-sets scoring (table tennis "Best of 5/7 Sets", volleyball "Best of Series") ----
 
 it('requires sets_to_win when scoring_type is best_of_sets', function () {
