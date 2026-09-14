@@ -52,6 +52,18 @@ if [ "$1" = "supervisord" ]; then
         php artisan db:seed --force || echo "db:seed failed — continuing boot anyway"
     fi
 
+    # Narrower sibling of SEED_ON_BOOT — re-syncs just role/permission
+    # grants (RolesAndPermissionsSeeder::syncPermissions()) without also
+    # running DatabaseSeeder's full demo-data seeders, which would
+    # repopulate a deliberately-emptied production database with sample
+    # tournaments/teams/players. Use this after a role gains/loses a
+    # permission (e.g. venue_facilitator getting 'manage tournaments') on
+    # a database you don't want DatabaseSeeder's other seeders touching.
+    # Unset after use, same as the flags above.
+    if [ "$SEED_ROLES_ON_BOOT" = "true" ]; then
+        php artisan db:seed --class=RolesAndPermissionsSeeder --force || echo "RolesAndPermissionsSeeder failed — continuing boot anyway"
+    fi
+
     # Same one-shot-hook pattern as SEED_ON_BOOT above, for the opposite
     # operation — wiping every table except accounts/roles/sports back to a
     # fresh state. --force skips the interactive confirmation prompt, which
