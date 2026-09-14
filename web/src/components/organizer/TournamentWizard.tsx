@@ -326,48 +326,42 @@ export function TournamentWizard() {
         ) : (
           <>
             <div className={fieldGroup}>
-              <label className={label}>Venue organizer (scoreboard) *</label>
+              <label className={label}>Venue organizer (scoreboard)</label>
               <select
                 value={venueOrganizerId}
                 onChange={(e) => setVenueOrganizerId(e.target.value ? Number(e.target.value) : '')}
                 className={select}
               >
-                <option value="">Choose a venue organizer...</option>
+                <option value="">Run it yourself</option>
                 {organizers?.venue_organizers.map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.name}
                   </option>
                 ))}
               </select>
-              {organizers && organizers.venue_organizers.length === 0 && (
-                <p className="text-xs text-red-600">
-                  No venue organizer accounts exist yet — ask an admin to create one before you can create a tournament.
-                </p>
-              )}
               <p className="text-xs text-slate-500">
-                Required — scoring is always run by the venue organizer you assign here, not by you.
+                Optional — leave as &quot;Run it yourself&quot; to score matches yourself, or assign someone else to
+                run the scoreboard.
               </p>
             </div>
             <div className={fieldGroup}>
-              <label className={label}>Livestream organizer *</label>
+              <label className={label}>Livestream organizer</label>
               <select
                 value={livestreamOrganizerId}
                 onChange={(e) => setLivestreamOrganizerId(e.target.value ? Number(e.target.value) : '')}
                 className={select}
               >
-                <option value="">Choose a livestream organizer...</option>
+                <option value="">Run it yourself</option>
                 {organizers?.livestream_organizers.map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.name}
                   </option>
                 ))}
               </select>
-              {organizers && organizers.livestream_organizers.length === 0 && (
-                <p className="text-xs text-red-600">
-                  No livestream organizer accounts exist yet — ask an admin to create one before you can create a
-                  tournament.
-                </p>
-              )}
+              <p className="text-xs text-slate-500">
+                Optional — leave as &quot;Run it yourself&quot; to broadcast it yourself, or assign someone else to
+                livestream it.
+              </p>
             </div>
           </>
         )}
@@ -419,7 +413,7 @@ export function TournamentWizard() {
             !sportId ||
             !name ||
             !startsAt ||
-            (isVenueFacilitator ? !venueId : !venueOrganizerId || !livestreamOrganizerId) ||
+            (isVenueFacilitator && !venueId) ||
             (sportRequiresTeam && !sportFormatId) ||
             createMutation.isPending
           }
