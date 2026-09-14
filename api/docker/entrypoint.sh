@@ -74,20 +74,21 @@ if [ "$1" = "supervisord" ]; then
         php artisan system:reset-keep-accounts --force || echo "system:reset-keep-accounts failed — continuing boot anyway"
     fi
 
-    # Narrower sibling of SEED_ON_BOOT, for the four full-detail Basketball
-    # seeders covering double_elimination/round_robin/group_stage/swiss
-    # (each 4 teams, already at their final round — see the seeder classes'
-    # own doc comments). UNLIKE the other seeders in this file, these are
-    # NOT idempotent — Tournament::create() runs unconditionally every time,
-    # so leaving this flag set across a second boot would create duplicate
-    # tournaments. Unset it immediately after the one deploy that needed it,
-    # same as RESET_ON_BOOT above (not "harmless to leave on" like
-    # SEED_ON_BOOT's firstOrCreate-based seeders).
+    # Narrower sibling of SEED_ON_BOOT, for the four full-detail format-demo
+    # seeders covering double_elimination (Basketball) plus
+    # round_robin/group_stage/swiss (Badminton Singles) (each already at
+    # their final round — see the seeder classes' own doc comments). UNLIKE
+    # the other seeders in this file, these are NOT idempotent —
+    # Tournament::create() runs unconditionally every time, so leaving this
+    # flag set across a second boot would create duplicate tournaments.
+    # Unset it immediately after the one deploy that needed it, same as
+    # RESET_ON_BOOT above (not "harmless to leave on" like SEED_ON_BOOT's
+    # firstOrCreate-based seeders).
     if [ "$SEED_BASKETBALL_FORMATS_ON_BOOT" = "true" ]; then
         php artisan db:seed --class=DoubleEliminationBasketballTournamentSeeder --force || echo "DoubleEliminationBasketballTournamentSeeder failed — continuing boot anyway"
-        php artisan db:seed --class=RoundRobinBasketballTournamentSeeder --force || echo "RoundRobinBasketballTournamentSeeder failed — continuing boot anyway"
-        php artisan db:seed --class=GroupStageBasketballTournamentSeeder --force || echo "GroupStageBasketballTournamentSeeder failed — continuing boot anyway"
-        php artisan db:seed --class=SwissBasketballTournamentSeeder --force || echo "SwissBasketballTournamentSeeder failed — continuing boot anyway"
+        php artisan db:seed --class=RoundRobinBadmintonTournamentSeeder --force || echo "RoundRobinBadmintonTournamentSeeder failed — continuing boot anyway"
+        php artisan db:seed --class=GroupStageBadmintonTournamentSeeder --force || echo "GroupStageBadmintonTournamentSeeder failed — continuing boot anyway"
+        php artisan db:seed --class=SwissBadmintonTournamentSeeder --force || echo "SwissBadmintonTournamentSeeder failed — continuing boot anyway"
     fi
 fi
 
