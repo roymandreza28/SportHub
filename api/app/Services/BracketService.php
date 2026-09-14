@@ -893,6 +893,13 @@ class BracketService
                 'round' => $m->round,
                 'group_number' => $m->group_number,
                 'bracket_type' => $m->bracket_type,
+                // Only meaningful for double_elimination's losers bracket —
+                // BracketView's connector-line drawing needs this to
+                // reconstruct exactly which match a loser drops into or a
+                // losers-bracket winner advances to, mirroring
+                // dropIntoLosersBracket()/advanceDoubleEliminationLosers()'s
+                // own position math below.
+                'bracket_position' => $m->bracket_position,
                 'participant_a_id' => $m->participant_a_id,
                 'participant_b_id' => $m->participant_b_id,
                 'participant_a' => MatchParticipants::shape($m->participant_a_team_id, $m->participantATeam, $m->participantA),

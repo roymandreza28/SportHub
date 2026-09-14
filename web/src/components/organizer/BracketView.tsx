@@ -21,7 +21,7 @@ export const TRACK_LABEL: Record<string, string> = {
   final: 'Grand final',
 }
 
-type ConnectorLine = { id: string; x1: number; y1: number; x2: number; y2: number }
+type ConnectorLine = { id: string; x1: number; y1: number; x2: number; y2: number; dashed?: boolean }
 
 function MatchCard({
   match,
@@ -170,6 +170,125 @@ export function eliminationRoundLabel(matchCount: number, roundIndex: number): s
   }
 }
 
+// Splits a flat match list into winners-bracket rounds, losers-bracket
+// rounds (both ordered ascending by round number, matches within a round
+// ordered by id — the same order BracketService's generators create them
+// in), and the grand final match, if one exists. A tournament with only 2
+// entrants never gets a losers bracket or a final match at all — see
+// BracketService::generateDoubleElimination()'s own "decisive on its own"
+// comment — so both come back empty/null rather than throwing.
+function groupDoubleEliminationMatches(matches: BracketMatch[]) {
+  const wbByRound = new Map<number, BracketMatch[]>()
+  const lbByRound = new Map<number, BracketMatch[]>()
+  let finalMatch: BracketMatch | null = null
+
+  for (const m of matches) {
+    if (m.bracket_type === 'winners') {
+      const arr = wbByRound.get(m.round) ?? []
+      arr.push(m)
+      wbByRound.set(m.round, arr)
+    } else if (m.bracket_type === 'losers') {
+      const arr = lbByRound.get(m.round) ?? []
+      arr.push(m)
+      lbByRound.set(m.round, arr)
+    } else if (m.bracket_type === 'final') {
+      finalMatch = m
+    }
+  }
+
+  const byId = (a: BracketMatch, b: BracketMatch) => a.id - b.id
+  const wbRounds = [...wbByRound.keys()].sort((a, b) => a - b).map((r) => [...wbByRound.get(r)!].sort(byId))
+  const lbRounds = [...lbByRound.keys()].sort((a, b) => a - b).map((r) => [...lbByRound.get(r)!].sort(byId))
+
+  return { wbRounds, lbRounds, finalMatch }
+}
+
+// Reconstructs exactly which match every winners/losers-bracket match feeds
+// into — mirroring BracketService's advanceDoubleEliminationWinners()/
+// dropIntoLosersBracket()/advanceDoubleEliminationLosers() position math, so
+// the connector lines drawn from this always match what actually happens
+// when a result is reported, not just a visual approximation. `dashed`
+// marks a LOSER dropping into the losers bracket (the one relationship
+// isTreeRound-style single-elimination brackets never have); everything
+// else is a winner advancing.
+function computeDoubleEliminationConnectors(
+  matches: BracketMatch[]
+): { from: number; to: number; dashed: boolean }[] {
+  const { wbRounds, lbRounds, finalMatch } = groupDoubleEliminationMatches(matches)
+  const edges: { from: number; to: number; dashed: boolean }[] = []
+
+  // Winners bracket: round r's winner advances to round r+1 (standard
+  // single-elimination pairing), and the last WB round's winner goes into
+  // the grand final's slot A.
+  wbRounds.forEach((round, i) => {
+    const nextRound = wbRounds[i + 1]
+    if (nextRound) {
+      round.forEach((m, j) => {
+        const target = nextRound[Math.floor(j / 2)]
+        if (target) edges.push({ from: m.id, to: target.id, dashed: false })
+      })
+    } else if (finalMatch) {
+      round.forEach((m) => edges.push({ from: m.id, to: finalMatch!.id, dashed: false }))
+    }
+  })
+
+  // Winners bracket: round r's LOSER drops into the losers bracket. Round 1
+  // losers pair up directly (two WB round-1 losers per LB round-1 match);
+  // every later round's loser instead joins whoever already survived that
+  // far in the losers bracket, one per LB "merge" round — see
+  // dropIntoLosersBracket()'s own two branches.
+  wbRounds.forEach((round, i) => {
+    const wbRound = i + 1
+    if (wbRound === 1) {
+      const lbRound1 = lbRounds[0]
+      if (!lbRound1) return
+      round.forEach((m, j) => {
+        const target = lbRound1.find((lm) => lm.bracket_position === Math.floor(j / 2))
+        if (target) edges.push({ from: m.id, to: target.id, dashed: true })
+      })
+    } else {
+      // Losers-bracket rounds are numbered 100+1, 100+2, ... — the merge
+      // round a WB round r (r>1) loser drops into is 100 + 2*(r-1).
+      const lbRound = lbRounds.find((r) => r[0] && r[0].round === 100 + 2 * (wbRound - 1))
+      if (!lbRound) return
+      round.forEach((m, j) => {
+        const target = lbRound.find((lm) => lm.bracket_position === j)
+        if (target) edges.push({ from: m.id, to: target.id, dashed: true })
+      })
+    }
+  })
+
+  // Losers bracket: odd rounds feed the very next (even, "merge") round at
+  // the SAME position, slot A; even rounds feed the next (odd, "survivors")
+  // round at position floor(position/2) — see advanceDoubleEliminationLosers().
+  // The very last losers-bracket round's winner goes into the grand final's
+  // slot B instead of another losers round.
+  lbRounds.forEach((round, i) => {
+    const lbRoundNumber = i + 1
+    const isLast = i === lbRounds.length - 1
+    if (isLast) {
+      if (finalMatch) round.forEach((m) => edges.push({ from: m.id, to: finalMatch!.id, dashed: false }))
+      return
+    }
+    const nextRound = lbRounds[i + 1]
+    if (!nextRound) return
+    if (lbRoundNumber % 2 === 1) {
+      round.forEach((m) => {
+        const target = nextRound.find((lm) => lm.bracket_position === m.bracket_position)
+        if (target) edges.push({ from: m.id, to: target.id, dashed: false })
+      })
+    } else {
+      round.forEach((m) => {
+        const nextPos = Math.floor((m.bracket_position ?? 0) / 2)
+        const target = nextRound.find((lm) => lm.bracket_position === nextPos)
+        if (target) edges.push({ from: m.id, to: target.id, dashed: false })
+      })
+    }
+  })
+
+  return edges
+}
+
 export function BracketView({
   tournamentId,
   tournamentName,
@@ -271,6 +390,15 @@ export function BracketView({
   // left-to-right layout.
   const isPyramid = bracket?.format === 'single_elimination'
 
+  // Double elimination gets its own two-track layout (winners bracket row
+  // on top, losers bracket row below, grand final off to the side) instead
+  // of the flat per-round-number columns every other format uses — a flat
+  // layout would put the losers bracket's rounds (numbered 101+) AFTER the
+  // winners bracket's in reading order, several columns away from the WB
+  // matches whose losers actually feed them, which is exactly backwards for
+  // "show the flow of the tournament".
+  const isDoubleElimination = bracket?.format === 'double_elimination'
+
   // Public channel — spectators watching the bracket see round advances and
   // score-driven bracket changes live, without a manual refresh.
   useEffect(() => {
@@ -292,6 +420,12 @@ export function BracketView({
   const structure = useMemo(
     () => (bracket?.structure ?? []).map((round) => round.map((m) => freshBracketMatch(bracket, m.id) ?? m)),
     [bracket]
+  )
+
+  // Only computed/used when isDoubleElimination — see groupDoubleEliminationMatches.
+  const { wbRounds, lbRounds, finalMatch } = useMemo(
+    () => groupDoubleEliminationMatches(structure.flat()),
+    [structure]
   )
 
   // Measures each visible match card relative to the scrollable bracket
@@ -323,46 +457,60 @@ export function BracketView({
       const containerRect = container.getBoundingClientRect()
       const next: ConnectorLine[] = []
 
-      for (let r = 0; r < structure.length - 1; r++) {
-        const round = structure[r]
-        const nextRound = structure[r + 1]
-        if (!isTreeRound(round) || !isTreeRound(nextRound)) continue
-
-        round.forEach((match, i) => {
-          const targetMatch = nextRound[Math.floor(i / 2)]
-          if (!targetMatch) return
-
-          const fromEl = cardEls.current.get(match.id)
-          const toEl = cardEls.current.get(targetMatch.id)
-          if (!fromEl || !toEl) return
-
-          const fromRect = fromEl.getBoundingClientRect()
-          const toRect = toEl.getBoundingClientRect()
-
-          // Horizontal (default): flow is left→right, so a connector exits
-          // a match's right edge and enters the next one's left edge.
-          // Vertical (pyramid/portrait): flow is bottom→top instead (round
-          // 1 sits at the bottom, the final at the top — see the
-          // flex-col-reverse container below), so a connector exits a
-          // match's top edge and enters the next one's bottom edge.
-          next.push(
-            isPyramid
-              ? {
-                  id: `${match.id}-${targetMatch.id}`,
-                  x1: fromRect.left + fromRect.width / 2 - containerRect.left + container.scrollLeft,
-                  y1: fromRect.top - containerRect.top + container.scrollTop,
-                  x2: toRect.left + toRect.width / 2 - containerRect.left + container.scrollLeft,
-                  y2: toRect.bottom - containerRect.top + container.scrollTop,
-                }
-              : {
-                  id: `${match.id}-${targetMatch.id}`,
-                  x1: fromRect.right - containerRect.left + container.scrollLeft,
-                  y1: fromRect.top + fromRect.height / 2 - containerRect.top + container.scrollTop,
-                  x2: toRect.left - containerRect.left + container.scrollLeft,
-                  y2: toRect.top + toRect.height / 2 - containerRect.top + container.scrollTop,
-                }
-          )
+      // Horizontal elbow: flow is left→right, so a connector exits a
+      // match's right edge and enters the target's left edge — used for
+      // every non-pyramid layout, double elimination included (a
+      // cross-row winners→losers drop just has a bigger vertical jog).
+      function pushHorizontal(fromId: number, toId: number, dashed: boolean) {
+        const fromEl = cardEls.current.get(fromId)
+        const toEl = cardEls.current.get(toId)
+        if (!fromEl || !toEl) return
+        const fromRect = fromEl.getBoundingClientRect()
+        const toRect = toEl.getBoundingClientRect()
+        next.push({
+          id: `${fromId}-${toId}`,
+          x1: fromRect.right - containerRect.left + container.scrollLeft,
+          y1: fromRect.top + fromRect.height / 2 - containerRect.top + container.scrollTop,
+          x2: toRect.left - containerRect.left + container.scrollLeft,
+          y2: toRect.top + toRect.height / 2 - containerRect.top + container.scrollTop,
+          dashed,
         })
+      }
+
+      if (isDoubleElimination) {
+        computeDoubleEliminationConnectors(structure.flat()).forEach((e) => pushHorizontal(e.from, e.to, e.dashed))
+      } else {
+        for (let r = 0; r < structure.length - 1; r++) {
+          const round = structure[r]
+          const nextRound = structure[r + 1]
+          if (!isTreeRound(round) || !isTreeRound(nextRound)) continue
+
+          round.forEach((match, i) => {
+            const targetMatch = nextRound[Math.floor(i / 2)]
+            if (!targetMatch) return
+
+            if (isPyramid) {
+              // Vertical (pyramid/portrait): flow is bottom→top instead
+              // (round 1 sits at the bottom, the final at the top — see the
+              // flex-col-reverse container below), so a connector exits a
+              // match's top edge and enters the next one's bottom edge.
+              const fromEl = cardEls.current.get(match.id)
+              const toEl = cardEls.current.get(targetMatch.id)
+              if (!fromEl || !toEl) return
+              const fromRect = fromEl.getBoundingClientRect()
+              const toRect = toEl.getBoundingClientRect()
+              next.push({
+                id: `${match.id}-${targetMatch.id}`,
+                x1: fromRect.left + fromRect.width / 2 - containerRect.left + container.scrollLeft,
+                y1: fromRect.top - containerRect.top + container.scrollTop,
+                x2: toRect.left + toRect.width / 2 - containerRect.left + container.scrollLeft,
+                y2: toRect.bottom - containerRect.top + container.scrollTop,
+              })
+            } else {
+              pushHorizontal(match.id, targetMatch.id, false)
+            }
+          })
+        }
       }
 
       setLines(next)
@@ -392,7 +540,7 @@ export function BracketView({
     // recomputes the same scale from the same natural sizes, so setScale
     // is a no-op and nothing triggers a third run.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [structure, isPyramid, scale])
+  }, [structure, isPyramid, isDoubleElimination, scale])
 
   if (isLoading) return <p className="text-sm text-slate-500">Loading bracket...</p>
   // A bracket row can exist with no structure yet if generation failed
@@ -406,6 +554,26 @@ export function BracketView({
   const finalRound = structure[structure.length - 1]
   const champion =
     finalRound?.length === 1 && finalRound[0].status === 'completed' ? finalRound[0].winner : null
+
+  // Shared by both the double-elimination two-track layout and the generic
+  // flat one below — same MatchCard, same handlers, just arranged into
+  // different containers.
+  function renderMatchCard(match: BracketMatch) {
+    return (
+      <MatchCard
+        key={match.id}
+        match={match}
+        onClick={onSelectMatch ? () => onSelectMatch(match) : undefined}
+        onSchedule={canScheduleMatches ? () => setSchedulingMatch(match) : undefined}
+        onShare={canShareMatches ? () => setSharingMatch(match) : undefined}
+        onStatSheet={isStatSheetEligible?.(match) && onOpenStatSheet ? () => onOpenStatSheet(match) : undefined}
+        cardRef={(el) => {
+          if (el) cardEls.current.set(match.id, el)
+          else cardEls.current.delete(match.id)
+        }}
+      />
+    )
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -456,6 +624,9 @@ export function BracketView({
             <marker id="bracket-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
               <path d="M0,0 L8,4 L0,8 Z" className="fill-teal-400" />
             </marker>
+            <marker id="bracket-arrow-amber" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" className="fill-amber-400" />
+            </marker>
           </defs>
           {lines.map((line) => {
             // Horizontal: elbow meets halfway across (midX), arrowhead
@@ -477,9 +648,10 @@ export function BracketView({
                 key={line.id}
                 d={d}
                 fill="none"
-                className="stroke-teal-300"
+                className={line.dashed ? 'stroke-amber-400' : 'stroke-teal-300'}
                 strokeWidth={1.5}
-                markerEnd="url(#bracket-arrow)"
+                strokeDasharray={line.dashed ? '4 3' : undefined}
+                markerEnd={line.dashed ? 'url(#bracket-arrow-amber)' : 'url(#bracket-arrow)'}
               />
             )
           })}
@@ -492,56 +664,99 @@ export function BracketView({
             flow, only how it paints, so without this the container would
             still show whitespace/scrollbars sized for the un-shrunk content. */}
         <div style={{ width: scaledSize.width || undefined, height: scaledSize.height || undefined, overflow: 'hidden' }}>
-          <div
-            ref={contentRef}
-            className={`flex w-max ${
-              // items-center on the cross axis: each round-row is a different
-              // width (round 1 widest, the final narrowest), so without this
-              // they'd left-align against each other instead of narrowing
-              // symmetrically toward the center — the actual pyramid shape.
-              isPyramid ? 'flex-col-reverse items-center gap-10' : 'gap-8'
-            }`}
-            style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
-          >
-            {structure.map((round, i) => (
-              <div
-                key={i}
-                className={
-                  isPyramid
-                    ? 'relative flex flex-row items-center justify-center gap-6'
-                    : 'relative flex flex-col justify-around gap-4'
-                }
-              >
-                <h4
+          {isDoubleElimination ? (
+            <div
+              ref={contentRef}
+              className="flex w-max items-stretch gap-10"
+              style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
+            >
+              <div className="flex flex-col gap-8">
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-teal-600">Winners bracket</h3>
+                  <div className="flex gap-8">
+                    {wbRounds.map((round, i) => (
+                      <div key={`wb-${i}`} className="relative flex flex-col justify-around gap-4">
+                        <h4 className="text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          {i === wbRounds.length - 1 ? 'WB Final' : eliminationRoundLabel(round.length, i)}
+                        </h4>
+                        {round.map((match) => renderMatchCard(match))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {lbRounds.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-600">Losers bracket</h3>
+                    <div className="flex gap-8">
+                      {lbRounds.map((round, i) => (
+                        <div key={`lb-${i}`} className="relative flex flex-col justify-around gap-4">
+                          <h4 className="text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            {i === lbRounds.length - 1 ? 'LB Final' : `LB Round ${i + 1}`}
+                          </h4>
+                          {round.map((match) => renderMatchCard(match))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {finalMatch && (
+                <div className="flex flex-col justify-center gap-2">
+                  <h3 className="text-center text-xs font-semibold uppercase tracking-wide text-purple-600">
+                    Grand final
+                  </h3>
+                  {renderMatchCard(finalMatch)}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div
+              ref={contentRef}
+              className={`flex w-max ${
+                // items-center on the cross axis: each round-row is a different
+                // width (round 1 widest, the final narrowest), so without this
+                // they'd left-align against each other instead of narrowing
+                // symmetrically toward the center — the actual pyramid shape.
+                isPyramid ? 'flex-col-reverse items-center gap-10' : 'gap-8'
+              }`}
+              style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
+            >
+              {structure.map((round, i) => (
+                <div
+                  key={i}
                   className={
                     isPyramid
-                      ? 'absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-slate-500'
-                      : 'text-center text-xs font-semibold uppercase tracking-wide text-slate-500'
+                      ? 'relative flex flex-row items-center justify-center gap-6'
+                      : 'relative flex flex-col justify-around gap-4'
                   }
                 >
-                  {isTreeRound(round) ? eliminationRoundLabel(round.length, i) : `Round ${i + 1}`}
-                </h4>
-                {round.map((match) => (
-                  <MatchCard
-                    key={match.id}
-                    match={match}
-                    onClick={onSelectMatch ? () => onSelectMatch(match) : undefined}
-                    onSchedule={canScheduleMatches ? () => setSchedulingMatch(match) : undefined}
-                    onShare={canShareMatches ? () => setSharingMatch(match) : undefined}
-                    onStatSheet={
-                      isStatSheetEligible?.(match) && onOpenStatSheet ? () => onOpenStatSheet(match) : undefined
+                  <h4
+                    className={
+                      isPyramid
+                        ? 'absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-slate-500'
+                        : 'text-center text-xs font-semibold uppercase tracking-wide text-slate-500'
                     }
-                    cardRef={(el) => {
-                      if (el) cardEls.current.set(match.id, el)
-                      else cardEls.current.delete(match.id)
-                    }}
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
+                  >
+                    {isTreeRound(round) ? eliminationRoundLabel(round.length, i) : `Round ${i + 1}`}
+                  </h4>
+                  {round.map((match) => renderMatchCard(match))}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
+
+      {isDoubleElimination && (
+        <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-4 rounded-full bg-teal-300" /> Winner advances
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-0 w-4 border-t-2 border-dashed border-amber-400" /> Loser drops to losers bracket
+          </span>
+        </div>
+      )}
 
       {schedulingMatch && (
         <MatchScheduleModal

@@ -40,6 +40,12 @@ export type BracketMatch = {
   round: number
   group_number?: number | null
   bracket_type?: 'winners' | 'losers' | 'final' | 'swiss' | null
+  // Only meaningful for double_elimination's losers bracket — identifies
+  // which "slot" within its round this match occupies, needed to
+  // reconstruct the WB-loser-drop and LB-advancement wiring for the
+  // bracket's connector lines (see BracketView's
+  // computeDoubleEliminationConnectors).
+  bracket_position?: number | null
   participant_a_id: number | null
   participant_b_id: number | null
   // Already on the wire (GameMatch has no $hidden) — declared here so a
