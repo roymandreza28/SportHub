@@ -800,6 +800,22 @@ class BracketService
             return;
         }
 
+        // Round robin has no bracket to advance (every result only affects
+        // one row of a standings table, not a next match — see
+        // generateRoundRobin()'s own doc comment) — but the bracket's
+        // structure JSON is still a snapshot cached at generation time
+        // (buildStructure() only gets called when something explicitly
+        // rebuilds it), so without this a completed match's winner would
+        // never actually show up in the bracket view: the underlying match
+        // row is correct, but the cached blob the frontend actually renders
+        // from would keep showing it scheduled forever.
+        if ($tournament->format === 'round_robin') {
+            $bracket->update(['structure' => $this->buildStructure($bracket)]);
+            Broadcasting::safely(fn () => BracketUpdated::dispatch($bracket->fresh()));
+
+            return;
+        }
+
         if (! in_array($tournament->format, ['single_elimination', 'group_stage'], true)) {
             return;
         }

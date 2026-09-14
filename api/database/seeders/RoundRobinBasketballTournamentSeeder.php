@@ -26,10 +26,11 @@ use Illuminate\Support\Collection;
 // round 3 (the round robin's own final round of fixtures) is left
 // scheduled — "already at the final round" without the tournament actually
 // being over, same framing as every sibling seeder in this file group.
-// advanceWinner() is still a no-op for round_robin (no bracket to advance,
-// just a standings table — see its own comment), so nothing here depends on
-// it beyond the box-score/stat-sheet/match-log side effects
-// simulateDetailedMatch() already produces.
+// advanceWinner() has no bracket to advance for round_robin (just a
+// standings table), but it does still rebuild the bracket's cached
+// structure snapshot on every completion — see its own comment — which is
+// what actually makes each simulated match's winner show up in the bracket
+// view at all.
 class RoundRobinBasketballTournamentSeeder extends Seeder
 {
     private const COACH_EMAILS = ['coach1@sporthub.test', 'coach2@sporthub.test', 'coach3@sporthub.test', 'coach4@sporthub.test'];

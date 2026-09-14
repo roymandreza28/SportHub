@@ -231,6 +231,26 @@ it('gives every player exactly one bye round in an odd-numbered round robin', fu
     }
 });
 
+it('records a completed round-robin matchs winner in the bracket structure snapshot, not just the match row', function () {
+    // Regression: round_robin has no bracket to advance (it's just a
+    // standings table), but advanceWinner() used to return before ever
+    // rebuilding bracket.structure for this format — the match row itself
+    // got its winner_id set correctly, but the cached structure snapshot
+    // the frontend actually renders from stayed frozen at generation time,
+    // so a completed match's winner never actually showed up anywhere.
+    $tournament = makeTournament('round_robin', 4);
+    $service = app(BracketService::class);
+    $bracket = $service->generate($tournament);
+
+    $match = $bracket->matches->first();
+    completeMatch($service, $match, 21, 10);
+
+    $structureMatch = collect($bracket->fresh()->structure)->flatten(1)->firstWhere('id', $match->id);
+    expect($structureMatch['status'])->toBe('completed');
+    expect($structureMatch['winner_id'])->toBe($match->participant_a_id);
+    expect($structureMatch['winner']['id'])->toBe($match->participant_a_id);
+});
+
 it('rebuilds structure as a jsonb-ready array grouped by round', function () {
     $tournament = makeTournament('single_elimination', 4);
     $bracket = app(BracketService::class)->generate($tournament);
