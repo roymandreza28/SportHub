@@ -182,8 +182,12 @@ it('denies score saves (and thus player stat writes) to a venue organizer not as
 });
 
 it('sums a players career stats correctly across multiple completed matches and sports, excluding live ones', function () {
-    $basketball = Sport::create(['name' => 'Basketball', 'category' => 'team']);
-    $bFormat = SportFormat::create(['sport_id' => $basketball->id, 'name' => '5v5', 'players_per_side' => 5]);
+    // Badminton here (not Basketball) — Basketball's career totals are
+    // derived rates computed by ProfileController::basketballCareerTotals(),
+    // covered separately; this test is about the generic per-field-sum path
+    // every other sport still uses.
+    $badminton = Sport::create(['name' => 'Badminton', 'category' => 'racquet']);
+    $bFormat = SportFormat::create(['sport_id' => $badminton->id, 'name' => 'Doubles', 'players_per_side' => 2]);
     $volleyball = Sport::create(['name' => 'Volleyball', 'category' => 'team']);
     $vFormat = SportFormat::create(['sport_id' => $volleyball->id, 'name' => '6v6', 'players_per_side' => 6]);
     $organizer = userWithRole('organizer');
@@ -191,27 +195,27 @@ it('sums a players career stats correctly across multiple completed matches and 
     $player = userWithRole('player');
     $opponentCoach = userWithRole('coach');
 
-    // Two completed basketball matches for the same player.
-    $bTournament1 = playerStatTournament($basketball, $bFormat, $organizer, $venueOrganizer);
-    $teamA1 = playerStatTeam($basketball, $bFormat, $player, 'Squad 1');
-    $teamB1 = playerStatTeam($basketball, $bFormat, $opponentCoach, 'Rivals 1');
+    // Two completed badminton matches for the same player.
+    $bTournament1 = playerStatTournament($badminton, $bFormat, $organizer, $venueOrganizer);
+    $teamA1 = playerStatTeam($badminton, $bFormat, $player, 'Squad 1');
+    $teamB1 = playerStatTeam($badminton, $bFormat, $opponentCoach, 'Rivals 1');
     $match1 = playerStatTeamMatch($bTournament1, $teamA1, $teamB1);
-    MatchPlayerStat::create(['match_id' => $match1->id, 'user_id' => $player->id, 'team_id' => $teamA1->id, 'sport_id' => $basketball->id, 'stats' => ['points' => 10, 'rebounds' => 3]]);
+    MatchPlayerStat::create(['match_id' => $match1->id, 'user_id' => $player->id, 'team_id' => $teamA1->id, 'sport_id' => $badminton->id, 'stats' => ['points_won' => 10, 'aces' => 3]]);
     $match1->update(['status' => 'completed']);
 
-    $bTournament2 = playerStatTournament($basketball, $bFormat, $organizer, $venueOrganizer);
-    $teamA2 = playerStatTeam($basketball, $bFormat, $player, 'Squad 2');
-    $teamB2 = playerStatTeam($basketball, $bFormat, $opponentCoach, 'Rivals 2');
+    $bTournament2 = playerStatTournament($badminton, $bFormat, $organizer, $venueOrganizer);
+    $teamA2 = playerStatTeam($badminton, $bFormat, $player, 'Squad 2');
+    $teamB2 = playerStatTeam($badminton, $bFormat, $opponentCoach, 'Rivals 2');
     $match2 = playerStatTeamMatch($bTournament2, $teamA2, $teamB2);
-    MatchPlayerStat::create(['match_id' => $match2->id, 'user_id' => $player->id, 'team_id' => $teamA2->id, 'sport_id' => $basketball->id, 'stats' => ['points' => 8, 'rebounds' => 5]]);
+    MatchPlayerStat::create(['match_id' => $match2->id, 'user_id' => $player->id, 'team_id' => $teamA2->id, 'sport_id' => $badminton->id, 'stats' => ['points_won' => 8, 'aces' => 5]]);
     $match2->update(['status' => 'completed']);
 
-    // A still-live basketball match — must be excluded from the sum.
-    $bTournament3 = playerStatTournament($basketball, $bFormat, $organizer, $venueOrganizer);
-    $teamA3 = playerStatTeam($basketball, $bFormat, $player, 'Squad 3');
-    $teamB3 = playerStatTeam($basketball, $bFormat, $opponentCoach, 'Rivals 3');
+    // A still-live badminton match — must be excluded from the sum.
+    $bTournament3 = playerStatTournament($badminton, $bFormat, $organizer, $venueOrganizer);
+    $teamA3 = playerStatTeam($badminton, $bFormat, $player, 'Squad 3');
+    $teamB3 = playerStatTeam($badminton, $bFormat, $opponentCoach, 'Rivals 3');
     $match3 = playerStatTeamMatch($bTournament3, $teamA3, $teamB3);
-    MatchPlayerStat::create(['match_id' => $match3->id, 'user_id' => $player->id, 'team_id' => $teamA3->id, 'sport_id' => $basketball->id, 'stats' => ['points' => 999]]);
+    MatchPlayerStat::create(['match_id' => $match3->id, 'user_id' => $player->id, 'team_id' => $teamA3->id, 'sport_id' => $badminton->id, 'stats' => ['points_won' => 999]]);
     $match3->update(['status' => 'live']);
 
     // One completed volleyball match, different sport.
@@ -228,10 +232,10 @@ it('sums a players career stats correctly across multiple completed matches and 
     $data = collect($response->json('sports'));
     expect($data)->toHaveCount(2);
 
-    $basketballEntry = $data->firstWhere('sport_name', 'Basketball');
-    expect($basketballEntry['matches_played'])->toBe(2);
-    expect($basketballEntry['totals']['points'])->toBe(18);
-    expect($basketballEntry['totals']['rebounds'])->toBe(8);
+    $badmintonEntry = $data->firstWhere('sport_name', 'Badminton');
+    expect($badmintonEntry['matches_played'])->toBe(2);
+    expect($badmintonEntry['totals']['points_won'])->toBe(18);
+    expect($badmintonEntry['totals']['aces'])->toBe(8);
 
     $volleyballEntry = $data->firstWhere('sport_name', 'Volleyball');
     expect($volleyballEntry['matches_played'])->toBe(1);

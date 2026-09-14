@@ -6,10 +6,15 @@
 // actually played, which isn't always 5.
 type PentagonAxis = { key: string; label: string; scale_max: number }
 
-const SIZE = 240
+// SIZE is deliberately much bigger than the chart itself (RADIUS) — the
+// leftover margin is where axis labels live, and a longer label like
+// "Shooting %" or "TO/G" needs real room to extend into on the chart's
+// left/right sides without clipping against the viewBox edge (see
+// SkillEvaluationChart.tsx's identical fix for the same reason).
+const SIZE = 320
 const CENTER = SIZE / 2
-const RADIUS = SIZE * 0.34
-const LABEL_RADIUS = SIZE * 0.44
+const RADIUS = 80
+const LABEL_RADIUS = RADIUS + 45
 const RING_SCALES = [0.33, 0.66, 1]
 
 function pointAt(index: number, total: number, scale: number): { x: number; y: number } {
@@ -59,7 +64,7 @@ export function PlayerStatsPentagon({
       <p className="text-xs text-slate-400">
         {matchesPlayed} match{matchesPlayed === 1 ? '' : 'es'} recorded
       </p>
-      <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width={SIZE} height={SIZE}>
+      <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full max-w-[280px]">
         {RING_SCALES.map((scale) => (
           <polygon key={scale} points={polygonPoints(sides, scale)} fill="none" stroke="#e2e8f0" strokeWidth={1} />
         ))}

@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Social;
 
 use App\Http\Controllers\Controller;
 use App\Models\MatchPlayerStat;
+use App\Models\MatchStatSheet;
 use App\Models\User;
 use App\Support\PlayerStatFieldSets;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 
 class ProfileController extends Controller
@@ -111,18 +113,10 @@ class ProfileController extends Controller
 
         $bySport = $rows->groupBy('sport_id')->map(function ($sportRows) use ($user) {
             $sportName = $sportRows->first()->sport->name;
-            $fields = PlayerStatFieldSets::for($sportName) ?? [];
-            $totals = array_fill_keys(array_column($fields, 'key'), 0);
             $wins = 0;
             $losses = 0;
 
             foreach ($sportRows as $row) {
-                foreach ($row->stats ?? [] as $key => $value) {
-                    if (array_key_exists($key, $totals)) {
-                        $totals[$key] += (int) $value;
-                    }
-                }
-
                 match ($this->resultFor($row, $user)) {
                     'win' => $wins++,
                     'loss' => $losses++,
@@ -131,6 +125,9 @@ class ProfileController extends Controller
             }
 
             $decided = $wins + $losses;
+            ['totals' => $totals, 'pentagon_fields' => $pentagonFields] = $sportName === 'Basketball'
+                ? $this->basketballCareerTotals($sportRows, $user->id)
+                : $this->genericCareerTotals($sportRows, $sportName);
 
             return [
                 'sport_id' => $sportRows->first()->sport_id,
@@ -140,7 +137,7 @@ class ProfileController extends Controller
                 'losses' => $losses,
                 'win_rate' => $decided > 0 ? round($wins / $decided * 100, 1) : 0,
                 'totals' => $totals,
-                'pentagon_fields' => PlayerStatFieldSets::pentagonAxesFor($sportName),
+                'pentagon_fields' => $pentagonFields,
             ];
         })->values();
 
@@ -163,6 +160,103 @@ class ProfileController extends Controller
             ],
             'history' => $history,
         ];
+    }
+
+    /** @param  Collection<int, MatchPlayerStat>  $sportRows */
+    private function genericCareerTotals(Collection $sportRows, string $sportName): array
+    {
+        $fields = PlayerStatFieldSets::for($sportName) ?? [];
+        $totals = array_fill_keys(array_column($fields, 'key'), 0);
+
+        foreach ($sportRows as $row) {
+            foreach ($row->stats ?? [] as $key => $value) {
+                if (array_key_exists($key, $totals)) {
+                    $totals[$key] += (int) $value;
+                }
+            }
+        }
+
+        return ['totals' => $totals, 'pentagon_fields' => PlayerStatFieldSets::pentagonAxesFor($sportName)];
+    }
+
+    // Basketball's career pentagon is derived, not a straight per-field sum
+    // like every other sport's: shot attempts, the offense/defense rebound
+    // split, and assists/steals/blocks/turnovers only exist in the coach's
+    // stat sheet (MatchStatSheet) — MatchPlayerStat, the organizer-tracked
+    // table every other sport's pentagon sums directly, only ever captures
+    // made shots and fouls for Basketball (see PlayerStatSheetLinkage's own
+    // doc comment on why). So each axis here is a genuine rate — a shooting
+    // percentage, or a per-game average — computed from whichever games
+    // have that data, rather than a total that would just grow unbounded
+    // and lose meaning as more games pile up.
+    /** @param  Collection<int, MatchPlayerStat>  $sportRows */
+    private function basketballCareerTotals(Collection $sportRows, int $userId): array
+    {
+        // Built with a plain loop, not Collection::collapse() — collapse()
+        // renumbers integer array keys (it's array_merge under the hood),
+        // which would silently break looking this map up by match id below.
+        $sheetRowByMatch = [];
+        foreach (MatchStatSheet::whereIn('match_id', $sportRows->pluck('match_id'))->get() as $sheet) {
+            foreach ($sheet->data['rows'] ?? [] as $row) {
+                if (($row['player_id'] ?? null) === $userId) {
+                    $sheetRowByMatch[$sheet->match_id] = $row['stats'] ?? [];
+                }
+            }
+        }
+
+        $sums = array_fill_keys([
+            'fg2_att', 'fg2_made', 'fg3_att', 'fg3_made', 'ft_att', 'ft_made',
+            'reb_off', 'reb_def', 'assists', 'steals', 'blocks', 'turnovers', 'fouls',
+        ], 0);
+
+        foreach ($sportRows as $row) {
+            // Made-shot counts and fouls are always trusted from
+            // MatchPlayerStat — the same organizer-tracked source the
+            // coach stat sheet's own locked fields read from live (see
+            // PlayerStatSheetLinkage) — never from the sheet's own stored
+            // data, which a coach's submission for a locked key never
+            // actually updates.
+            $sums['fouls'] += (int) ($row->stats['fouls'] ?? 0);
+            $sums['fg2_made'] += (int) ($row->stats['fg2_made'] ?? 0);
+            $sums['fg3_made'] += (int) ($row->stats['fg3_made'] ?? 0);
+            $sums['ft_made'] += (int) ($row->stats['ft_made'] ?? 0);
+
+            // Attempts, the rebound split, and the playmaking/defense
+            // counts only exist once a coach has filled in a stat sheet
+            // for that specific game — never guessed or backfilled.
+            $sheetStats = $sheetRowByMatch[$row->match_id] ?? null;
+            if ($sheetStats) {
+                foreach (['fg2_att', 'fg3_att', 'ft_att', 'reb_off', 'reb_def', 'assists', 'steals', 'blocks', 'turnovers'] as $key) {
+                    $sums[$key] += (int) ($sheetStats[$key] ?? 0);
+                }
+            }
+        }
+
+        $matchesPlayed = max(1, $sportRows->count());
+        $totalAttempts = $sums['fg2_att'] + $sums['fg3_att'] + $sums['ft_att'];
+        $totalMade = $sums['fg2_made'] + $sums['fg3_made'] + $sums['ft_made'];
+
+        $totals = [
+            'shooting_pct' => $totalAttempts > 0 ? round($totalMade / $totalAttempts * 100, 1) : 0,
+            'rebounds_per_game' => round(($sums['reb_off'] + $sums['reb_def']) / $matchesPlayed, 1),
+            'assists_per_game' => round($sums['assists'] / $matchesPlayed, 1),
+            'steals_per_game' => round($sums['steals'] / $matchesPlayed, 1),
+            'blocks_per_game' => round($sums['blocks'] / $matchesPlayed, 1),
+            'turnovers_per_game' => round($sums['turnovers'] / $matchesPlayed, 1),
+            'fouls_per_game' => round($sums['fouls'] / $matchesPlayed, 1),
+        ];
+
+        $pentagonFields = [
+            ['key' => 'shooting_pct', 'label' => 'Shooting %', 'scale_max' => 100],
+            ['key' => 'rebounds_per_game', 'label' => 'Reb/G', 'scale_max' => 15],
+            ['key' => 'assists_per_game', 'label' => 'Ast/G', 'scale_max' => 10],
+            ['key' => 'steals_per_game', 'label' => 'Stl/G', 'scale_max' => 5],
+            ['key' => 'blocks_per_game', 'label' => 'Blk/G', 'scale_max' => 5],
+            ['key' => 'turnovers_per_game', 'label' => 'TO/G', 'scale_max' => 8],
+            ['key' => 'fouls_per_game', 'label' => 'PF/G', 'scale_max' => 6],
+        ];
+
+        return ['totals' => $totals, 'pentagon_fields' => $pentagonFields];
     }
 
     // 'draw' covers both a genuine tie and a match BracketService advanced
