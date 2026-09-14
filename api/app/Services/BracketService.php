@@ -161,12 +161,34 @@ class BracketService
     {
         $numGroups = max(1, (int) ceil($playerIds->count() / 4));
 
-        // Deal players into groups round-robin style (like dealing cards) so
-        // group sizes differ by at most 1 — a flat chunk(4) could otherwise
-        // leave a trailing group of a single player, which can't round-robin.
+        // Deal players into groups in a SNAKE pattern — sweep across the
+        // groups in order, then back in reverse, then forward again —
+        // rather than a straight round-robin deal. With no real seeding
+        // concept on this platform, $playerIds is already shuffled (see
+        // generate()), so this mainly just keeps group sizes even (a flat
+        // chunk(4) could leave a trailing group of a single player, which
+        // can't round-robin) the same way a real seeded snake deal keeps
+        // seed strength spread out when the input IS ranked.
         $groups = collect(range(0, $numGroups - 1))->mapWithKeys(fn ($g) => [$g => collect()]);
-        foreach ($playerIds->values() as $i => $playerId) {
-            $groups[$i % $numGroups]->push($playerId);
+        $direction = 1;
+        $g = 0;
+
+        foreach ($playerIds->values() as $playerId) {
+            $groups[$g]->push($playerId);
+
+            if ($direction === 1) {
+                if ($g === $numGroups - 1) {
+                    $direction = -1;
+                } else {
+                    $g++;
+                }
+            } else {
+                if ($g === 0) {
+                    $direction = 1;
+                } else {
+                    $g--;
+                }
+            }
         }
 
         foreach ($groups as $groupNumber => $members) {
@@ -177,11 +199,14 @@ class BracketService
     /**
      * Called after every group_stage match completes. Once every group match
      * is done, ranks each group (wins, then point differential, then points
-     * scored) and seeds the top 2 from each group into a single-elimination
-     * knockout stage — reusing the same generation code plain
-     * single_elimination tournaments use, just starting one round after the
-     * group phase and skipping the shuffle (qualifiers are already ranked).
+     * scored) and seeds the top ADVANCE_PER_GROUP finishers from each group
+     * into a single-elimination knockout stage — reusing the same generation
+     * code plain single_elimination tournaments use, just starting one round
+     * after the group phase and skipping the shuffle (qualifiers are already
+     * ranked).
      */
+    private const ADVANCE_PER_GROUP = 2;
+
     protected function maybeStartGroupKnockout(Bracket $bracket, bool $teamMode = false): void
     {
         $groupMatches = $bracket->matches()->whereNotNull('group_number')->get();
@@ -198,17 +223,45 @@ class BracketService
 
         $standings = $groupMatches->groupBy('group_number')->map(fn (Collection $matches) => $this->rankGroup($matches, $teamMode));
 
-        $ranked1 = $standings->map(fn ($s) => $s->get(0))->filter()->values();
-        $ranked2 = $standings->map(fn ($s) => $s->get(1))->filter()->values();
-
-        // Cross-seed so a group's own top 2 don't immediately rematch in
-        // round 1 of the knockout: every group winner, then every runner-up
-        // in reverse group order.
-        $qualifiers = $ranked1->concat($ranked2->reverse()->values())->pluck('id')->values();
+        $qualifiers = $this->buildQualifierOrder($standings, self::ADVANCE_PER_GROUP)->pluck('id')->values();
 
         $startRound = $groupMatches->max('round') + 1;
 
         $this->generateSingleElimination($bracket, $qualifiers, $startRound, $teamMode);
+    }
+
+    /**
+     * Orders qualifiers into "tiers" (every group's 1st place, then every
+     * group's 2nd place, ...) and, within each tier after the first,
+     * rotates which group's qualifier comes first — so the tier boundaries
+     * never line up group-for-group. Combined with
+     * generateSingleElimination()'s own round-1 pairing (consecutive
+     * entries, never the seed-1-vs-seed-N pattern a plain bracket uses),
+     * this guarantees no group's own two qualifiers meet each other in
+     * round 1 — the naive "list every winner, then every runner-up" order
+     * this replaces could put a group's OWN winner and runner-up right at
+     * that seam (e.g. 3 groups: [G0w,G1w,G2w,G2r,G1r,G0r] pairs G2w-vs-G2r).
+     *
+     * @param  Collection<int, Collection<int, array{id:int,wins:int,for:int,against:int}>>  $standingsByGroup
+     * @return Collection<int, array{id:int,wins:int,for:int,against:int}>
+     */
+    private function buildQualifierOrder(Collection $standingsByGroup, int $advancePerGroup): Collection
+    {
+        $groupNumbers = $standingsByGroup->keys()->sort()->values();
+        $numGroups = $groupNumbers->count();
+        $qualifiers = collect();
+
+        for ($tier = 0; $tier < $advancePerGroup; $tier++) {
+            for ($g = 0; $g < $numGroups; $g++) {
+                $groupIdx = $groupNumbers[($g + $tier) % $numGroups];
+                $standing = $standingsByGroup->get($groupIdx)?->get($tier);
+                if ($standing) {
+                    $qualifiers->push($standing);
+                }
+            }
+        }
+
+        return $qualifiers;
     }
 
     private function rankGroup(Collection $matches, bool $teamMode = false): Collection
@@ -252,24 +305,8 @@ class BracketService
         $bracketSize = 2 ** (int) ceil(log($count, 2));
         $totalRounds = (int) log($bracketSize, 2);
         $roundCount = $bracketSize / 2;
-        $numByes = $bracketSize - $count;
 
-        // Distribute byes one-per-match (byes < matches whenever byes > 0, since
-        // bracketSize is the smallest power of 2 >= count) so no match ever pairs
-        // two byes against each other.
-        $players = $playerIds->values();
-        $slots = [];
-        $cursor = 0;
-        for ($i = 0; $i < $roundCount; $i++) {
-            if ($i < $numByes) {
-                $slots[] = $players[$cursor++];
-                $slots[] = null;
-            } else {
-                $slots[] = $players[$cursor++];
-                $slots[] = $players[$cursor++];
-            }
-        }
-        $slots = collect($slots);
+        $slots = $this->padWithByesEvenly($playerIds->values(), $bracketSize);
 
         $aField = $teamMode ? 'participant_a_team_id' : 'participant_a_id';
         $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
@@ -306,6 +343,47 @@ class BracketService
         foreach ($completedByeMatches as $match) {
             $this->advanceWinner($match);
         }
+    }
+
+    /**
+     * Pads a participant list out to the next power-of-two bracket size by
+     * spreading byes EVENLY through the list, rather than clustering them
+     * all at the front — a bye always lands next to a real entry (never
+     * bye-vs-bye), same guarantee as before, but now a bye-recipient isn't
+     * disproportionately drawn from the front of the list. For group_stage's
+     * knockout draw specifically, the list arriving here is already the
+     * tiered, group-rotated qualifier order from buildQualifierOrder() —
+     * spreading byes through THAT order (instead of appending them
+     * afterward) is what keeps every group's own two qualifiers apart in
+     * round 1 even when the qualifier count needs padding.
+     *
+     * @param  Collection<int, int>  $entries
+     * @return Collection<int, int|null>
+     */
+    private function padWithByesEvenly(Collection $entries, int $bracketSize): Collection
+    {
+        $count = $entries->count();
+        $pad = $bracketSize - $count;
+
+        if ($pad <= 0) {
+            return $entries;
+        }
+
+        $out = [];
+        $interval = $count / $pad;
+        $nextByeAt = $interval;
+        $byesPlaced = 0;
+
+        foreach ($entries->values() as $i => $entry) {
+            $out[] = $entry;
+            if ($byesPlaced < $pad && ($i + 1) >= $nextByeAt) {
+                $out[] = null;
+                $byesPlaced++;
+                $nextByeAt += $interval;
+            }
+        }
+
+        return collect($out);
     }
 
     // ---- Double elimination ----
