@@ -162,43 +162,6 @@ class AuthController extends Controller
         return response()->noContent();
     }
 
-    // Self-service editing of the low-stakes profile fields — name, phone,
-    // address. Deliberately excludes email/username (there is no username
-    // column) and every other "major" field (password, role, verification
-    // status, is_active) — those either have their own dedicated endpoint
-    // above (password) or are admin-only (AdminUserController).
-    public function updateProfile(Request $request)
-    {
-        $data = $request->validate([
-            'first_name' => ['sometimes', 'string', 'max:255'],
-            'middle_name' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'last_name' => ['sometimes', 'string', 'max:255'],
-            'phone' => ['sometimes', 'string', 'max:20'],
-            'address' => ['sometimes', 'string', 'max:500'],
-        ]);
-
-        $user = $request->user();
-
-        // Keeps the plain `name` column (used everywhere else in the app —
-        // the bracket grid, newsfeed authorship, match participant labels)
-        // in sync with whichever of the three name parts actually changed,
-        // the same composition register() uses to build it in the first
-        // place. array_key_exists (not ??) so explicitly clearing
-        // middle_name to null is respected rather than silently falling
-        // back to the old value.
-        if (array_intersect(['first_name', 'middle_name', 'last_name'], array_keys($data)) !== []) {
-            $data['name'] = collect([
-                array_key_exists('first_name', $data) ? $data['first_name'] : $user->first_name,
-                array_key_exists('middle_name', $data) ? $data['middle_name'] : $user->middle_name,
-                array_key_exists('last_name', $data) ? $data['last_name'] : $user->last_name,
-            ])->filter()->implode(' ');
-        }
-
-        $user->update($data);
-
-        return response()->json($this->withRoles($user->fresh()));
-    }
-
     public function updateAvatar(Request $request)
     {
         $data = $request->validate([

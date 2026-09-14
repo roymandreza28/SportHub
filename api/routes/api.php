@@ -87,7 +87,6 @@ Route::post('/public-inquiries', [PublicInquiryController::class, 'store']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::patch('/user/password', [AuthController::class, 'updatePassword']);
-    Route::patch('/user/profile', [AuthController::class, 'updateProfile']);
     Route::post('/user/avatar', [AuthController::class, 'updateAvatar']);
 
     Route::get('/user', function (Request $request) {

@@ -18,24 +18,13 @@ export type Role =
   | 'coach'
 export type VerificationStatus = 'pending' | 'verified' | 'rejected'
 
-export type User = {
+type User = {
   id: number
   name: string
   email: string
   roles: Role[]
   avatar_url: string | null
   verification_status: VerificationStatus
-  // Already present on every /api/user response (User::$fillable spreads
-  // straight through — see AuthController::withRoles()) but left unused by
-  // the frontend until AccountSettingsModal's basic-details editor needed
-  // them. first_name/last_name are effectively always set (required at
-  // registration); middle_name/phone/address can be null on an
-  // older/seeded account that predates those columns.
-  first_name: string | null
-  middle_name: string | null
-  last_name: string | null
-  phone: string | null
-  address: string | null
 }
 
 type LoginResponse = User & { token: string }
