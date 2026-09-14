@@ -354,6 +354,48 @@ function computeSwissRecordBuckets(matches: BracketMatch[]): SwissRound[] {
   return result
 }
 
+// Reconstructs, from the real match data already on hand, which previous-
+// round match each of a round's matches' players actually came from —
+// swiss pairing has no fixed bracket topology the way single/double
+// elimination does (BracketService::pairSwissRound() can pair a player
+// with anyone still fresh each round), so unlike
+// computeDoubleEliminationConnectors this doesn't encode an advancement
+// RULE, it just re-derives "this player's previous game was here" from
+// whichever match each player actually appears in the round before. A
+// round 1 match has nothing to connect from (no previous round), so it's
+// simply skipped, same as a knocked-out bracket slot never getting a line.
+function computeSwissConnectors(matches: BracketMatch[]): { from: number; to: number }[] {
+  const swissMatches = matches.filter((m) => m.bracket_type === 'swiss')
+  const rounds = [...new Set(swissMatches.map((m) => m.round))].sort((a, b) => a - b)
+  const seen = new Set<string>()
+  const edges: { from: number; to: number }[] = []
+
+  for (let i = 1; i < rounds.length; i++) {
+    const prevRoundMatches = swissMatches.filter((m) => m.round === rounds[i - 1])
+    const currRoundMatches = swissMatches.filter((m) => m.round === rounds[i])
+
+    const lastMatchByParticipant = new Map<number, BracketMatch>()
+    for (const m of prevRoundMatches) {
+      if (m.participant_a) lastMatchByParticipant.set(m.participant_a.id, m)
+      if (m.participant_b) lastMatchByParticipant.set(m.participant_b.id, m)
+    }
+
+    for (const m of currRoundMatches) {
+      for (const participant of [m.participant_a, m.participant_b]) {
+        if (!participant) continue
+        const prevMatch = lastMatchByParticipant.get(participant.id)
+        if (!prevMatch) continue
+        const key = `${prevMatch.id}-${m.id}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        edges.push({ from: prevMatch.id, to: m.id })
+      }
+    }
+  }
+
+  return edges
+}
+
 export function BracketView({
   tournamentId,
   tournamentName,
@@ -564,6 +606,8 @@ export function BracketView({
 
       if (isDoubleElimination) {
         computeDoubleEliminationConnectors(structure.flat()).forEach((e) => pushHorizontal(e.from, e.to, e.dashed))
+      } else if (isSwiss) {
+        computeSwissConnectors(structure.flat()).forEach((e) => pushHorizontal(e.from, e.to, false))
       } else if (!isRoundRobin) {
         for (let r = 0; r < structure.length - 1; r++) {
           const round = structure[r]
@@ -625,7 +669,7 @@ export function BracketView({
     // recomputes the same scale from the same natural sizes, so setScale
     // is a no-op and nothing triggers a third run.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [structure, isPyramid, isDoubleElimination, isRoundRobin, scale])
+  }, [structure, isPyramid, isDoubleElimination, isRoundRobin, isSwiss, scale])
 
   if (isLoading) return <p className="text-sm text-slate-500">Loading bracket...</p>
   // A bracket row can exist with no structure yet if generation failed
@@ -806,7 +850,10 @@ export function BracketView({
                     Round {round}
                   </h4>
                   {buckets.map((bucket) => (
-                    <div key={bucket.label} className="flex flex-col gap-2">
+                    <div
+                      key={bucket.label}
+                      className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white/70 p-3"
+                    >
                       <h5 className="text-center text-[10px] font-bold uppercase tracking-wide text-teal-600">
                         {bucket.label}
                       </h5>
@@ -861,6 +908,18 @@ export function BracketView({
           </span>
           <span className="flex items-center gap-1.5">
             <span className="h-0 w-4 border-t-2 border-dashed border-amber-400" /> Loser drops to losers bracket
+          </span>
+        </div>
+      )}
+
+      {isSwiss && (
+        <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-4 rounded-full bg-teal-300" /> Line traces a player's previous match
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-4 w-4 rounded-md border border-slate-300 bg-white/70" /> Box groups matches by
+            record entering that round
           </span>
         </div>
       )}
