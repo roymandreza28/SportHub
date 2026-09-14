@@ -73,7 +73,7 @@ function rankStandings(participants: ParticipantStanding[]): { participant: Part
 // eliminationRoundLabel's cases.
 function roundLabelFor(match: BracketMatch, structure: BracketMatch[][], format?: TournamentFormat): string {
   if (match.bracket_type && TRACK_LABEL[match.bracket_type]) return TRACK_LABEL[match.bracket_type]
-  if (match.group_number != null) return `Group ${match.group_number + 1}`
+  if (match.group_number != null) return `Group ${String.fromCharCode(65 + match.group_number)}`
   const round = structure[match.round - 1]
   if (format !== 'round_robin' && round && isTreeRound(round)) return eliminationRoundLabel(round.length, match.round - 1)
   return `Round ${match.round}`

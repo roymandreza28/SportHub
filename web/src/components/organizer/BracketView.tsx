@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchBracket, freshBracketMatch, type BracketMatch, type ScoringType } from '../../lib/organizerApi'
 import { echo } from '../../lib/echo'
@@ -7,7 +7,7 @@ import { MatchScheduleModal } from './MatchScheduleModal'
 import { ShareMatchModal } from './ShareMatchModal'
 import { ShareBracketModal } from './ShareBracketModal'
 import { TournamentStandingsView } from './TournamentStandingsView'
-import { IconCalendar, IconClipboard, IconShare } from '../layout/icons'
+import { IconCalendar, IconChevronDown, IconClipboard, IconShare } from '../layout/icons'
 
 export const STATUS_STYLE: Record<string, string> = {
   scheduled: 'bg-slate-100 text-slate-500',
@@ -44,7 +44,9 @@ function MatchCard({
   const aName = match.participant_a?.name ?? 'TBD'
   const bName = match.participant_b?.name ?? 'TBD'
   const trackLabel = match.bracket_type ? TRACK_LABEL[match.bracket_type] : null
-  const groupLabel = match.group_number != null ? `Group ${match.group_number + 1}` : null
+  // Lettered (Group A, B, ...) to match the group-stage standings grid's
+  // own card headers — see GroupStandingsCard.
+  const groupLabel = match.group_number != null ? `Group ${String.fromCharCode(65 + match.group_number)}` : null
   const canSchedule = !!onSchedule && !isOpen && match.status !== 'completed'
   // Nothing to share until both participants are actually known — a
   // still-open "awaiting players" slot has no matchup worth posting. Once
@@ -396,6 +398,139 @@ function computeSwissConnectors(matches: BracketMatch[]): { from: number; to: nu
   return edges
 }
 
+type GroupStanding = {
+  id: number
+  name: string
+  played: number
+  wins: number
+  draws: number
+  losses: number
+  points: number
+}
+
+// Per-group standings table (Name/P/W/D/L/PTS), matching a real group-
+// stage reference layout's group-of-cards presentation — mirrors
+// BracketService::rankGroup()'s own ranking (points, i.e. wins + half a
+// point per draw — same scheme swissStandings()/TournamentStandingsView
+// already use elsewhere — then score differential, then total scored)
+// recomputed client-side from the match data already on hand, since this
+// is a display concern, not a source of truth. Every group member gets a
+// row (even a still-winless 0-0-0-0 one) as soon as they appear in ANY of
+// that group's matches, played or not — otherwise a group whose games
+// haven't started yet would show no rows at all.
+function computeGroupStandings(matches: BracketMatch[]): Map<number, GroupStanding[]> {
+  const byGroup = new Map<number, BracketMatch[]>()
+  for (const m of matches) {
+    if (m.group_number == null) continue
+    const arr = byGroup.get(m.group_number) ?? []
+    arr.push(m)
+    byGroup.set(m.group_number, arr)
+  }
+
+  const result = new Map<number, GroupStanding[]>()
+
+  for (const [groupNumber, groupMatches] of byGroup) {
+    const table = new Map<number, GroupStanding>()
+    const ensure = (participant: { id: number; name: string } | null | undefined) => {
+      if (!participant || table.has(participant.id)) return
+      table.set(participant.id, { id: participant.id, name: participant.name, played: 0, wins: 0, draws: 0, losses: 0, points: 0 })
+    }
+    for (const match of groupMatches) {
+      ensure(match.participant_a)
+      ensure(match.participant_b)
+    }
+
+    for (const match of groupMatches) {
+      if (match.status !== 'completed') continue
+
+      for (const participant of [match.participant_a, match.participant_b]) {
+        if (!participant) continue
+        const entry = table.get(participant.id)!
+        entry.played += 1
+        if (match.winner?.id === participant.id) {
+          entry.wins += 1
+          entry.points += 1
+        } else if (match.winner) {
+          entry.losses += 1
+        } else {
+          entry.draws += 1
+          entry.points += 0.5
+        }
+      }
+    }
+
+    result.set(
+      groupNumber,
+      [...table.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || a.name.localeCompare(b.name))
+    )
+  }
+
+  return result
+}
+
+function GroupStandingsCard({
+  groupNumber,
+  standings,
+  matches,
+  advancePerGroup,
+  renderMatchCard,
+}: {
+  groupNumber: number
+  standings: GroupStanding[]
+  matches: BracketMatch[]
+  advancePerGroup: number
+  renderMatchCard: (match: BracketMatch) => ReactNode
+}) {
+  const [showFixtures, setShowFixtures] = useState(false)
+
+  return (
+    <div className="w-72 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="bg-teal-600 px-4 py-2.5">
+        <h4 className="text-center text-xs font-bold uppercase tracking-wide text-pure-white">
+          Group {String.fromCharCode(65 + groupNumber)}
+        </h4>
+      </div>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-slate-100 bg-slate-50 text-slate-500">
+            <th className="px-3 py-1.5 text-left font-medium">Name</th>
+            <th className="px-1.5 py-1.5 text-right font-medium">P</th>
+            <th className="px-1.5 py-1.5 text-right font-medium">W</th>
+            <th className="px-1.5 py-1.5 text-right font-medium">D</th>
+            <th className="px-1.5 py-1.5 text-right font-medium">L</th>
+            <th className="px-3 py-1.5 text-right font-medium">PTS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {standings.map((s, i) => (
+            <tr key={s.id} className={`border-b border-slate-50 last:border-0 ${i < advancePerGroup ? 'bg-teal-50/60' : ''}`}>
+              <td className="max-w-32 truncate px-3 py-1.5 font-medium text-slate-700">{s.name}</td>
+              <td className="px-1.5 py-1.5 text-right tabular-nums text-slate-600">{s.played}</td>
+              <td className="px-1.5 py-1.5 text-right tabular-nums text-slate-600">{s.wins}</td>
+              <td className="px-1.5 py-1.5 text-right tabular-nums text-slate-600">{s.draws}</td>
+              <td className="px-1.5 py-1.5 text-right tabular-nums text-slate-600">{s.losses}</td>
+              <td className="px-3 py-1.5 text-right font-bold tabular-nums text-teal-700">{s.points}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button
+        type="button"
+        onClick={() => setShowFixtures((v) => !v)}
+        className="flex w-full items-center justify-center gap-1 border-t border-slate-100 px-3 py-1.5 text-[11px] font-medium text-slate-500 hover:bg-slate-50"
+      >
+        {showFixtures ? 'Hide fixtures' : 'Show fixtures'}
+        <IconChevronDown className={`h-3 w-3 shrink-0 transition-transform ${showFixtures ? 'rotate-180' : ''}`} />
+      </button>
+      {showFixtures && (
+        <div className="flex flex-col items-center gap-3 border-t border-slate-100 bg-slate-50/60 p-3">
+          {matches.map((match) => renderMatchCard(match))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function BracketView({
   tournamentId,
   tournamentName,
@@ -523,6 +658,16 @@ export function BracketView({
   // per round — see computeSwissRecordBuckets's own doc comment.
   const isSwiss = bracket?.format === 'swiss'
 
+  // Group stage gets its own group-of-cards standings layout (a bordered
+  // card per group, each a Name/P/W/D/L/PTS table) for the group phase,
+  // followed by the knockout bracket once it's generated — see
+  // computeGroupStandings's own doc comment. Mirrors
+  // BracketService::ADVANCE_PER_GROUP so the standings table highlights
+  // the same qualification cutoff the backend actually seeds the knockout
+  // from, rather than a display-only guess.
+  const isGroupStage = bracket?.format === 'group_stage'
+  const ADVANCE_PER_GROUP = 2
+
   // Public channel — spectators watching the bracket see round advances and
   // score-driven bracket changes live, without a manual refresh.
   useEffect(() => {
@@ -554,6 +699,21 @@ export function BracketView({
 
   // Only computed/used when isSwiss — see computeSwissRecordBuckets.
   const swissRounds = useMemo(() => computeSwissRecordBuckets(structure.flat()), [structure])
+
+  // Only computed/used when isGroupStage — see computeGroupStandings.
+  // Sorted by group number for stable left-to-right/reading order.
+  const groupStandings = useMemo(() => computeGroupStandings(structure.flat()), [structure])
+  const sortedGroupNumbers = useMemo(() => [...groupStandings.keys()].sort((a, b) => a - b), [groupStandings])
+  // The knockout phase's matches look exactly like a single_elimination
+  // bracket once generated (see isTreeRound's own doc comment) — this
+  // filters the group-phase matches (group_number set) out of each round,
+  // leaving only the knockout rounds, in the same left-to-right layout the
+  // generic branch below already uses for a plain single_elimination
+  // tournament.
+  const knockoutRounds = useMemo(
+    () => structure.map((round) => round.filter((m) => m.group_number == null)).filter((round) => round.length > 0),
+    [structure]
+  )
 
   // Measures each visible match card relative to the scrollable bracket
   // container and draws an elbowed connector + arrowhead from every match
@@ -867,6 +1027,43 @@ export function BracketView({
                   ))}
                 </div>
               ))}
+            </div>
+          ) : isGroupStage ? (
+            <div
+              ref={contentRef}
+              className="flex w-max flex-col gap-8"
+              style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
+            >
+              <div className="flex flex-wrap gap-4">
+                {sortedGroupNumbers.map((groupNumber) => (
+                  <GroupStandingsCard
+                    key={groupNumber}
+                    groupNumber={groupNumber}
+                    standings={groupStandings.get(groupNumber) ?? []}
+                    matches={structure
+                      .flat()
+                      .filter((m) => m.group_number === groupNumber)
+                      .sort((a, b) => a.round - b.round || a.id - b.id)}
+                    advancePerGroup={ADVANCE_PER_GROUP}
+                    renderMatchCard={renderMatchCard}
+                  />
+                ))}
+              </div>
+              {knockoutRounds.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-purple-600">Knockout stage</h3>
+                  <div className="flex gap-8">
+                    {knockoutRounds.map((round, i) => (
+                      <div key={i} className="relative flex flex-col justify-around gap-4">
+                        <h4 className="text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          {eliminationRoundLabel(round.length, i)}
+                        </h4>
+                        {round.map((match) => renderMatchCard(match))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div
