@@ -74,6 +74,20 @@ if [ "$1" = "supervisord" ]; then
         php artisan system:reset-keep-accounts --force || echo "system:reset-keep-accounts failed — continuing boot anyway"
     fi
 
+    # Narrower sibling of RESET_ON_BOOT — clears tournament/bracket/match/
+    # team/livestream/newsfeed/matchmaking/skill-evaluation/social data only,
+    # leaving venues/courts/equipment, accounts, and sports/formats intact
+    # (see ResetTournamentAndNewsfeedData's own doc comment for the exact
+    # table list). Use this to clear out demo tournament data without also
+    # wiping the venues, which took real effort to seed with real locations.
+    # Same one-shot pattern as RESET_ON_BOOT — unset after use, since running
+    # it again on a later boot would just re-wipe whatever was seeded since.
+    # Runs before SEED_BASKETBALL_FORMATS_ON_BOOT below so the two can be set
+    # together in a single deploy: clear, then reseed, in one boot.
+    if [ "$RESET_TOURNAMENTS_ON_BOOT" = "true" ]; then
+        php artisan system:reset-tournaments-and-newsfeed --force || echo "system:reset-tournaments-and-newsfeed failed — continuing boot anyway"
+    fi
+
     # Narrower sibling of SEED_ON_BOOT, for the four full-detail format-demo
     # seeders covering double_elimination (Basketball) plus
     # round_robin/group_stage/swiss (Badminton Singles) (each already at
