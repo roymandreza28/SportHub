@@ -8,7 +8,8 @@ import { fetchVenueAvailability, calculateVenueRent, formatPeso, type Venue } fr
 import { renderResourceLaneLabel, laneColumnClassNames, LaneGroupBanner, isLaneResource } from '../../lib/resourceLaneLabel'
 import { createVenueRegistration, type CreatedVenueRegistration } from '../../lib/playerApi'
 import { useChatUI } from '../../lib/ChatUIContext'
-import { buttonGhost, buttonPrimary, input } from '../../lib/formStyles'
+import { buttonGhost, buttonPrimary, input, select } from '../../lib/formStyles'
+import { useIsMobile } from '../../lib/useIsMobile'
 import { IconMessageCircle } from '../layout/icons'
 
 export function VenueRegistrationForm({ venue }: { venue: Venue }) {
@@ -80,7 +81,17 @@ export function VenueRegistrationForm({ venue }: { venue: Venue }) {
         ? calculateVenueRent(venue, selection.start, selection.end)
         : null
 
+  const isMobile = useIsMobile()
   const resources = venue.courts.map((c) => ({ id: String(c.id), title: c.name }))
+  const [selectedResourceId, setSelectedResourceId] = useState(resources[0]?.id ?? '')
+  // Which resource's own column is on screen — separate from `courtId`
+  // (which court the user has actually picked a booking slot for), since
+  // on mobile the calendar only ever shows one resource at a time (see
+  // visibleResources below) and this picker needs a sane default before
+  // any slot has been selected, unlike courtId which starts blank.
+  const visibleResources =
+    isMobile && resources.length > 1 ? resources.filter((r) => r.id === selectedResourceId) : resources
+
   const busyEvents = (busy ?? []).map((b) => ({
     id: `busy-${b.id}`,
     title: b.title,
@@ -95,11 +106,15 @@ export function VenueRegistrationForm({ venue }: { venue: Venue }) {
 
   // See VenueScheduleCalendar's identical comment — resource-timegrid
   // stretches every non-lane column to fill 100% of its container, which
-  // squeezes illegibly thin on a phone. A per-court minimum plus an outer
-  // horizontal scroll keeps every column tappable instead.
-  const laneCount = resources.filter((r) => isLaneResource(r.title)).length
-  const courtCount = resources.length - laneCount
+  // squeezes illegibly thin on a phone (and there's no per-court width
+  // small enough to fit them all AND stay tappable). A per-court minimum
+  // plus an outer horizontal scroll keeps every column tappable on desktop;
+  // on mobile, visibleResources above narrows to one resource so the single
+  // remaining column can just fill the screen instead, with no scrolling.
+  const laneCount = visibleResources.filter((r) => isLaneResource(r.title)).length
+  const courtCount = visibleResources.length - laneCount
   const minCalendarWidth = 64 + courtCount * 130 + laneCount * 36
+  const showPicker = isMobile && resources.length > 1
 
   return (
     <div className="flex flex-col gap-3">
@@ -111,14 +126,28 @@ export function VenueRegistrationForm({ venue }: { venue: Venue }) {
         </p>
       </div>
 
+      {showPicker && (
+        <select
+          value={selectedResourceId}
+          onChange={(e) => setSelectedResourceId(e.target.value)}
+          className={select}
+        >
+          {resources.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.title}
+            </option>
+          ))}
+        </select>
+      )}
+
       <div className="overflow-x-auto rounded-lg border border-slate-200">
-        <div style={{ minWidth: minCalendarWidth }}>
-          <LaneGroupBanner resources={resources}>
+        <div style={{ minWidth: showPicker ? undefined : minCalendarWidth }}>
+          <LaneGroupBanner resources={visibleResources}>
             <FullCalendar
               schedulerLicenseKey="CC-Attribution-NonCommercial-NoDerivatives"
               plugins={[resourceTimeGridPlugin, interactionPlugin]}
               initialView="resourceTimeGridDay"
-              resources={resources}
+              resources={visibleResources}
               events={busyEvents}
               selectable
               select={handleSelect}
