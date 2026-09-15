@@ -1,6 +1,6 @@
 {
-  "name": "SportHub",
-  "short_name": "SportHub",
+  "name": "SportsHub",
+  "short_name": "SportsHub",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#ffffff",

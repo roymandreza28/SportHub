@@ -309,7 +309,7 @@ export function LandingPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <span className="flex items-center gap-2 text-lg font-bold tracking-tight text-slate-900">
             <img src="/logo.png" alt="" className="h-8 w-8" />
-            Sport<span className="text-teal-600">Hub</span>
+            Sports<span className="text-teal-600">Hub</span>
           </span>
           <div className="hidden gap-8 text-sm font-medium text-slate-600 md:flex">
             <a href="#home" className="hover:text-slate-900">Home</a>
@@ -408,7 +408,7 @@ export function LandingPage() {
           </Reveal>
           <Reveal delayMs={120}>
             <p className="mt-6 max-w-2xl text-lg text-pure-white/90">
-              Sporthub brings venue booking, tournament brackets, live scoreboards, and skill-based
+              SportsHub brings venue booking, tournament brackets, live scoreboards, and skill-based
               matchmaking together for organizers, facilitators, coaches, and players across the
               Municipality of Binangonan, Rizal.
             </p>
@@ -418,7 +418,7 @@ export function LandingPage() {
               onClick={() => openAuth('register')}
               className="rounded-md bg-teal-500 px-6 py-3 font-semibold text-pure-white shadow-lg shadow-teal-900/30 transition hover:-translate-y-0.5 hover:bg-teal-400 hover:shadow-xl active:translate-y-0 active:scale-95"
             >
-              Join Sporthub &rarr;
+              Join SportsHub &rarr;
             </button>
             <a
               href="#features"
@@ -473,12 +473,12 @@ export function LandingPage() {
       <section id="about" className="scroll-mt-20 bg-white">
         <div className="mx-auto max-w-6xl px-6 py-24">
           <Reveal>
-            <p className="text-sm font-semibold uppercase tracking-widest text-teal-600">About Sporthub</p>
+            <p className="text-sm font-semibold uppercase tracking-widest text-teal-600">About SportsHub</p>
             <h2 className="mt-2 max-w-3xl text-3xl font-extrabold text-balance text-slate-900 sm:text-4xl">
               End-to-end platform for the Municipality of Binangonan&apos;s sports program.
             </h2>
             <p className="mt-6 max-w-3xl text-lg text-slate-600">
-              Sporthub gives every part of Binangonan&apos;s municipal sports program its own workspace:
+              SportsHub gives every part of Binangonan&apos;s municipal sports program its own workspace:
               venues and courts for facilitators, tournaments and brackets for organizers, evaluations
               and registrations for coaches, and bookings, matchmaking, and profiles for players
               &mdash; all backed by the same real-time data.
@@ -526,7 +526,7 @@ export function LandingPage() {
       </section>
 
       <footer className="border-t border-slate-100 py-8 text-center text-sm text-slate-500">
-        Sporthub &mdash; Municipal Sport Community Hub of Binangonan, Rizal
+        SportsHub &mdash; Municipal Sport Community Hub of Binangonan, Rizal
       </footer>
 
       <AuthModal

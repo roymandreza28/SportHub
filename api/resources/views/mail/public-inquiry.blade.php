@@ -1,5 +1,5 @@
 @component('mail::message')
-# New inquiry from SportHub
+# New inquiry from SportsHub
 
 **Topic:** {{ $inquiry->topic }}<br>
 **From:** {{ $inquiry->name ?: 'Not provided' }} ({{ $inquiry->email }})
@@ -9,5 +9,5 @@
 Reply directly to this email — it goes straight back to {{ $inquiry->email }}.
 
 Thanks,<br>
-SportHub
+SportsHub
 @endcomponent

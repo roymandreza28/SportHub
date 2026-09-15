@@ -11,11 +11,11 @@ export function RegisterPage() {
           <Link to="/" className="mb-4 inline-flex items-center gap-2">
             <img src="/logo.png" alt="" className="h-8 w-8" />
             <span className="text-lg font-bold text-slate-900">
-              Sport<span className="text-teal-600">Hub</span>
+              Sports<span className="text-teal-600">Hub</span>
             </span>
           </Link>
           <h1 className="text-2xl font-bold text-slate-900">Create your account</h1>
-          <p className="mt-1 text-sm text-slate-500">Join Sporthub as a player or a coach.</p>
+          <p className="mt-1 text-sm text-slate-500">Join SportsHub as a player or a coach.</p>
         </div>
         <RegisterForm onSuccess={() => navigate('/dashboard', { replace: true })} />
         <p className="mt-6 text-center text-sm text-slate-600">

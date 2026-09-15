@@ -66,7 +66,7 @@ class WebPushService
         ]);
 
         $payload = json_encode([
-            'title' => 'SportHub',
+            'title' => 'SportsHub',
             'body' => self::present($notification),
             'url' => '/dashboard',
         ]);

@@ -1,4 +1,4 @@
-# SportHub — Project History & Handoff Notes
+# SportsHub — Project History & Handoff Notes
 
 This document exists so a different AI coding tool (or a human) picking up
 this repo cold can continue work without re-deriving decisions already made,
@@ -9,7 +9,7 @@ that lost commit-message trail as far as *why* things are the way they are.
 
 ## 1. What this is
 
-SportHub is a municipal sports platform (originally scoped for Morong,
+SportsHub is a municipal sports platform (originally scoped for Morong,
 Rizal, Philippines; the target municipality was changed to Binangonan,
 Rizal on 2026-09-03 — every seeded venue, tournament, and team name was
 updated to reference real Binangonan facilities and barangays) —

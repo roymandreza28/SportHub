@@ -12,7 +12,7 @@ it('renders a valid jpeg of the expected dimensions for a known sport', function
 });
 
 it('falls back to the default palette for an unrecognized or null sport', function () {
-    $bytes = NewsCoverCardGenerator::generate('Welcome to SportHub!', null);
+    $bytes = NewsCoverCardGenerator::generate('Welcome to SportsHub!', null);
 
     $image = imagecreatefromstring($bytes);
     expect($image)->not->toBeFalse();

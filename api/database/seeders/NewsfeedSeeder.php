@@ -110,8 +110,8 @@ class NewsfeedSeeder extends Seeder
 
         $this->post(
             $organizer, null,
-            'Welcome to SportHub Binangonan! 🎉',
-            "SportHub is now live for the whole municipality — browse open tournaments, book a court, or register your team in just a few taps. Say hello in the comments and let us know what sport you're most excited to see!",
+            'Welcome to SportsHub Binangonan! 🎉',
+            "SportsHub is now live for the whole municipality — browse open tournaments, book a court, or register your team in just a few taps. Say hello in the comments and let us know what sport you're most excited to see!",
             now()->subDays(10),
             $engagementPool
         );

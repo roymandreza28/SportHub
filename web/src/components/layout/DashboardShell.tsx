@@ -108,7 +108,7 @@ export function DashboardShell({
           <img src="/logo.png" alt="" className="h-9 w-9 shrink-0" />
           {!collapsed && (
             <span className="font-display text-2xl font-bold leading-none tracking-tight text-slate-900">
-              Sport<span className="text-teal-600">Hub</span>
+              Sports<span className="text-teal-600">Hub</span>
             </span>
           )}
         </Link>
@@ -161,7 +161,7 @@ export function DashboardShell({
             <Link to="/dashboard" className="flex shrink-0 items-center gap-2 rounded-lg p-1 hover:bg-slate-50 md:hidden">
               <img src="/logo.png" alt="" className="h-8 w-8 shrink-0" />
               <span className="font-display text-xl font-bold leading-none tracking-tight text-slate-900">
-                Sport<span className="text-teal-600">Hub</span>
+                Sports<span className="text-teal-600">Hub</span>
               </span>
             </Link>
           )}

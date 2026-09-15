@@ -64,7 +64,7 @@ export function PublicNewsModal({ open, onClose }: { open: boolean; onClose: () 
         <div className="flex items-center gap-2.5">
           <img src="/logo.png" alt="" className="h-8 w-8 rounded-full object-cover" />
           <div>
-            <p className="text-sm font-bold leading-none text-slate-900">SportHub News</p>
+            <p className="text-sm font-bold leading-none text-slate-900">SportsHub News</p>
             <p className="mt-1 text-xs leading-none text-slate-500">{today}</p>
           </div>
         </div>

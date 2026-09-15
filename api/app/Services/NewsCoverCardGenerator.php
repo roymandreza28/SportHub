@@ -27,7 +27,7 @@ class NewsCoverCardGenerator
         'Table Tennis' => [[219, 39, 119], [112, 26, 117], [255, 255, 255]],
     ];
 
-    // SportHub's own teal brand accent — used for every non-sport-specific
+    // SportsHub's own teal brand accent — used for every non-sport-specific
     // post (welcome message, facility updates, etc.) rather than an
     // arbitrary default, so those still look intentionally "on brand".
     private const DEFAULT_PALETTE = [[13, 148, 136], [17, 60, 65], [255, 255, 255]];
@@ -112,7 +112,7 @@ class NewsCoverCardGenerator
     private static function drawWordmark($image): void
     {
         $white = imagecolorallocatealpha($image, 255, 255, 255, 40);
-        self::text($image, 'SportHub', 15, self::WIDTH - 130, self::HEIGHT - 22, $white);
+        self::text($image, 'SportsHub', 15, self::WIDTH - 130, self::HEIGHT - 22, $white);
     }
 
     // A pill badge (icon + sport name, all-caps) top-left — the clearest,

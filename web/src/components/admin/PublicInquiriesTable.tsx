@@ -25,7 +25,7 @@ function formatInboxDate(isoDate: string): string {
 // browser is registered to open mailto: links with. If that's Gmail, the
 // browser opens a Gmail compose draft pre-filled with this; if it's a
 // desktop client, that opens instead. Either way, actual delivery happens
-// from the admin's own mail account, not from SportHub's backend.
+// from the admin's own mail account, not from SportsHub's backend.
 function buildReplyHref(inquiry: PublicInquiryRecord): string {
   const subject = `Re: ${inquiry.topic}`
   const greeting = inquiry.name ? `Hi ${inquiry.name},` : 'Hi,'
@@ -101,7 +101,7 @@ function InquiryRow({ inquiry, expanded, onToggle }: { inquiry: PublicInquiryRec
 
 // Read-only otherwise — the admin's actual reply is composed and sent from
 // their own email account via the Reply button's mailto: link, never
-// through SportHub's own backend.
+// through SportsHub's own backend.
 export function PublicInquiriesTable() {
   const { data, isLoading } = useQuery({ queryKey: ['admin', 'public-inquiries'], queryFn: fetchPublicInquiries })
   const [expandedId, setExpandedId] = useState<number | null>(null)

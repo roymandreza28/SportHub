@@ -46,7 +46,7 @@ export function AuthModal({
       {/* A trophy-ribbon accent rather than a plain top border — the same
           brand gradient (Orange Red -> Gold in Championship Spirit, Gold ->
           Dark Orange under Night Game Lights) that already colors the rest
-          of the app, so this modal reads as SportHub even before the logo
+          of the app, so this modal reads as SportsHub even before the logo
           loads. */}
       <div className="h-1.5 w-full bg-gradient-to-r from-teal-600 via-teal-500 to-teal-800" />
 
@@ -61,11 +61,11 @@ export function AuthModal({
       <div className="flex flex-col items-center gap-1.5 px-8 pb-2 pt-8 text-center">
         <img
           src="/logo.png"
-          alt="SportHub"
+          alt="SportsHub"
           className="h-16 w-16 rounded-full object-cover shadow-md ring-4 ring-teal-50"
         />
         <h2 className="mt-2 text-xl font-bold text-slate-900">
-          {mode === 'login' ? 'Welcome back' : 'Join SportHub'}
+          {mode === 'login' ? 'Welcome back' : 'Join SportsHub'}
         </h2>
         <p className="text-sm text-slate-500">
           {mode === 'login' ? 'Sign in to continue to your dashboard.' : "Binangonan's Municipal Sports Platform"}

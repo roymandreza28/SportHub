@@ -178,7 +178,7 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
             )}
             {pushState === 'denied' && (
               <p className="text-xs text-slate-400">
-                Blocked — enable notifications for SportHub in your browser's site settings to turn this on.
+                Blocked — enable notifications for SportsHub in your browser's site settings to turn this on.
               </p>
             )}
             {pushState !== 'unsupported' && pushState !== 'denied' && pushSubscribed && (
@@ -196,7 +196,7 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
                 </button>
                 {needsHomeScreenInstallOnIOS() && (
                   <p className="text-xs text-slate-400">
-                    On iPhone, first add SportHub to your Home Screen (Share → Add to Home Screen), then open it
+                    On iPhone, first add SportsHub to your Home Screen (Share → Add to Home Screen), then open it
                     from there and enable this.
                   </p>
                 )}

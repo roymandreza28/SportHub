@@ -9,7 +9,7 @@ export function LoadingScreen() {
         <div className="absolute inset-0 rounded-full border-4 border-slate-100 border-t-teal-600 animate-spin" />
         <div className="absolute inset-3 rounded-full border-4 border-slate-100 border-b-teal-300 animate-spin-reverse" />
         <div className="absolute inset-0 flex items-center justify-center">
-          <img src="/logo.png" alt="SportHub" className="h-14 w-14 rounded-full object-cover" />
+          <img src="/logo.png" alt="SportsHub" className="h-14 w-14 rounded-full object-cover" />
         </div>
       </div>
       <p className="text-sm font-medium text-slate-500">Loading...</p>

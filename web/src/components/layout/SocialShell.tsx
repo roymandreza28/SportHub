@@ -18,7 +18,7 @@ export function SocialShell({ children }: { children: ReactNode }) {
           <Link to="/dashboard" className="flex items-center gap-2">
             <img src="/logo.png" alt="" className="h-7 w-7" />
             <span className="text-base font-bold text-slate-900">
-              Sport<span className="text-teal-600">Hub</span>
+              Sports<span className="text-teal-600">Hub</span>
             </span>
           </Link>
         </div>
