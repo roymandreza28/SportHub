@@ -5,6 +5,8 @@ import { fetchFriends } from '../../lib/friendsApi'
 import { createGroupConversation, startDirectConversation } from '../../lib/chatApi'
 import { buttonPrimary, buttonSecondary, fieldGroup, input, label } from '../../lib/formStyles'
 import { Avatar } from '../layout/Avatar'
+import { useIsMobile } from '../../lib/useIsMobile'
+import { IconX } from '../layout/icons'
 
 export function NewConversationModal({
   onClose,
@@ -27,6 +29,7 @@ export function NewConversationModal({
   singleSelect?: boolean
 }) {
   const queryClient = useQueryClient()
+  const isMobile = useIsMobile()
   const { data: friends } = useQuery({ queryKey: ['social', 'friends'], queryFn: fetchFriends })
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [groupName, setGroupName] = useState('')
@@ -63,16 +66,54 @@ export function NewConversationModal({
   // position descendants. Left inline, "fixed inset-0" resolves against the
   // header's own (short) box instead of the viewport, squeezing the dialog
   // into a thin strip at the top instead of centering it on the page.
+  //
+  // z-50: higher than HeaderMessagesMenu's mobile "Chats" panel (z-40) —
+  // that panel is itself a full-screen portal, so on mobile it used to sit
+  // on top of and completely hide this one at the old z-30, even though the
+  // friend list was rendering the whole time. HeaderMessagesMenu now also
+  // closes that panel before opening this one, but the higher z-index here
+  // means the picker stays visible either way.
+  //
+  // Mobile gets its own full-bleed layout (no backdrop, no rounded card, no
+  // max-width) rather than the desktop centered card shrunk to fit — same
+  // fork StatSheetModal.tsx uses. The friends list itself becomes the
+  // flexible middle section (flex-1) so it fills whatever room is left
+  // between the header and the action buttons, with its own scroll, instead
+  // of staying capped at a desktop-sized ~192px on a full phone screen.
   return createPortal(
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/60 p-4">
-      <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
-        <h3 className="text-base font-bold text-slate-900">{title}</h3>
-        {helperText && <p className="mt-1 text-sm text-slate-500">{helperText}</p>}
+    <div
+      className={
+        isMobile
+          ? 'fixed inset-0 z-50 flex flex-col bg-white'
+          : 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4'
+      }
+    >
+      <div
+        className={
+          isMobile
+            ? 'flex h-full w-full flex-col p-4'
+            : 'flex w-full max-w-sm flex-col rounded-xl bg-white p-6 shadow-2xl'
+        }
+        style={isMobile ? undefined : { maxHeight: '92vh' }}
+      >
+        <div className="flex shrink-0 items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">{title}</h3>
+            {helperText && <p className="mt-1 text-sm text-slate-500">{helperText}</p>}
+          </div>
+          {isMobile && (
+            <button onClick={onClose} aria-label="Close" className="shrink-0 text-slate-400 hover:text-slate-600">
+              <IconX className="h-5 w-5" />
+            </button>
+          )}
+        </div>
 
-        <div className="mt-4 flex flex-col gap-3">
-          <div className={fieldGroup}>
+        <div className="mt-4 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+          <div className={`${fieldGroup} min-h-0 ${isMobile ? 'flex-1' : ''}`}>
             <label className={label}>Friends</label>
-            <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-100">
+            <div
+              className={`overflow-y-auto rounded-lg border border-slate-100 ${isMobile ? 'flex-1' : 'max-h-48'}`}
+            >
               {friends?.length === 0 && <p className="p-3 text-sm text-slate-400">Add a friend first.</p>}
               {friends?.map((friend) => (
                 <label
@@ -108,10 +149,12 @@ export function NewConversationModal({
           {mutation.isError && <p className="text-xs text-red-600">Couldn't start that conversation.</p>}
         </div>
 
-        <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onClose} className={buttonSecondary}>
-            Cancel
-          </button>
+        <div className="mt-5 flex shrink-0 justify-end gap-2">
+          {!isMobile && (
+            <button onClick={onClose} className={buttonSecondary}>
+              Cancel
+            </button>
+          )}
           <button
             onClick={() => mutation.mutate()}
             disabled={selected.size === 0 || (isGroup && !groupName) || mutation.isPending}

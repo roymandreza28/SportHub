@@ -25,6 +25,18 @@ export function HeaderMessagesMenu() {
   const [tab, setTab] = useState<FilterTab>('all')
   const [showNewModal, setShowNewModal] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  // The mobile panel is portaled to document.body (see the createPortal
+  // call below), so in the real DOM it's NOT a descendant of containerRef
+  // even though it's still nested inside it in JSX/React-tree terms.
+  // Without tracking it separately here, handleClickOutside's
+  // containerRef.contains() check saw every tap inside the mobile panel —
+  // including "New" itself — as an outside click, closing the panel via
+  // mousedown before the tap's own click/onClick ever got to fire. On
+  // mobile the panel is opaque and covers the full viewport anyway (no
+  // real "outside" to tap — it already has its own explicit X close
+  // button), so this ref exists purely to make every in-panel tap count as
+  // "inside" there, same as it always has on desktop.
+  const panelRef = useRef<HTMLDivElement>(null)
 
   const { data: conversations } = useQuery({ queryKey: ['social', 'conversations'], queryFn: fetchConversations })
 
@@ -32,9 +44,10 @@ export function HeaderMessagesMenu() {
     if (!open) return
 
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false)
-      }
+      const target = event.target as Node
+      if (containerRef.current?.contains(target)) return
+      if (panelRef.current?.contains(target)) return
+      setOpen(false)
     }
 
     document.addEventListener('mousedown', handleClickOutside)
@@ -63,7 +76,23 @@ export function HeaderMessagesMenu() {
       <div className="flex shrink-0 items-center justify-between px-4 pt-3">
         <p className="text-lg font-bold text-slate-900">Chats</p>
         <div className="flex items-center gap-3">
-          <button onClick={() => setShowNewModal(true)} className="text-xs font-semibold text-teal-600 hover:text-teal-700">
+          <button
+            onClick={() => {
+              setShowNewModal(true)
+              // On mobile the "Chats" panel below is a z-40 full-screen
+              // portal (see the createPortal call further down) — left
+              // open, it sat on top of and completely hid the friend-
+              // picker modal underneath it (z-30 previously, now z-50 —
+              // see NewConversationModal/ColleagueDirectoryModal), even
+              // though the picker was rendering fine the whole time.
+              // Closing it here is what actually made the friend list
+              // impossible to see; desktop never had this problem (the
+              // panel there is just an absolute dropdown, not a
+              // screen-covering portal), so only close it on mobile.
+              if (isMobile) setOpen(false)
+            }}
+            className="text-xs font-semibold text-teal-600 hover:text-teal-700"
+          >
             New
           </button>
           {/* No "click outside" affordance once the panel fills the whole
@@ -137,7 +166,7 @@ export function HeaderMessagesMenu() {
           for NewConversationModal/AccountSettingsModal). Without the
           portal, "fixed inset-0" would resolve against the header's own
           short box instead of the real viewport. */}
-      {open && isMobile && createPortal(<div className="fixed inset-0 z-40">{panel}</div>, document.body)}
+      {open && isMobile && createPortal(<div ref={panelRef} className="fixed inset-0 z-40">{panel}</div>, document.body)}
 
       {showNewModal && isOrganizerFamily && (
         <ColleagueDirectoryModal
