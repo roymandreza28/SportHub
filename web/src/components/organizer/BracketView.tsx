@@ -754,12 +754,17 @@ export function BracketView({
         if (!fromEl || !toEl) return
         const fromRect = fromEl.getBoundingClientRect()
         const toRect = toEl.getBoundingClientRect()
+        // Non-null assertions: already guarded above (`if (!container ||
+        // !content) return`) in the enclosing function, but a nested
+        // function's closure over an outer const isn't narrowed by that
+        // guard as far as `tsc -b`'s project-reference build is concerned
+        // (unlike a plain `tsc --noEmit` run, which didn't flag this).
         next.push({
           id: `${fromId}-${toId}`,
-          x1: fromRect.right - containerRect.left + container.scrollLeft,
-          y1: fromRect.top + fromRect.height / 2 - containerRect.top + container.scrollTop,
-          x2: toRect.left - containerRect.left + container.scrollLeft,
-          y2: toRect.top + toRect.height / 2 - containerRect.top + container.scrollTop,
+          x1: fromRect.right - containerRect.left + container!.scrollLeft,
+          y1: fromRect.top + fromRect.height / 2 - containerRect.top + container!.scrollTop,
+          x2: toRect.left - containerRect.left + container!.scrollLeft,
+          y2: toRect.top + toRect.height / 2 - containerRect.top + container!.scrollTop,
           dashed,
         })
       }

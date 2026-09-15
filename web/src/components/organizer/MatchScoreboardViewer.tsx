@@ -35,7 +35,7 @@ export function MatchScoreboardViewer({
   // tournament shape on hand, with no organizer/livestream_organizer ids to
   // give it (so canGoLive below just stays false there, and only the name
   // display and any ALREADY-running broadcast preview are available).
-  tournament?: { name?: string; organizer_id?: number; livestream_organizer_id?: number }
+  tournament?: { name?: string; organizer_id?: number; livestream_organizer_id?: number | null }
   onClose: () => void
 }) {
   const { user } = useAuth()

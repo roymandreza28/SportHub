@@ -46,7 +46,7 @@ export function LivestreamMiniWindow({
 
   if (dismissed || (!livestream && !canGoLive)) return null
 
-  const isBroadcaster = livestream != null && user?.id === livestream.broadcaster_id
+  const isBroadcaster = livestream != null && user?.id === livestream.broadcaster?.id
 
   return (
     <div className="fixed bottom-4 right-4 z-40 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">

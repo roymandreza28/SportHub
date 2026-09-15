@@ -55,7 +55,19 @@ describe('GuestRoute', () => {
   // form and look logged out even though their session is still valid.
   it('redirects to /dashboard when the user is already authenticated', () => {
     mockAuth({
-      user: { id: 1, name: 'Test', email: 't@test.com', roles: ['player'], avatar_url: null, verification_status: 'verified' as const },
+      user: {
+        id: 1,
+        name: 'Test',
+        email: 't@test.com',
+        roles: ['player'],
+        avatar_url: null,
+        verification_status: 'verified' as const,
+        first_name: null,
+        middle_name: null,
+        last_name: null,
+        phone: null,
+        address: null,
+      },
     })
     renderAt('/login')
     expect(screen.getByText('Dashboard page')).toBeInTheDocument()

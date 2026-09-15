@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { ProtectedRoute } from './ProtectedRoute'
 import * as AuthContext from './AuthContext'
 
+const PROFILE_DEFAULTS = { first_name: null, middle_name: null, last_name: null, phone: null, address: null } as const
+
 function mockAuth(overrides: Partial<ReturnType<typeof AuthContext.useAuth>>) {
   vi.spyOn(AuthContext, 'useAuth').mockReturnValue({
     user: null,
@@ -59,14 +61,16 @@ describe('ProtectedRoute', () => {
   })
 
   it('renders the protected content when authenticated with no role restriction', () => {
-    mockAuth({ user: { id: 1, name: 'Test', email: 't@test.com', roles: [], avatar_url: null, verification_status: 'verified' as const } })
+    mockAuth({
+      user: { id: 1, name: 'Test', email: 't@test.com', roles: [], avatar_url: null, verification_status: 'verified' as const, ...PROFILE_DEFAULTS },
+    })
     renderAt('/anywhere')
     expect(screen.getByText('Protected content')).toBeInTheDocument()
   })
 
   it('redirects to /dashboard when authenticated but missing the required role', () => {
     mockAuth({
-      user: { id: 1, name: 'Test', email: 't@test.com', roles: ['player'], avatar_url: null, verification_status: 'verified' as const },
+      user: { id: 1, name: 'Test', email: 't@test.com', roles: ['player'], avatar_url: null, verification_status: 'verified' as const, ...PROFILE_DEFAULTS },
       hasRole: () => false,
     })
     renderAt('/admin')
@@ -75,7 +79,7 @@ describe('ProtectedRoute', () => {
 
   it('renders the protected content when the user has the required role', () => {
     mockAuth({
-      user: { id: 1, name: 'Test', email: 't@test.com', roles: ['admin'], avatar_url: null, verification_status: 'verified' as const },
+      user: { id: 1, name: 'Test', email: 't@test.com', roles: ['admin'], avatar_url: null, verification_status: 'verified' as const, ...PROFILE_DEFAULTS },
       hasRole: (...roles) => roles.includes('admin'),
     })
     renderAt('/admin')
