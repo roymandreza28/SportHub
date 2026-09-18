@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Events\SystemMetricUpdated;
 use App\Models\Venue;
 use App\Support\Broadcasting;
+use App\Support\CsvExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class VenueController extends Controller
 {
@@ -157,6 +159,38 @@ class VenueController extends Controller
                 'is_walk_in' => is_null($registration->user_id),
                 'conversation_id' => $registration->conversation?->id,
             ]);
+    }
+
+    // Same "Reports" defense-checklist criterion as
+    // TournamentController::exportRegistrations() — a facilitator's booking
+    // history as CSV, sourced from the exact same venueRegistrations query
+    // schedule() already serves, just with every booking (not only the
+    // upcoming ones a calendar view needs) and in a downloadable format.
+    public function exportBookings(Venue $venue): StreamedResponse
+    {
+        $this->authorize('viewSchedule', $venue);
+
+        $registrations = $venue->venueRegistrations()
+            ->with(['user:id,name,email', 'court:id,name'])
+            ->orderBy('starts_at')
+            ->get();
+
+        $rows = $registrations->map(fn ($registration) => [
+            $registration->id,
+            $registration->court?->name,
+            $registration->user?->name ?? $registration->walk_in_name ?? 'Walk-in',
+            $registration->user?->email,
+            $registration->purpose,
+            $registration->status,
+            $registration->starts_at?->toIso8601String(),
+            $registration->ends_at?->toIso8601String(),
+        ]);
+
+        $filename = 'venue-'.$venue->id.'-bookings-'.now()->format('Y-m-d').'.csv';
+
+        return CsvExport::download($filename, [
+            'Booking ID', 'Court', 'Booked By', 'Email', 'Purpose', 'Status', 'Starts At', 'Ends At',
+        ], $rows);
     }
 
     public function availability(Venue $venue)

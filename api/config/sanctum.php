@@ -50,7 +50,15 @@ return [
     |
     */
 
-    'expiration' => null,
+    // 43200 minutes = 30 days. Was previously null (tokens never expired,
+    // relying solely on an explicit logout to revoke them) — flagged as a
+    // robustness gap, since a leaked/stolen token would stay valid forever.
+    // 30 days is measured from token creation (Sanctum doesn't extend this
+    // on use), long enough that a normal user is never forced to
+    // re-authenticate mid-session, short enough to bound the blast radius
+    // of a leaked token. Override via SANCTUM_TOKEN_EXPIRATION_MINUTES if a
+    // different tradeoff is needed.
+    'expiration' => (int) env('SANCTUM_TOKEN_EXPIRATION_MINUTES', 43200),
 
     /*
     |--------------------------------------------------------------------------

@@ -1,11 +1,16 @@
 # DEPLOYMENT.md — adjustments needed after the 2026-09-06 redeploy
 
+**Status: applied.** Every item below has been folded into `docs/DEPLOYMENT.md`
+directly (its section 9, section 4/4a, and the process note near the top).
+This file is kept as-is for the historical record of what changed and why,
+rather than edited into a would-be-redundant copy of the same information —
+`DEPLOYMENT.md` is the authoritative, current document; read this one only if
+you want the reasoning behind a specific correction.
+
 This is a review of `docs/DEPLOYMENT.md` against what's actually deployed right
 now, following: deleting every old Vercel project (`web`, `sport-hub`,
 `sport-hub-qvw6`) and Render resource (`sporthub-api`, `sporthub-reverb`,
 `sporthub-db`), and recreating everything under the `sporthub-binangonan` name.
-This file only lists what to change — no edits have been made to
-`DEPLOYMENT.md` itself yet.
 
 ## 1. Section 9 header and "Current live services" line — outdated names/URLs
 

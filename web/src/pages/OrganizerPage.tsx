@@ -8,6 +8,7 @@ import {
   proceedTournament,
   cancelTournament,
   generateBracket,
+  exportTournamentRegistrations,
   type Tournament,
   type BracketMatch,
 } from '../lib/organizerApi'
@@ -24,7 +25,7 @@ import {
   type NavItem,
 } from '../components/layout/DashboardShell'
 import { IconChevronDown, IconFileText, IconHome, IconRadio, IconTrophy } from '../components/layout/icons'
-import { buttonDanger, buttonPrimary, buttonSuccess } from '../lib/formStyles'
+import { buttonDanger, buttonPrimary, buttonSecondary, buttonSuccess } from '../lib/formStyles'
 import { TournamentWizard } from '../components/organizer/TournamentWizard'
 import { BracketView } from '../components/organizer/BracketView'
 import { ChampionCongratsModal } from '../components/organizer/ChampionCongratsModal'
@@ -147,6 +148,7 @@ export function OrganizerPage() {
 
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
   const [activeMatchId, setActiveMatchId] = useState<number | null>(null)
+  const [exportingRegistrations, setExportingRegistrations] = useState(false)
   // A not-yet-started match a venue organizer just clicked — shown the
   // win-by-default/start-game choice (MatchStartOptionsModal) before the
   // real scoreboard ever opens. A match already live/completed skips this
@@ -440,6 +442,24 @@ export function OrganizerPage() {
                     Could not proceed — this tournament has no bracket yet (not enough registrants?). Cancel it
                     instead.
                   </p>
+                )}
+                {canManageTournaments && (
+                  <div className="mb-3 flex justify-end">
+                    <button
+                      onClick={async () => {
+                        setExportingRegistrations(true)
+                        try {
+                          await exportTournamentRegistrations(selectedTournamentId)
+                        } finally {
+                          setExportingRegistrations(false)
+                        }
+                      }}
+                      disabled={exportingRegistrations}
+                      className={`${buttonSecondary} text-xs`}
+                    >
+                      {exportingRegistrations ? 'Exporting...' : 'Export registrations (CSV)'}
+                    </button>
+                  </div>
                 )}
                 {/* The main organizer gets a read-only scoreboard VIEW —
                     results are the outcome of matches facilitated by

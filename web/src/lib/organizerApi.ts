@@ -233,6 +233,22 @@ export async function generateBracket(tournamentId: number) {
   return data
 }
 
+// Downloads the tournament's registration list as CSV. responseType: 'blob'
+// (not the JSON-export pattern accountApi.ts uses) because the backend
+// genuinely streams CSV text, not a JSON body to re-serialize client-side —
+// the browser just needs to save the response bytes as-is.
+export async function exportTournamentRegistrations(tournamentId: number): Promise<void> {
+  const response = await api.get(`/api/tournaments/${tournamentId}/registrations/export`, { responseType: 'blob' })
+  const url = URL.createObjectURL(response.data as Blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `tournament-${tournamentId}-registrations.csv`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 export async function fetchBracket(tournamentId: number) {
   const { data } = await api.get<Bracket>(`/api/tournaments/${tournamentId}/bracket`)
   return data

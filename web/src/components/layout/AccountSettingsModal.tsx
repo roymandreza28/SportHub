@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom'
 import { useMutation } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { useAuth } from '../../lib/AuthContext'
-import { updateOwnPassword, updateOwnProfile } from '../../lib/accountApi'
-import { buttonPrimary, buttonSecondary, fieldGroup, input, label } from '../../lib/formStyles'
+import { deleteOwnAccount, exportOwnData, updateOwnPassword, updateOwnProfile } from '../../lib/accountApi'
+import { buttonDanger, buttonPrimary, buttonSecondary, fieldGroup, input, label } from '../../lib/formStyles'
 import {
   disablePushNotifications,
   enablePushNotifications,
@@ -25,12 +25,16 @@ function extractErrorMessage(error: unknown): string {
 }
 
 export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
-  const { user, refreshUser } = useAuth()
+  const { user, refreshUser, logout } = useAuth()
   const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
   const [pushState, setPushState] = useState<PushPermissionState>('unsupported')
   const [pushSubscribed, setPushSubscribed] = useState(false)
   const [pushBusy, setPushBusy] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
 
   // Basic details — everything EXCEPT email/password/role/verification,
   // which either have their own dedicated section below (password) or no
@@ -69,6 +73,23 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
       setPassword('')
     },
   })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteOwnAccount(deletePassword),
+    onSuccess: () => logout(),
+  })
+
+  async function handleExport() {
+    setExporting(true)
+    setExportError(null)
+    try {
+      await exportOwnData()
+    } catch (error) {
+      setExportError(extractErrorMessage(error))
+    } finally {
+      setExporting(false)
+    }
+  }
 
   async function handleEnablePush() {
     setPushBusy(true)
@@ -226,6 +247,65 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
 
           {mutation.isError && <p className="text-xs text-red-600">{extractErrorMessage(mutation.error)}</p>}
           {mutation.isSuccess && <p className="text-xs text-green-700">Password updated.</p>}
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4">
+          <div className={fieldGroup}>
+            <label className={label}>Your data</label>
+            <p className="text-xs text-slate-500">
+              Download a copy of everything SportsHub has on record for your account — profile, registrations,
+              bookings, skill history, and anything you've posted.
+            </p>
+            <button onClick={handleExport} disabled={exporting} className={`${buttonSecondary} self-start`}>
+              {exporting ? 'Preparing download...' : 'Download my data'}
+            </button>
+            {exportError && <p className="text-xs text-red-600">{exportError}</p>}
+          </div>
+
+          <div className={`${fieldGroup} rounded-lg border border-red-100 bg-red-50/50 p-3`}>
+            <label className={label}>Delete account</label>
+            <p className="text-xs text-slate-500">
+              Permanently deactivates your account and signs you out everywhere. This can't be undone from the app —
+              contact an administrator if you change your mind.
+            </p>
+
+            {!showDeleteConfirm ? (
+              <button onClick={() => setShowDeleteConfirm(true)} className={`${buttonDanger} self-start`}>
+                Delete my account
+              </button>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <input
+                  type="password"
+                  placeholder="Confirm your password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  className={input}
+                />
+                {deleteMutation.isError && (
+                  <p className="text-xs text-red-600">{extractErrorMessage(deleteMutation.error)}</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setShowDeleteConfirm(false)
+                      setDeletePassword('')
+                    }}
+                    className={buttonSecondary}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => deleteMutation.mutate()}
+                    disabled={!deletePassword || deleteMutation.isPending}
+                    className={buttonDanger}
+                  >
+                    {deleteMutation.isPending ? 'Deleting...' : 'Permanently delete'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="mt-5 flex justify-end gap-2">

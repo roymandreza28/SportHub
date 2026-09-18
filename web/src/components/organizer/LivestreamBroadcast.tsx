@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchLivestream, sendWebRTCSignal, uploadLivestreamRecording, type LivestreamItem } from '../../lib/organizerApi'
 import { sendPublicSignal, type PublicSignalType } from '../../lib/publicSignalApi'
@@ -6,6 +7,19 @@ import { useAuth } from '../../lib/AuthContext'
 import { echo } from '../../lib/echo'
 import { ICE_SERVERS } from '../../lib/webrtc'
 import { buttonDanger, buttonPrimary } from '../../lib/formStyles'
+import { IconCameraSwitch } from '../layout/icons'
+
+// Biases capture toward a landscape resolution instead of whatever the
+// device's default orientation happens to produce — a phone held upright
+// still asks the camera hardware for a 16:9-shaped feed (the sensor itself
+// is landscape-native regardless of how the phone is held), so both the
+// broadcaster's own preview and what every viewer receives stay in
+// landscape format rather than being squeezed portrait video.
+const LANDSCAPE_VIDEO_CONSTRAINTS: MediaTrackConstraints = {
+  width: { ideal: 1280 },
+  height: { ideal: 720 },
+  aspectRatio: { ideal: 16 / 9 },
+}
 
 // There's no server-side media pipeline anywhere in this app's WebRTC relay
 // (LivestreamBroadcast -> LivestreamViewer -> LiveRelayVideo is pure
@@ -44,7 +58,25 @@ const STATUS_STYLE: Record<string, string> = {
 // camera and fans it out to every connected viewer as a direct peer
 // connection (mesh topology, no media server). See web/src/lib/webrtc.ts
 // for the STUN-only/no-TURN tradeoff this implies.
-export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem }) {
+//
+// Once live, this takes over the whole screen (portaled to document.body,
+// same reasoning as every other full-viewport overlay in this app —
+// escaping whatever small box happens to contain it, e.g. a match-scoring
+// page) rather than staying an inline embed: organizer, venue facilitator,
+// and livestream organizer all start a broadcast from a fairly cramped
+// screen (the Livestreams tab, or a corner LivestreamMiniWindow docked over
+// live scoring), and a camera feed that small isn't usable for actually
+// operating the broadcast. `onLiveChange` lets a parent that supplies its
+// own small-box chrome (LivestreamMiniWindow) know to get out of the way
+// once this is rendering itself full-screen, instead of the two
+// overlapping.
+export function LivestreamBroadcast({
+  livestream,
+  onLiveChange,
+}: {
+  livestream: LivestreamItem
+  onLiveChange?: (isLive: boolean) => void
+}) {
   const { user } = useAuth()
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -54,12 +86,27 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
   const recorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const [isLive, setIsLive] = useState(livestream.status === 'live')
+  const [minimized, setMinimized] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [recordingStatus, setRecordingStatus] = useState<'idle' | 'uploading' | 'uploaded' | 'upload-failed'>('idle')
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([])
+  const [switchingCamera, setSwitchingCamera] = useState(false)
 
   useEffect(() => {
     isLiveRef.current = isLive
-  }, [isLive])
+    onLiveChange?.(isLive)
+  }, [isLive, onLiveChange])
+
+  // The <video> element itself is a different DOM node in each of the three
+  // render branches below (not-live inline, live full-screen, live
+  // minimized) — React mounts a fresh one on every switch, and srcObject is
+  // an imperative DOM property React doesn't carry across that for us, so
+  // it has to be reattached by hand once the newly-mounted element exists.
+  useEffect(() => {
+    if (videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current
+    }
+  }, [isLive, minimized])
 
   // The main organizer publishes from their OWN device/session — there's no
   // shared query cache to react to, so this is how the broadcaster's own
@@ -106,11 +153,21 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
       // with a single front-facing webcam and no facingMode metadata at
       // all just ignores the hint and opens normally.
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
+        video: { facingMode: { ideal: 'environment' }, ...LANDSCAPE_VIDEO_CONSTRAINTS },
         audio: true,
       })
       streamRef.current = stream
       if (videoRef.current) videoRef.current.srcObject = stream
+
+      // Device labels are only populated once permission has been granted,
+      // so this is the earliest point a "switch camera" control can know
+      // whether the broadcaster actually has more than one camera to offer.
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices()
+        setVideoDevices(devices.filter((d) => d.kind === 'videoinput'))
+      } catch {
+        setVideoDevices([])
+      }
 
       // Records the exact same outgoing stream every viewer's peer
       // connection is fed from — recording is best-effort: a browser with
@@ -134,6 +191,52 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
     }
   }
 
+  // Swaps the outgoing video track for the next camera on the device
+  // (front/rear, or any other attached webcam) without tearing down and
+  // re-offering to every connected peer — RTCRtpSender.replaceTrack() swaps
+  // what a peer connection is already sending mid-call, so viewers keep
+  // watching the same connection and just see the feed change. The
+  // MediaStream driving the <video> preview and the MediaRecorder is
+  // mutated in place (remove the old track, add the new one) rather than
+  // replaced outright, since both were set up against that exact stream
+  // object at broadcast start.
+  async function switchCamera() {
+    const stream = streamRef.current
+    if (!stream || videoDevices.length < 2 || switchingCamera) return
+
+    const currentTrack = stream.getVideoTracks()[0]
+    const currentDeviceId = currentTrack?.getSettings().deviceId
+    const currentIndex = videoDevices.findIndex((d) => d.deviceId === currentDeviceId)
+    const nextDevice = videoDevices[(currentIndex + 1) % videoDevices.length]
+
+    setSwitchingCamera(true)
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: nextDevice.deviceId }, ...LANDSCAPE_VIDEO_CONSTRAINTS },
+        audio: false,
+      })
+      const newTrack = newStream.getVideoTracks()[0]
+
+      for (const pc of [...peersRef.current.values(), ...publicPeersRef.current.values()]) {
+        const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
+        await sender?.replaceTrack(newTrack)
+      }
+
+      if (currentTrack) {
+        stream.removeTrack(currentTrack)
+        currentTrack.stop()
+      }
+      stream.addTrack(newTrack)
+      // Some browsers don't repaint an already-playing <video> after its
+      // srcObject's tracks change in place — reassigning forces a refresh.
+      if (videoRef.current) videoRef.current.srcObject = stream
+    } catch {
+      setError('Could not switch camera.')
+    } finally {
+      setSwitchingCamera(false)
+    }
+  }
+
   async function stopBroadcast() {
     peersRef.current.forEach((pc) => pc.close())
     peersRef.current.clear()
@@ -154,8 +257,10 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
+    setVideoDevices([])
     await sendWebRTCSignal(livestream.id, user!.id, 'broadcast-ended', {})
     setIsLive(false)
+    setMinimized(false)
 
     const recording = await recordingDone
     recordedChunksRef.current = []
@@ -281,37 +386,143 @@ export function LivestreamBroadcast({ livestream }: { livestream: LivestreamItem
     }
   }, [livestream.id, isLive, newsId])
 
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-800">{livestream.title}</h3>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLE[livestream.status] ?? 'bg-slate-100 text-slate-500'}`}>
-          {isLive ? 'live' : livestream.status}
-        </span>
-      </div>
-
-      <video ref={videoRef} autoPlay muted playsInline className="aspect-video w-full rounded-lg border border-slate-200 bg-slate-950" />
-
-      {error && <p className="text-sm text-red-600">{error}</p>}
+  const statusMessages = (textClass: string, mutedClass: string) => (
+    <>
+      {error && <p className={`text-sm ${textClass}`}>{error}</p>}
       {recordingStatus === 'uploading' && (
-        <p className="text-xs text-slate-500">Saving the recording so viewers can rewatch it later...</p>
+        <p className={`text-xs ${mutedClass}`}>Saving the recording so viewers can rewatch it later...</p>
       )}
-      {recordingStatus === 'uploaded' && (
-        <p className="text-xs text-teal-700">Recording saved — viewers can rewatch this broadcast once it's over.</p>
-      )}
+      {recordingStatus === 'uploaded' && <p className="text-xs text-teal-500">Recording saved — viewers can rewatch this broadcast once it's over.</p>}
       {recordingStatus === 'upload-failed' && (
-        <p className="text-xs text-red-600">Couldn't save the recording — the live broadcast itself was unaffected.</p>
+        <p className={`text-xs ${textClass}`}>Couldn't save the recording — the live broadcast itself was unaffected.</p>
+      )}
+    </>
+  )
+
+  const switchCameraButton = (size: 'lg' | 'sm') => {
+    if (videoDevices.length < 2) return null
+    const dims = size === 'lg' ? 'h-12 w-12 bottom-6 right-6' : 'h-8 w-8 bottom-2 right-2'
+    const iconDims = size === 'lg' ? 'h-6 w-6' : 'h-4 w-4'
+    return (
+      <button
+        onClick={switchCamera}
+        disabled={switchingCamera}
+        aria-label="Switch camera"
+        title="Switch camera"
+        className={`absolute ${dims} flex items-center justify-center rounded-full bg-slate-950/60 text-white backdrop-blur transition hover:bg-slate-950/80 disabled:opacity-50`}
+      >
+        <IconCameraSwitch className={iconDims} />
+      </button>
+    )
+  }
+
+  return (
+    <>
+      {!isLive && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-800">{livestream.title}</h3>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLE[livestream.status] ?? 'bg-slate-100 text-slate-500'}`}>
+              {livestream.status}
+            </span>
+          </div>
+
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            className="aspect-video w-full rounded-lg border border-slate-200 bg-slate-950 object-cover"
+          />
+
+          {statusMessages('text-red-600', 'text-slate-500')}
+
+          <button onClick={startBroadcast} disabled={recordingStatus === 'uploading'} className={`${buttonPrimary} self-start`}>
+            Start broadcast
+          </button>
+        </div>
       )}
 
-      {isLive ? (
-        <button onClick={stopBroadcast} className={`${buttonDanger} self-start`}>
-          Stop broadcast
-        </button>
-      ) : (
-        <button onClick={startBroadcast} disabled={recordingStatus === 'uploading'} className={`${buttonPrimary} self-start`}>
-          Start broadcast
-        </button>
-      )}
-    </div>
+      {/* Full-screen broadcasting view — horizontal/landscape always, even
+          on a portrait phone: the video box is aspect-video-constrained and
+          centered rather than stretched to fill the viewport, so a portrait
+          screen letterboxes it (black bars top/bottom) instead of distorting
+          or cropping it into a vertical shape. */}
+      {isLive && !minimized &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex flex-col bg-slate-950">
+            <div className="flex shrink-0 items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                <h3 className="truncate text-sm font-semibold text-white">{livestream.title}</h3>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  onClick={() => setMinimized(true)}
+                  className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
+                >
+                  Minimize
+                </button>
+                <button onClick={stopBroadcast} className={`${buttonDanger} px-3 py-1.5 text-xs`}>
+                  Stop broadcast
+                </button>
+              </div>
+            </div>
+
+            <div className="relative flex flex-1 items-center justify-center overflow-hidden px-4 pb-4">
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                playsInline
+                className="aspect-video max-h-full max-w-full rounded-lg bg-black object-contain"
+              />
+              {switchCameraButton('lg')}
+            </div>
+
+            {(error || recordingStatus !== 'idle') && (
+              <div className="shrink-0 px-4 pb-4">{statusMessages('text-red-400', 'text-slate-400')}</div>
+            )}
+          </div>,
+          document.body
+        )}
+
+      {/* Minimized broadcasting view — same corner-docked footprint as
+          LivestreamMiniWindow, so a broadcaster who minimizes can keep
+          working elsewhere in the app while staying live. */}
+      {isLive &&
+        minimized &&
+        createPortal(
+          <div className="fixed bottom-4 right-4 z-40 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-slate-900 px-2.5 py-1.5">
+              <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-white">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+                <span className="truncate">{livestream.title}</span>
+              </span>
+              <button
+                onClick={() => setMinimized(false)}
+                className="shrink-0 text-[11px] text-white/70 hover:text-white"
+              >
+                Expand
+              </button>
+            </div>
+
+            <div className="p-2">
+              <div className="relative">
+                <video ref={videoRef} autoPlay muted playsInline className="aspect-video w-full rounded-lg bg-black object-cover" />
+                {switchCameraButton('sm')}
+              </div>
+              {(error || recordingStatus !== 'idle') && <div className="mt-1.5">{statusMessages('text-red-600', 'text-slate-500')}</div>}
+              <button
+                onClick={stopBroadcast}
+                className="mt-2 w-full rounded-lg bg-red-50 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100"
+              >
+                Stop broadcast
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
   )
 }

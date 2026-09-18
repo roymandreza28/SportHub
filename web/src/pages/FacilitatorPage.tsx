@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchMyVenues, fetchVenueSchedule } from '../lib/venueApi'
+import { fetchMyVenues, fetchVenueSchedule, exportVenueBookings } from '../lib/venueApi'
 import {
   DashboardShell,
   ListPreview,
@@ -80,6 +80,7 @@ export function FacilitatorPage() {
   const [bookingsVenueId, setBookingsVenueId] = useState<number | null>(null)
   const [scheduleVenueId, setScheduleVenueId] = useState<number | null>(null)
   const [showManualBookingForm, setShowManualBookingForm] = useState(false)
+  const [exportingBookings, setExportingBookings] = useState(false)
 
   const myVenues = venues ?? []
   const selected = myVenues.find((v) => v.id === selectedId) ?? myVenues[0] ?? null
@@ -201,6 +202,20 @@ export function FacilitatorPage() {
               <div className="flex items-center gap-4">
                 <button onClick={() => setShowManualBookingForm(true)} className={buttonPrimary}>
                   + Add walk-in booking
+                </button>
+                <button
+                  onClick={async () => {
+                    setExportingBookings(true)
+                    try {
+                      await exportVenueBookings(bookingsVenue.id)
+                    } finally {
+                      setExportingBookings(false)
+                    }
+                  }}
+                  disabled={exportingBookings}
+                  className={buttonGhost}
+                >
+                  {exportingBookings ? 'Exporting...' : 'Export bookings (CSV)'}
                 </button>
                 <button onClick={() => setBookingsVenueId(null)} className={buttonGhost}>
                   &larr; Back to venues

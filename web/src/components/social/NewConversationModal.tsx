@@ -30,7 +30,7 @@ export function NewConversationModal({
 }) {
   const queryClient = useQueryClient()
   const isMobile = useIsMobile()
-  const { data: friends } = useQuery({ queryKey: ['social', 'friends'], queryFn: fetchFriends })
+  const { data: friends, isLoading: friendsLoading } = useQuery({ queryKey: ['social', 'friends'], queryFn: fetchFriends })
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [groupName, setGroupName] = useState('')
 
@@ -114,7 +114,10 @@ export function NewConversationModal({
             <div
               className={`overflow-y-auto rounded-lg border border-slate-100 ${isMobile ? 'flex-1' : 'max-h-48'}`}
             >
-              {friends?.length === 0 && <p className="p-3 text-sm text-slate-400">Add a friend first.</p>}
+              {friendsLoading && <p className="p-3 text-sm text-slate-400">Loading...</p>}
+              {!friendsLoading && friends?.length === 0 && (
+                <p className="p-3 text-sm text-slate-400">Add a friend first.</p>
+              )}
               {friends?.map((friend) => (
                 <label
                   key={friend.friendship_id}

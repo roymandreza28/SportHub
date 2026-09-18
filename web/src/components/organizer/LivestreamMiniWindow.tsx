@@ -35,6 +35,11 @@ export function LivestreamMiniWindow({
   const queryClient = useQueryClient()
   const [collapsed, setCollapsed] = useState(false)
   const [dismissed, setDismissed] = useState(false)
+  // Tracks LivestreamBroadcast's own internal isLive state (via
+  // onLiveChange), not livestream.status — the query backing that prop can
+  // lag a few seconds behind the broadcaster's own browser actually going
+  // live.
+  const [broadcasterLive, setBroadcasterLive] = useState(false)
 
   const aName = match.participant_a?.name ?? 'TBD'
   const bName = match.participant_b?.name ?? 'TBD'
@@ -47,6 +52,15 @@ export function LivestreamMiniWindow({
   if (dismissed || (!livestream && !canGoLive)) return null
 
   const isBroadcaster = livestream != null && user?.id === livestream.broadcaster?.id
+
+  // Once actually live, LivestreamBroadcast takes over the screen itself
+  // (full-screen or its own minimized corner window, both portaled to
+  // document.body) — this component's own corner box would just be an
+  // empty duplicate sitting behind it, so get out of the way entirely
+  // rather than double up on chrome.
+  if (isBroadcaster && broadcasterLive) {
+    return <LivestreamBroadcast livestream={livestream} onLiveChange={setBroadcasterLive} />
+  }
 
   return (
     <div className="fixed bottom-4 right-4 z-40 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
@@ -76,7 +90,7 @@ export function LivestreamMiniWindow({
               {goLive.isError && <p className="text-[10px] text-red-600">Could not start the broadcast.</p>}
             </div>
           ) : isBroadcaster ? (
-            <LivestreamBroadcast livestream={livestream} />
+            <LivestreamBroadcast livestream={livestream} onLiveChange={setBroadcasterLive} />
           ) : (
             <LivestreamViewer livestream={livestream} />
           )}

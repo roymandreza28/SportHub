@@ -89,6 +89,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/user/password', [AuthController::class, 'updatePassword']);
     Route::patch('/user/profile', [AuthController::class, 'updateProfile']);
     Route::post('/user/avatar', [AuthController::class, 'updateAvatar']);
+    Route::get('/user/data-export', [AuthController::class, 'exportData']);
+    Route::delete('/user', [AuthController::class, 'destroySelf']);
 
     Route::get('/user', function (Request $request) {
         $user = $request->user();
@@ -188,6 +190,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/venues/{venue}', [VenueController::class, 'update']);
         Route::delete('/venues/{venue}', [VenueController::class, 'destroy']);
         Route::get('/venues/{venue}/schedule', [VenueController::class, 'schedule']);
+        Route::get('/venues/{venue}/bookings/export', [VenueController::class, 'exportBookings']);
         Route::post('/venues/{venue}/registrations/manual', [VenueRegistrationController::class, 'storeManual']);
 
         Route::post('/venues/{venue}/courts', [CourtController::class, 'store']);
@@ -282,6 +285,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/tournaments/{tournament}/generate-bracket', [TournamentController::class, 'generateBracket']);
         Route::post('/tournaments/{tournament}/proceed', [TournamentController::class, 'proceed']);
         Route::post('/tournaments/{tournament}/cancel', [TournamentController::class, 'cancel']);
+        Route::get('/tournaments/{tournament}/registrations/export', [TournamentController::class, 'exportRegistrations']);
         Route::patch('/matches/{match}/schedule', [MatchController::class, 'schedule']);
     });
 

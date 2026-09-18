@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\SkillLevel;
+use App\Models\TournamentRegistration;
 use App\Models\User;
+use App\Models\VenueRegistration;
 use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -214,6 +217,64 @@ class AuthController extends Controller
         $user->update(['avatar_path' => $request->file('avatar')->store('avatars/'.$user->id, 'public')]);
 
         return response()->json($this->withRoles($user->fresh()));
+    }
+
+    // Self-service data export — a JSON download of everything this
+    // account has ever submitted or has recorded against it, covering the
+    // same ground an admin could see via the various profile/history
+    // endpoints, just bundled into one file for the user themselves. Kept
+    // deliberately narrow to what identifiably belongs to this one user
+    // (their own profile, registrations, bookings, skill history, and
+    // authored content) rather than every row that merely references them
+    // (e.g. not another user's chat messages in a shared conversation).
+    public function exportData(Request $request)
+    {
+        $user = $request->user();
+
+        $data = [
+            'exported_at' => now()->toIso8601String(),
+            'profile' => $user->toArray(),
+            'player_profile' => $user->playerProfile,
+            'skill_levels' => $user->playerProfile
+                ? SkillLevel::where('player_profile_id', $user->playerProfile->id)->get()
+                : [],
+            'tournament_registrations' => TournamentRegistration::where('user_id', $user->id)->with('tournament:id,name,status')->get(),
+            'organized_tournaments' => $user->organizedTournaments,
+            'venue_registrations' => VenueRegistration::where('user_id', $user->id)->get(),
+            'matchmaking_requests' => $user->matchmakingRequests,
+            'news_posts' => $user->news,
+            'posts' => $user->posts,
+            'coach_evaluations_given' => $user->evaluationsGiven,
+        ];
+
+        AuditLog::record($user, 'user.data_exported');
+
+        return response()->json($data)
+            ->header('Content-Disposition', 'attachment; filename="sporthub-data-'.$user->id.'.json"');
+    }
+
+    // Self-service account deletion — soft-deletes (User uses SoftDeletes,
+    // see the users table's deleted_at column), same as the admin-only
+    // AdminUserController::destroy(). Soft delete deliberately, not a hard
+    // delete: the FK design elsewhere (nullOnDelete on match participants,
+    // tournament registrations, etc.) only fires on an actual row delete,
+    // so a hard delete here would silently blank out historical
+    // tournament/match records other players still rely on. Every issued
+    // token is revoked so the account can't keep being used after this.
+    public function destroySelf(Request $request)
+    {
+        $request->validate([
+            'password' => ['required', 'current_password'],
+        ]);
+
+        $user = $request->user();
+
+        AuditLog::record($user, 'user.self_deleted');
+
+        $user->tokens()->delete();
+        $user->delete();
+
+        return response()->noContent();
     }
 
     public function logout(Request $request)

@@ -9,10 +9,12 @@ use App\Models\User;
 use App\Models\Venue;
 use App\Services\BracketService;
 use App\Services\NotificationService;
+use App\Support\CsvExport;
 use App\Support\NewsMediaStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TournamentController extends Controller
 {
@@ -330,6 +332,46 @@ class TournamentController extends Controller
         $bracketService->notifyParticipants($tournament, "{$tournament->name} has been cancelled.");
 
         return $tournament;
+    }
+
+    // Covers the "Generated/exported reports contain correct totals, dates,
+    // labels, and filters" defense-checklist criterion for the event-
+    // management module — a CSV of exactly who's registered, sourced live
+    // from the same registrations table every other registration view
+    // reads from (no separate report-only data path to drift out of sync).
+    public function exportRegistrations(Tournament $tournament): StreamedResponse
+    {
+        $this->authorize('export', $tournament);
+
+        $registrations = $tournament->registrations()
+            ->with(['user:id,name,email', 'team:id,name', 'team.members.user:id,name,email', 'registeredBy:id,name'])
+            ->orderBy('created_at')
+            ->get();
+
+        $rows = $registrations->map(function ($registration) {
+            $isTeam = $registration->team_id !== null;
+
+            return [
+                $registration->id,
+                $isTeam ? 'Team' : 'Individual',
+                $isTeam ? $registration->team?->name : $registration->user?->name,
+                $isTeam ? '' : $registration->user?->email,
+                $isTeam
+                    ? $registration->team?->members
+                        ->map(fn ($member) => $member->user?->name.' <'.$member->user?->email.'>')
+                        ->implode('; ')
+                    : '',
+                $registration->status,
+                $registration->registeredBy?->name,
+                $registration->created_at?->toIso8601String(),
+            ];
+        });
+
+        $filename = 'tournament-'.$tournament->id.'-registrations-'.now()->format('Y-m-d').'.csv';
+
+        return CsvExport::download($filename, [
+            'Registration ID', 'Type', 'Name', 'Email', 'Team Roster', 'Status', 'Registered By', 'Registered At',
+        ], $rows);
     }
 
     public function bracket(Tournament $tournament, BracketService $bracketService)

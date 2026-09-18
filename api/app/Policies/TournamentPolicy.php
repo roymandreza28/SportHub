@@ -26,4 +26,9 @@ class TournamentPolicy
     {
         return $this->update($user, $tournament);
     }
+
+    public function export(User $user, Tournament $tournament): bool
+    {
+        return $this->update($user, $tournament);
+    }
 }

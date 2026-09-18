@@ -27,6 +27,14 @@ This doc assumes the domain `sporthub.com` as an example in sections 1-8;
 substitute your own. Section 9 uses Render's default `*.onrender.com` URLs
 directly since no domain is required for the token-auth setup.
 
+**Process note:** `npx tsc --noEmit` is not sufficient to confirm a frontend
+change is deploy-safe — `npm run build`'s real `tsc -b` step catches strictly
+more (different narrowing-into-closures behavior, a different effective
+tsconfig for test files) and has caught production-only build failures
+`tsc --noEmit` missed at least twice in this project's history. Always run
+the real `npm run build` (or at least `npx tsc -b`) before considering
+frontend work deploy-safe.
+
 ## 0. Prerequisites
 
 - A Railway account with billing enabled (Postgres + two always-on services
@@ -88,25 +96,92 @@ directly since no domain is required for the token-auth setup.
 
 ## 4. First-time database setup
 
-Run once, after the `web` service's first successful deploy (Railway
-dashboard → service → the three-dot menu → "Run Command", or `railway run`
-locally with the service linked):
+On Railway, run once after the `web` service's first successful deploy
+(Railway dashboard → service → the three-dot menu → "Run Command", or
+`railway run` locally with the service linked):
 
 ```
 php artisan db:seed --class=RolesAndPermissionsSeeder --force
 php artisan db:seed --class=SportsSeeder --force
 ```
 
-**Do not run the plain `php artisan db:seed`** — `DatabaseSeeder` also creates
-demo accounts for every role with a hardcoded password (`password`) and fake
-sample venues/tournaments, meant only for local dev and the Playwright/Pest
-suites. Create the real first admin account interactively instead:
+**On Render's free plan there is no equivalent one-off command runner** —
+`render jobs create` explicitly returns "new paid services not allowed" on
+the free tier. The supported mechanism instead, already built into
+`api/docker/entrypoint.sh`, is a set of opt-in boot flags read at container
+startup — set one via `PUT /v1/services/{id}/env-vars/{key}` (which triggers
+a new deploy, same as any other env var change), let it run once, then unset
+it again so ordinary restarts don't repeat it:
+
+- `SEED_ON_BOOT=true` → runs `php artisan db:seed --force` (the full
+  `DatabaseSeeder`: roles, the 7 demo accounts, sports, venues, sample
+  tournaments, and newsfeed posts).
+- `SEED_ROLES_ON_BOOT=true` → runs just `RolesAndPermissionsSeeder` +
+  `SportsSeeder` — the Render equivalent of the two Railway commands above,
+  for a real (non-demo) launch.
+- `RESET_ON_BOOT=true` → runs `php artisan system:reset-keep-accounts
+  --force` (wipes everything except accounts/roles/sports back to fresh).
+- `RESET_TOURNAMENTS_ON_BOOT=true` → runs `php artisan
+  system:reset-tournaments-and-newsfeed --force` (narrower reset — leaves
+  venues/accounts/sports/sport_formats intact).
+
+**Do not use `SEED_ON_BOOT`/the plain `php artisan db:seed` for a real
+launch** — `DatabaseSeeder` also creates demo accounts for every role with a
+hardcoded password (`password`) and fake sample venues/tournaments, meant
+only for local dev, the Playwright/Pest suites, or a deliberate temporary
+demo deployment (see the dated entries at the end of this doc). Create the
+real first admin account interactively instead, either via `railway run`/an
+SSH-capable shell, or as its own one-shot boot-flag-triggered artisan
+command:
 
 ```
 php artisan tinker
 >>> $u = App\Models\User::create(['name' => '...', 'email' => '...', 'password' => bcrypt('...')]);
 >>> $u->assignRole('admin');
 ```
+
+## 4a. Database backup and recovery
+
+Neither Railway's nor Render's **free** Postgres plan includes managed
+backups or point-in-time recovery — Render's free database is deleted
+outright 90 days after creation unless upgraded or recreated, with no
+snapshot to restore from. Back up manually with `pg_dump` on a schedule you
+control (e.g. a monthly reminder, or before any risky migration/reset-flag
+deploy):
+
+1. Get a connection string: Render dashboard → the Postgres instance →
+   "Connect" tab. Use the **External Database URL** for a backup run from
+   your own machine (the Internal URL, used by the web/reverb services
+   themselves, only resolves inside Render's network — see the "external
+   connection blocked by default" gotcha in section 9). Render's free
+   Postgres has no IP allow-list restriction on the external URL by default,
+   unlike some paid-tier setups.
+2. Dump the database:
+   ```
+   pg_dump "<External Database URL>" --format=custom --file=sporthub-backup-$(date +%Y%m%d).dump
+   ```
+   `--format=custom` (not plain SQL) so the dump can be restored selectively
+   and is compressed automatically. Store the file somewhere durable outside
+   Render itself (it's the whole point of a backup) — a private cloud bucket
+   or encrypted local storage, not another file on the same free-tier host.
+3. Restore into a fresh/empty database with `pg_restore`:
+   ```
+   pg_restore --clean --if-exists --no-owner --dbname="<target Database URL>" sporthub-backup-20260101.dump
+   ```
+   `--no-owner` matters when restoring into a different Render Postgres
+   instance than the one the dump came from — the role names won't match,
+   and `--no-owner` skips the `ALTER OWNER` statements that would otherwise
+   fail.
+4. Sanity-check a restore before trusting it: `php artisan migrate:status`
+   should show every migration as `Ran`, and `php artisan tinker` →
+   `App\Models\User::count()` should match the expected row count.
+
+For a quicker, lower-fidelity safety net between real backups, `php artisan
+db:seed` (or the `SEED_ON_BOOT`/`RESET_ON_BOOT` flags above) can always
+regenerate a fully working *demo* database from scratch in seconds — that's
+not a substitute for backing up real user data, but it does mean a broken
+demo/staging environment is never more than one redeploy away from a clean
+slate.
 
 ## 5. Vercel: the web app
 
@@ -118,6 +193,11 @@ php artisan tinker
    `web/.env.production.example`.
 4. Settings → Domains → add `app.sporthub.com`, create the DNS record it
    gives you.
+5. If the Vercel account is a **team** (not a personal account) — check the
+   URL bar for `vercel.com/<team-slug>/...` — every API call needs
+   `?teamId=team_...` appended and every dashboard import needs the right
+   team selected first. Forgetting `teamId` on an API call is a silent
+   "works for personal projects, 404s for team ones" trap.
 5. Vercel's own GitHub integration deploys automatically on push to `main`
    (preview deployments on PRs) — no custom GitHub Actions step needed for
    this side, unlike the API.
@@ -174,29 +254,60 @@ start on the next request, which also drops any open Reverb/WebSocket
 connections), and the free Postgres database is deleted 90 days after
 creation unless upgraded or recreated.
 
-Provisioned via the Render CLI (`render services create`, `render postgres
-create`) and, for two fields the CLI doesn't expose for Docker-runtime
-services, direct calls to the REST API (`api.render.com/v1/...`) with the
-same API key as a Bearer token:
+As of this writing, the Render CLI only supports `render blueprints
+validate`, not actually deploying a Blueprint — so every resource below was
+provisioned with direct `curl` calls to the REST API
+(`api.render.com/v1/...`) and Vercel's API (`api.vercel.com/...`), each
+using that platform's personal API token as a Bearer token, rather than the
+CLI or a dashboard click-through:
 
+- Vercel project: `POST /v11/projects` with a `gitRepository: {type: github,
+  repo: "owner/SportHub"}` block — links the project to the GitHub repo the
+  same way the dashboard's "Import" flow does.
+- Vercel env vars: `POST /v10/projects/{id}/env` (accepts an array, so every
+  var can be created in one call).
+- Vercel deploy: `POST /v13/deployments` with a `gitSource: {type: github,
+  org, repo, ref: "main"}` block — builds directly from the GitHub repo
+  server-side; no local `vercel deploy` build-and-upload needed.
+- Render Postgres: `POST /v1/postgres` — **requires an explicit `"version"`
+  field** ("16" was used); omitting it 400s with `"version is required"`.
+- Render services: `POST /v1/services` with `type: web_service`,
+  `serviceDetails.env: docker`, and the same `dockerfilePath`/
+  `dockerContext`/`dockerCommand`/`preDeployCommand` fields `render.yaml`
+  already documents.
 - `dockerCommand` (the Reverb service's override of the image's default
-  CMD) — `render services update --start-command` explicitly rejects
-  Docker-runtime services ("only supported for native runtimes"); the field
-  has to be set via `PATCH /v1/services/{id}` with
-  `{"serviceDetails":{"envSpecificDetails":{"dockerCommand":"..."}}}`.
+  CMD) specifically needs `PATCH /v1/services/{id}` with
+  `{"serviceDetails":{"envSpecificDetails":{"dockerCommand":"..."}}}` — the
+  CLI's `render services update --start-command` explicitly rejects
+  Docker-runtime services ("only supported for native runtimes").
 - Individual env var fixes after creation (e.g. `APP_URL`, `REVERB_HOST`,
   once each service's real Render-assigned URL was known) — `PUT
-  /v1/services/{id}/env-vars/{key}` with `{"value":"..."}`; there's no CLI
-  equivalent for updating one env var on an existing service.
+  /v1/services/{id}/env-vars/{key}` with `{"value":"..."}`.
+
+**Gotcha: `fromDatabase` env var linking doesn't work via the REST API.**
+`render.yaml`'s Blueprint syntax lets an env var read
+`fromDatabase: {name, property}` instead of a literal value — the same shape
+in a direct `POST /v1/services` payload gets rejected with `"missing
+environment variable value"`. This is a Blueprint-only YAML feature; the
+plain REST API always requires a literal `value` for every env var,
+including `DB_HOST`/`DB_PORT`/`DB_DATABASE`/`DB_USERNAME`/`DB_PASSWORD`.
+
+**Gotcha: a freshly created database doesn't accept external connections by
+default.** Its Networking allow list starts empty — separate from any web
+service's own allow list. Rather than opening it to `0.0.0.0/0`, use the
+**Internal Database URL** instead (works with no allow-list changes at all
+for anything running inside Render's own network, which covers the web/
+reverb services themselves); reach for the External Database URL only for
+something genuinely external, like the manual `pg_dump` backup procedure in
+section 4a.
 
 **Gotcha hit during setup**: Render auto-assigns each service's public URL
 as `<name>.onrender.com`, *unless* that exact name is already taken/reserved
-elsewhere on Render, in which case it silently appends a random suffix
-(`sporthub-api` became `sporthub-api-g6rq.onrender.com`; `sporthub-reverb`
-happened to get its plain name). This isn't knowable ahead of creation —
-check each service's actual assigned URL after creating it, not before, and
-fix any env var that referenced the predicted-but-wrong URL (`APP_URL`,
-`REVERB_HOST`) via the `env-vars/{key}` PUT above.
+elsewhere on Render, in which case it silently appends a random suffix. This
+isn't knowable ahead of creation — check each service's actual assigned URL
+after creating it, not before, and fix any env var that referenced the
+predicted-but-wrong URL (`APP_URL`, `REVERB_HOST`) via the `env-vars/{key}`
+PUT above.
 
 **Also hit**: running the CLI from Git Bash on Windows — any argument
 starting with `/` (like `--health-check-path /up`) gets silently mangled
@@ -227,14 +338,38 @@ runtime `libzip.so.5` the compiled extension needs, throwing a PHP startup
 warning on every request. Removed `zip`/`libzip-dev` entirely — nothing in
 the app uses `ZipArchive`.
 
-Current live services: `sporthub-api` (Laravel), `sporthub-reverb` (same
-image, `dockerCommand` override), `sporthub-db` (Postgres, free plan).
+Current live services, as of the 2026-09-06 redeploy (everything was deleted
+and recreated under a new name that round — see the dated entry below for
+why):
+
+| Resource | Name | URL |
+|---|---|---|
+| Render web service (Laravel) | `sporthub-binangonan` | `https://sporthub-binangonan.onrender.com` |
+| Render web service (Reverb) | `sporthub-binangonan-reverb` | `https://sporthub-binangonan-reverb.onrender.com` |
+| Render Postgres | `sporthub-binangonan-db` | internal only, database name auto-suffixed to `sporthub_qulj` |
+| Vercel project | `sporthub-binangonan` | `https://sporthub-binangonan.vercel.app` |
+
+Neither service hit the random-suffix gotcha this round — both got their
+clean requested name. It's still a real risk next time (see the gotcha
+above), it just didn't recur here.
+
 `render.yaml` at the repo root documents the intended shape as
 infrastructure-as-code, though — per the CLI gap above — the actual services
 were provisioned imperatively rather than via a Blueprint apply.
 
-Demo/seed accounts (`DatabaseSeeder`, all `*@sporthub.test` /
-`password`) were deliberately included in this deployment on explicit
-request, as a temporary/demo setup rather than a real public launch — this
-is the one deviation from §8's "never reuse demo accounts in production"
-guidance, made knowingly. Revisit before treating this as a real launch.
+**2026-09-06 — full recreate under `sporthub-binangonan`.** Every prior
+Vercel project (`web`, `sport-hub`, `sport-hub-qvw6`) and Render resource
+(`sporthub-api`, `sporthub-reverb`, `sporthub-db`) was deleted and recreated
+from scratch under the `sporthub-binangonan` name (see the table above).
+Demo/seed accounts (`DatabaseSeeder`, all `*@sporthub.test` / `password`)
+were deliberately re-seeded into this deployment on explicit request
+("seed the users account like in the local deployment"), via the
+`SEED_ON_BOOT` boot flag described in section 4. This is the same deviation
+from §8's "never reuse demo accounts in production" guidance as the entry
+below, made knowingly for a second time — revisit before treating this as a
+real public launch.
+
+**Earlier deployment.** Demo/seed accounts were also deliberately included
+in the original deployment on explicit request, as a temporary/demo setup
+rather than a real public launch — the first instance of the same
+knowing deviation from §8's guidance.

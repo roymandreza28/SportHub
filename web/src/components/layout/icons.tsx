@@ -165,6 +165,21 @@ export function IconSwitch(props: IconProps) {
   )
 }
 
+export function IconCameraSwitch(props: IconProps) {
+  return base(
+    <>
+      <path d="M4 8V6.5A1.5 1.5 0 0 1 5.5 5h2.4l1-1.5h6.2l1 1.5h2.4A1.5 1.5 0 0 1 20 6.5V8" />
+      <path d="M4 8h16v10.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5V8Z" />
+      <circle cx="12" cy="13.2" r="3.2" />
+      <path d="M9.4 10.6a4 4 0 0 1 6 .9" />
+      <path d="M14.6 15.8a4 4 0 0 1-6-.9" />
+      <path d="M15.1 9.3v1.9h-1.9" />
+      <path d="M8.9 17.1v-1.9h1.9" />
+    </>,
+    props
+  )
+}
+
 export function IconLogOut(props: IconProps) {
   return base(
     <>

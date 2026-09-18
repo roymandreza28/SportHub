@@ -225,6 +225,21 @@ export async function fetchVenueSchedule(venueId: number) {
   return data
 }
 
+// Downloads the venue's full booking history as CSV — see
+// organizerApi.ts's exportTournamentRegistrations for why this fetches as a
+// blob rather than reusing the JSON-export download pattern.
+export async function exportVenueBookings(venueId: number): Promise<void> {
+  const response = await api.get(`/api/venues/${venueId}/bookings/export`, { responseType: 'blob' })
+  const url = URL.createObjectURL(response.data as Blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `venue-${venueId}-bookings.csv`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 export async function updateVenueRegistration(id: number, status: 'approved' | 'rejected') {
   const { data } = await api.patch(`/api/venue-registrations/${id}`, { status })
   return data

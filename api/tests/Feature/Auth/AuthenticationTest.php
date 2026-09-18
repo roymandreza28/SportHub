@@ -293,3 +293,56 @@ it('never lets a profile edit touch email or password', function () {
 it('denies editing a profile without authentication', function () {
     $this->patchJson('/api/user/profile', ['phone' => '09171234567'])->assertStatus(401);
 });
+
+it('lets a user export their own data as a JSON download', function () {
+    $user = userWithRole('player');
+
+    $response = $this->actingAs($user)->getJson('/api/user/data-export');
+
+    $response->assertOk();
+    $response->assertHeader('Content-Disposition', 'attachment; filename="sporthub-data-'.$user->id.'.json"');
+    $response->assertJsonPath('profile.id', $user->id);
+    expect($response->json('exported_at'))->toBeString();
+
+    $this->assertDatabaseHas('audit_logs', [
+        'actor_id' => $user->id,
+        'action' => 'user.data_exported',
+    ]);
+});
+
+it('denies exporting data without authentication', function () {
+    $this->getJson('/api/user/data-export')->assertStatus(401);
+});
+
+it('lets a user delete their own account after confirming their password, and revokes every token', function () {
+    $user = User::factory()->create(['password' => bcrypt('correct-password')]);
+    $token = $user->createToken('other-device')->plainTextToken;
+    expect(PersonalAccessToken::where('tokenable_id', $user->id)->count())->toBe(1);
+
+    $this->actingAs($user)->deleteJson('/api/user', [
+        'password' => 'correct-password',
+    ])->assertNoContent();
+
+    expect(User::find($user->id))->toBeNull();
+    expect(User::withTrashed()->find($user->id))->not->toBeNull();
+    expect(PersonalAccessToken::where('tokenable_id', $user->id)->count())->toBe(0);
+
+    $this->assertDatabaseHas('audit_logs', [
+        'actor_id' => $user->id,
+        'action' => 'user.self_deleted',
+    ]);
+});
+
+it('rejects self account deletion with the wrong password', function () {
+    $user = User::factory()->create(['password' => bcrypt('correct-password')]);
+
+    $this->actingAs($user)->deleteJson('/api/user', [
+        'password' => 'wrong-password',
+    ])->assertStatus(422);
+
+    expect(User::find($user->id))->not->toBeNull();
+});
+
+it('denies self account deletion without authentication', function () {
+    $this->deleteJson('/api/user', ['password' => 'whatever'])->assertStatus(401);
+});
