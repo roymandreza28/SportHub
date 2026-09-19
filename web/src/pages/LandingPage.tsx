@@ -320,10 +320,10 @@ export function LandingPage() {
           </div>
           {/* Sign In / Join Now only have room to sit inline with the nav
               links from md up. Below that, the icon row underneath (see
-              MOBILE_NAV_ITEMS) replaces these text links entirely, and Join
-              Now alone stands in for this whole block, level with the logo —
-              Sign In stays reachable from there via the register form's own
-              "Already have an account?" link. */}
+              MOBILE_NAV_ITEMS) replaces these text links entirely, and a
+              single Log in button stands in for this whole block, level
+              with the logo — registration stays reachable from there via
+              the login form's own "No account? Register" link. */}
           <div className="hidden items-center gap-4 md:flex">
             <button
               onClick={() => openAuth('login')}
@@ -340,11 +340,10 @@ export function LandingPage() {
             </button>
           </div>
           <button
-            onClick={() => openAuth('register')}
+            onClick={() => openAuth('login')}
             className="flex items-center gap-1.5 rounded-md bg-teal-600 px-3.5 py-2 text-sm font-semibold text-pure-white transition active:scale-95 md:hidden"
           >
-            Join Now
-            <span aria-hidden="true">&rarr;</span>
+            Log in
           </button>
         </div>
       </header>

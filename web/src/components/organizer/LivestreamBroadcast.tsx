@@ -79,7 +79,21 @@ export function LivestreamBroadcast({
 }) {
   const { user } = useAuth()
   const videoRef = useRef<HTMLVideoElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
+  // The actual camera+mic device stream — kept separate from outputStreamRef
+  // so the real camera track can always be found and stopped (releasing the
+  // hardware) regardless of whether it's also the thing being sent, or has
+  // been swapped out for a rotated stand-in (see getLandscapeVideoTrack).
+  const rawStreamRef = useRef<MediaStream | null>(null)
+  // What every peer connection, the MediaRecorder, and the local preview
+  // actually use — identical to rawStreamRef when the captured video is
+  // already landscape-shaped, otherwise the raw video track is swapped for
+  // a canvas-rotated one (still the same audio track either way).
+  const outputStreamRef = useRef<MediaStream | null>(null)
+  // Off-DOM helpers for the rotation pipeline — never appended anywhere,
+  // srcObject/captureStream work fine on a detached element.
+  const hiddenVideoElRef = useRef<HTMLVideoElement | null>(null)
+  const rotationCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const rotationFrameRef = useRef<number | null>(null)
   const peersRef = useRef<Map<number, RTCPeerConnection>>(new Map())
   const publicPeersRef = useRef<Map<string, RTCPeerConnection>>(new Map())
   const isLiveRef = useRef(false)
@@ -103,8 +117,8 @@ export function LivestreamBroadcast({
   // an imperative DOM property React doesn't carry across that for us, so
   // it has to be reattached by hand once the newly-mounted element exists.
   useEffect(() => {
-    if (videoRef.current && streamRef.current) {
-      videoRef.current.srcObject = streamRef.current
+    if (videoRef.current && outputStreamRef.current) {
+      videoRef.current.srcObject = outputStreamRef.current
     }
   }, [isLive, minimized])
 
@@ -125,7 +139,7 @@ export function LivestreamBroadcast({
     if (existing) return existing
 
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
-    streamRef.current?.getTracks().forEach((track) => pc.addTrack(track, streamRef.current!))
+    outputStreamRef.current?.getTracks().forEach((track) => pc.addTrack(track, outputStreamRef.current!))
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         sendWebRTCSignal(livestream.id, viewerId, 'ice-candidate', event.candidate.toJSON())
@@ -142,6 +156,86 @@ export function LivestreamBroadcast({
     await sendWebRTCSignal(livestream.id, viewerId, 'offer', { sdp: offer.sdp, type: offer.type })
   }
 
+  function stopRotationPipeline() {
+    if (rotationFrameRef.current != null) {
+      cancelAnimationFrame(rotationFrameRef.current)
+      rotationFrameRef.current = null
+    }
+    if (hiddenVideoElRef.current) {
+      hiddenVideoElRef.current.pause()
+      hiddenVideoElRef.current.srcObject = null
+    }
+  }
+
+  // A phone's rear camera sensor is mounted landscape-native, but most
+  // mobile browsers still hand back a genuinely portrait-shaped frame
+  // buffer (tall pixels, not just a tall <video> box) when the phone is
+  // held upright — `LANDSCAPE_VIDEO_CONSTRAINTS` above is only an `ideal`
+  // hint and plenty of devices ignore it outright. That portrait buffer is
+  // what would actually reach every viewer over WebRTC, so fixing the
+  // broadcaster's own on-screen CSS isn't enough — the outgoing track
+  // itself has to be landscape. When the raw track really is portrait, this
+  // draws it rotated 90° onto an off-DOM canvas every frame and returns
+  // canvas.captureStream()'s video track instead, so what's actually sent
+  // (and recorded, and previewed) is landscape regardless of device
+  // orientation. Already-landscape input (most webcams, or a phone that
+  // does report correctly) is returned untouched — no canvas/CPU cost.
+  async function getLandscapeVideoTrack(rawTrack: MediaStreamTrack): Promise<MediaStreamTrack> {
+    stopRotationPipeline()
+
+    if (!hiddenVideoElRef.current) {
+      const el = document.createElement('video')
+      el.muted = true
+      el.playsInline = true
+      hiddenVideoElRef.current = el
+    }
+    const hiddenVideo = hiddenVideoElRef.current
+    hiddenVideo.srcObject = new MediaStream([rawTrack])
+
+    await new Promise<void>((resolve) => {
+      if (hiddenVideo.readyState >= 1) {
+        resolve()
+        return
+      }
+      hiddenVideo.onloadedmetadata = () => resolve()
+    })
+    await hiddenVideo.play().catch(() => {})
+
+    const w = hiddenVideo.videoWidth
+    const h = hiddenVideo.videoHeight
+    if (!w || !h || w >= h) {
+      // Already landscape (or dimensions unavailable) — use the camera
+      // track as-is.
+      hiddenVideo.srcObject = null
+      return rawTrack
+    }
+
+    if (typeof HTMLCanvasElement.prototype.captureStream !== 'function') {
+      // No canvas-capture support (very old browser) — best-effort, ship
+      // the portrait track rather than nothing.
+      return rawTrack
+    }
+
+    if (!rotationCanvasRef.current) rotationCanvasRef.current = document.createElement('canvas')
+    const canvas = rotationCanvasRef.current
+    canvas.width = h
+    canvas.height = w
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return rawTrack
+
+    const draw = () => {
+      ctx.save()
+      ctx.translate(canvas.width, 0)
+      ctx.rotate(Math.PI / 2)
+      ctx.drawImage(hiddenVideo, 0, 0, w, h)
+      ctx.restore()
+      rotationFrameRef.current = requestAnimationFrame(draw)
+    }
+    draw()
+
+    return canvas.captureStream(30).getVideoTracks()[0]
+  }
+
   async function startBroadcast() {
     setError(null)
     setRecordingStatus('idle')
@@ -156,8 +250,12 @@ export function LivestreamBroadcast({
         video: { facingMode: { ideal: 'environment' }, ...LANDSCAPE_VIDEO_CONSTRAINTS },
         audio: true,
       })
-      streamRef.current = stream
-      if (videoRef.current) videoRef.current.srcObject = stream
+      rawStreamRef.current = stream
+
+      const landscapeTrack = await getLandscapeVideoTrack(stream.getVideoTracks()[0])
+      const output = new MediaStream([landscapeTrack, ...stream.getAudioTracks()])
+      outputStreamRef.current = output
+      if (videoRef.current) videoRef.current.srcObject = output
 
       // Device labels are only populated once permission has been granted,
       // so this is the earliest point a "switch camera" control can know
@@ -170,13 +268,13 @@ export function LivestreamBroadcast({
       }
 
       // Records the exact same outgoing stream every viewer's peer
-      // connection is fed from — recording is best-effort: a browser with
-      // no MediaRecorder support (rare) still broadcasts live fine, it just
-      // won't have a replay afterward.
+      // connection is fed from (post-rotation, if any) — recording is
+      // best-effort: a browser with no MediaRecorder support (rare) still
+      // broadcasts live fine, it just won't have a replay afterward.
       recordedChunksRef.current = []
       if (typeof MediaRecorder !== 'undefined') {
         const mimeType = pickRecorderMimeType()
-        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+        const recorder = new MediaRecorder(output, mimeType ? { mimeType } : undefined)
         recorder.ondataavailable = (event) => {
           if (event.data.size > 0) recordedChunksRef.current.push(event.data)
         }
@@ -195,41 +293,57 @@ export function LivestreamBroadcast({
   // (front/rear, or any other attached webcam) without tearing down and
   // re-offering to every connected peer — RTCRtpSender.replaceTrack() swaps
   // what a peer connection is already sending mid-call, so viewers keep
-  // watching the same connection and just see the feed change. The
-  // MediaStream driving the <video> preview and the MediaRecorder is
-  // mutated in place (remove the old track, add the new one) rather than
-  // replaced outright, since both were set up against that exact stream
-  // object at broadcast start.
+  // watching the same connection and just see the feed change. Runs the new
+  // camera's raw track through the same landscape pipeline startBroadcast()
+  // does, since a front camera or a different rear lens can report a
+  // different native orientation than the one just switched away from.
   async function switchCamera() {
-    const stream = streamRef.current
-    if (!stream || videoDevices.length < 2 || switchingCamera) return
+    const rawStream = rawStreamRef.current
+    const output = outputStreamRef.current
+    if (!rawStream || !output || videoDevices.length < 2 || switchingCamera) return
 
-    const currentTrack = stream.getVideoTracks()[0]
-    const currentDeviceId = currentTrack?.getSettings().deviceId
+    const currentRawTrack = rawStream.getVideoTracks()[0]
+    const currentDeviceId = currentRawTrack?.getSettings().deviceId
     const currentIndex = videoDevices.findIndex((d) => d.deviceId === currentDeviceId)
     const nextDevice = videoDevices[(currentIndex + 1) % videoDevices.length]
 
     setSwitchingCamera(true)
     try {
-      const newStream = await navigator.mediaDevices.getUserMedia({
+      const newRawStream = await navigator.mediaDevices.getUserMedia({
         video: { deviceId: { exact: nextDevice.deviceId }, ...LANDSCAPE_VIDEO_CONSTRAINTS },
         audio: false,
       })
-      const newTrack = newStream.getVideoTracks()[0]
+      const newRawTrack = newRawStream.getVideoTracks()[0]
+      const newLandscapeTrack = await getLandscapeVideoTrack(newRawTrack)
 
       for (const pc of [...peersRef.current.values(), ...publicPeersRef.current.values()]) {
         const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
-        await sender?.replaceTrack(newTrack)
+        await sender?.replaceTrack(newLandscapeTrack)
       }
 
-      if (currentTrack) {
-        stream.removeTrack(currentTrack)
-        currentTrack.stop()
+      // Swap the device-facing track (releases the old camera hardware) and
+      // the outgoing track (what preview/recorder/peers actually use) in
+      // place on their respective stream objects — both were set up against
+      // those exact MediaStream instances at broadcast start.
+      if (currentRawTrack) {
+        rawStream.removeTrack(currentRawTrack)
+        currentRawTrack.stop()
       }
-      stream.addTrack(newTrack)
+      rawStream.addTrack(newRawTrack)
+
+      const currentOutputTrack = output.getVideoTracks()[0]
+      if (currentOutputTrack) {
+        output.removeTrack(currentOutputTrack)
+        // Only stop it if it's a canvas track distinct from the raw camera
+        // track above — that one's already been stopped, and stopping the
+        // same track twice is harmless but this keeps intent explicit.
+        if (currentOutputTrack !== currentRawTrack) currentOutputTrack.stop()
+      }
+      output.addTrack(newLandscapeTrack)
+
       // Some browsers don't repaint an already-playing <video> after its
       // srcObject's tracks change in place — reassigning forces a refresh.
-      if (videoRef.current) videoRef.current.srcObject = stream
+      if (videoRef.current) videoRef.current.srcObject = output
     } catch {
       setError('Could not switch camera.')
     } finally {
@@ -254,8 +368,16 @@ export function LivestreamBroadcast({
       recorder.stop()
     })
 
-    streamRef.current?.getTracks().forEach((track) => track.stop())
-    streamRef.current = null
+    // Both stopped independently: outputStream's video track might be a
+    // canvas track the raw camera track was never part of, and the raw
+    // camera track is the only thing that actually releases the hardware
+    // (the OS/browser camera-in-use indicator). Stopping a track twice
+    // (e.g. the shared audio track appears in both) is a harmless no-op.
+    rawStreamRef.current?.getTracks().forEach((track) => track.stop())
+    rawStreamRef.current = null
+    outputStreamRef.current?.getTracks().forEach((track) => track.stop())
+    outputStreamRef.current = null
+    stopRotationPipeline()
     if (videoRef.current) videoRef.current.srcObject = null
     setVideoDevices([])
     await sendWebRTCSignal(livestream.id, user!.id, 'broadcast-ended', {})
@@ -324,8 +446,11 @@ export function LivestreamBroadcast({
       userChannel.stopListening('.WebRTCSignal', onSignal)
       peersRef.current.forEach((pc) => pc.close())
       peersRef.current.clear()
-      streamRef.current?.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
+      rawStreamRef.current?.getTracks().forEach((track) => track.stop())
+      rawStreamRef.current = null
+      outputStreamRef.current?.getTracks().forEach((track) => track.stop())
+      outputStreamRef.current = null
+      stopRotationPipeline()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [livestream.id, user?.id])
@@ -347,7 +472,7 @@ export function LivestreamBroadcast({
       if (existing) return existing
 
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
-      streamRef.current?.getTracks().forEach((track) => pc.addTrack(track, streamRef.current!))
+      outputStreamRef.current?.getTracks().forEach((track) => pc.addTrack(track, outputStreamRef.current!))
       pc.onicecandidate = (event) => {
         if (event.candidate) {
           sendPublicSignal(livestream.id, 'broadcaster', viewerToken, 'ice-candidate', event.candidate.toJSON())
