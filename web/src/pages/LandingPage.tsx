@@ -343,7 +343,7 @@ export function LandingPage() {
             onClick={() => openAuth('login')}
             className="flex items-center gap-1.5 rounded-md bg-teal-600 px-3.5 py-2 text-sm font-semibold text-pure-white transition active:scale-95 md:hidden"
           >
-            Log in
+            Sign In
           </button>
         </div>
       </header>

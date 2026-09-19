@@ -82,18 +82,18 @@ export function LivestreamBroadcast({
   // The actual camera+mic device stream — kept separate from outputStreamRef
   // so the real camera track can always be found and stopped (releasing the
   // hardware) regardless of whether it's also the thing being sent, or has
-  // been swapped out for a rotated stand-in (see getLandscapeVideoTrack).
+  // been swapped out for a cropped stand-in (see getLandscapeVideoTrack).
   const rawStreamRef = useRef<MediaStream | null>(null)
   // What every peer connection, the MediaRecorder, and the local preview
   // actually use — identical to rawStreamRef when the captured video is
   // already landscape-shaped, otherwise the raw video track is swapped for
-  // a canvas-rotated one (still the same audio track either way).
+  // a center-cropped one (still the same audio track either way).
   const outputStreamRef = useRef<MediaStream | null>(null)
-  // Off-DOM helpers for the rotation pipeline — never appended anywhere,
-  // srcObject/captureStream work fine on a detached element.
+  // Off-DOM helpers for the landscape-crop pipeline — never appended
+  // anywhere, srcObject/captureStream work fine on a detached element.
   const hiddenVideoElRef = useRef<HTMLVideoElement | null>(null)
-  const rotationCanvasRef = useRef<HTMLCanvasElement | null>(null)
-  const rotationFrameRef = useRef<number | null>(null)
+  const cropCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const cropFrameRef = useRef<number | null>(null)
   const peersRef = useRef<Map<number, RTCPeerConnection>>(new Map())
   const publicPeersRef = useRef<Map<string, RTCPeerConnection>>(new Map())
   const isLiveRef = useRef(false)
@@ -156,10 +156,10 @@ export function LivestreamBroadcast({
     await sendWebRTCSignal(livestream.id, viewerId, 'offer', { sdp: offer.sdp, type: offer.type })
   }
 
-  function stopRotationPipeline() {
-    if (rotationFrameRef.current != null) {
-      cancelAnimationFrame(rotationFrameRef.current)
-      rotationFrameRef.current = null
+  function stopLandscapeCropPipeline() {
+    if (cropFrameRef.current != null) {
+      cancelAnimationFrame(cropFrameRef.current)
+      cropFrameRef.current = null
     }
     if (hiddenVideoElRef.current) {
       hiddenVideoElRef.current.pause()
@@ -174,14 +174,24 @@ export function LivestreamBroadcast({
   // hint and plenty of devices ignore it outright. That portrait buffer is
   // what would actually reach every viewer over WebRTC, so fixing the
   // broadcaster's own on-screen CSS isn't enough — the outgoing track
-  // itself has to be landscape. When the raw track really is portrait, this
-  // draws it rotated 90° onto an off-DOM canvas every frame and returns
+  // itself has to be landscape.
+  //
+  // Deliberately a CENTER CROP, not a 90° rotation: rotating the pixel
+  // buffer would turn everything in frame sideways (whatever the
+  // broadcaster was actually pointing at ends up on its side for every
+  // viewer) — it only fixes the aspect ratio number, not what the video
+  // looks like. Cropping keeps the picture upright and correctly aligned
+  // exactly as filmed, just framed down to a 16:9 slice out of the
+  // vertical center of the portrait buffer (equivalent to what a
+  // broadcaster would get by holding the phone landscape in the first
+  // place). When the raw track really is portrait, this draws that cropped
+  // slice onto an off-DOM canvas every frame and returns
   // canvas.captureStream()'s video track instead, so what's actually sent
   // (and recorded, and previewed) is landscape regardless of device
   // orientation. Already-landscape input (most webcams, or a phone that
   // does report correctly) is returned untouched — no canvas/CPU cost.
   async function getLandscapeVideoTrack(rawTrack: MediaStreamTrack): Promise<MediaStreamTrack> {
-    stopRotationPipeline()
+    stopLandscapeCropPipeline()
 
     if (!hiddenVideoElRef.current) {
       const el = document.createElement('video')
@@ -216,20 +226,26 @@ export function LivestreamBroadcast({
       return rawTrack
     }
 
-    if (!rotationCanvasRef.current) rotationCanvasRef.current = document.createElement('canvas')
-    const canvas = rotationCanvasRef.current
-    canvas.width = h
-    canvas.height = w
+    if (!cropCanvasRef.current) cropCanvasRef.current = document.createElement('canvas')
+    const canvas = cropCanvasRef.current
+    // Full raw width (the horizontal framing is already correct — a
+    // portrait capture isn't narrower left-to-right than a landscape one
+    // would be), height trimmed down to a 16:9 slice. Clamped to `h` for
+    // the (practically never-hit) case of an almost-square raw capture,
+    // where a full 16:9 slice wouldn't fit.
+    canvas.width = w
+    canvas.height = Math.min(h, Math.round((w * 9) / 16))
     const ctx = canvas.getContext('2d')
     if (!ctx) return rawTrack
 
+    // Vertically centered: crops equally off the top and bottom rather
+    // than anchoring to one edge, so whatever the broadcaster framed in
+    // the middle of their portrait shot — the actual subject, most of the
+    // time — stays in frame.
+    const sourceY = (h - canvas.height) / 2
     const draw = () => {
-      ctx.save()
-      ctx.translate(canvas.width, 0)
-      ctx.rotate(Math.PI / 2)
-      ctx.drawImage(hiddenVideo, 0, 0, w, h)
-      ctx.restore()
-      rotationFrameRef.current = requestAnimationFrame(draw)
+      ctx.drawImage(hiddenVideo, 0, sourceY, w, canvas.height, 0, 0, canvas.width, canvas.height)
+      cropFrameRef.current = requestAnimationFrame(draw)
     }
     draw()
 
@@ -268,7 +284,7 @@ export function LivestreamBroadcast({
       }
 
       // Records the exact same outgoing stream every viewer's peer
-      // connection is fed from (post-rotation, if any) — recording is
+      // connection is fed from (post-crop, if any) — recording is
       // best-effort: a browser with no MediaRecorder support (rare) still
       // broadcasts live fine, it just won't have a replay afterward.
       recordedChunksRef.current = []
@@ -377,7 +393,7 @@ export function LivestreamBroadcast({
     rawStreamRef.current = null
     outputStreamRef.current?.getTracks().forEach((track) => track.stop())
     outputStreamRef.current = null
-    stopRotationPipeline()
+    stopLandscapeCropPipeline()
     if (videoRef.current) videoRef.current.srcObject = null
     setVideoDevices([])
     await sendWebRTCSignal(livestream.id, user!.id, 'broadcast-ended', {})
@@ -450,7 +466,7 @@ export function LivestreamBroadcast({
       rawStreamRef.current = null
       outputStreamRef.current?.getTracks().forEach((track) => track.stop())
       outputStreamRef.current = null
-      stopRotationPipeline()
+      stopLandscapeCropPipeline()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [livestream.id, user?.id])
