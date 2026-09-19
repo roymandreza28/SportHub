@@ -9,7 +9,7 @@ import { buttonGhost, buttonPrimary, chip, fieldGroup, label, select } from '../
 import { IconChevronDown } from '../layout/icons'
 import { MatchmakingLoader } from './MatchmakingLoader'
 import { MatchVenueScheduler } from './MatchVenueScheduler'
-import { TeamPanel } from './TeamPanel'
+import { ManageTeamsModal } from './ManageTeamsModal'
 import { DownPaymentPrompt } from './DownPaymentPrompt'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -44,7 +44,7 @@ export function MatchmakingPanel() {
   })
 
   const [mode, setMode] = useState<Mode>('join')
-  const [showTeams, setShowTeams] = useState(false)
+  const [showTeamsModal, setShowTeamsModal] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [sportId, setSportId] = useState<number | ''>('')
   const [formatId, setFormatId] = useState<number | ''>('')
@@ -195,16 +195,12 @@ export function MatchmakingPanel() {
             Create Match
           </button>
         </div>
-        <button type="button" onClick={() => setShowTeams((s) => !s)} className={buttonGhost}>
-          {showTeams ? 'Hide teams' : 'Manage teams'}
+        <button type="button" onClick={() => setShowTeamsModal(true)} className={buttonGhost}>
+          Manage teams
         </button>
       </div>
 
-      {showTeams && (
-        <div className="rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
-          <TeamPanel />
-        </div>
-      )}
+      {showTeamsModal && <ManageTeamsModal onClose={() => setShowTeamsModal(false)} />}
 
       {matchedWithReservation.length > 0 && (
         <div className="flex flex-col gap-3">

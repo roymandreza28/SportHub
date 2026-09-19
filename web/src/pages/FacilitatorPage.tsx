@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchMyVenues, fetchVenueSchedule, exportVenueBookings } from '../lib/venueApi'
+import { extractDownloadErrorMessage } from '../lib/api'
 import {
   DashboardShell,
   ListPreview,
@@ -81,6 +82,7 @@ export function FacilitatorPage() {
   const [scheduleVenueId, setScheduleVenueId] = useState<number | null>(null)
   const [showManualBookingForm, setShowManualBookingForm] = useState(false)
   const [exportingBookings, setExportingBookings] = useState(false)
+  const [exportBookingsError, setExportBookingsError] = useState<string | null>(null)
 
   const myVenues = venues ?? []
   const selected = myVenues.find((v) => v.id === selectedId) ?? myVenues[0] ?? null
@@ -206,8 +208,11 @@ export function FacilitatorPage() {
                 <button
                   onClick={async () => {
                     setExportingBookings(true)
+                    setExportBookingsError(null)
                     try {
                       await exportVenueBookings(bookingsVenue.id)
+                    } catch (error) {
+                      setExportBookingsError(await extractDownloadErrorMessage(error))
                     } finally {
                       setExportingBookings(false)
                     }
@@ -224,6 +229,7 @@ export function FacilitatorPage() {
             ) : undefined
           }
         >
+          {exportBookingsError && <p className="mb-3 text-xs text-red-600">{exportBookingsError}</p>}
           {bookingsVenue ? (
             <RegistrationApprovalQueue venue={bookingsVenue} />
           ) : (

@@ -13,6 +13,7 @@ import {
   type BracketMatch,
 } from '../lib/organizerApi'
 import { useAuth } from '../lib/AuthContext'
+import { extractDownloadErrorMessage } from '../lib/api'
 import { fetchNotifications, markNotificationRead } from '../lib/notificationsApi'
 import {
   DashboardShell,
@@ -149,6 +150,7 @@ export function OrganizerPage() {
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
   const [activeMatchId, setActiveMatchId] = useState<number | null>(null)
   const [exportingRegistrations, setExportingRegistrations] = useState(false)
+  const [exportRegistrationsError, setExportRegistrationsError] = useState<string | null>(null)
   // A not-yet-started match a venue organizer just clicked — shown the
   // win-by-default/start-game choice (MatchStartOptionsModal) before the
   // real scoreboard ever opens. A match already live/completed skips this
@@ -444,12 +446,15 @@ export function OrganizerPage() {
                   </p>
                 )}
                 {canManageTournaments && (
-                  <div className="mb-3 flex justify-end">
+                  <div className="mb-3 flex flex-col items-end gap-1">
                     <button
                       onClick={async () => {
                         setExportingRegistrations(true)
+                        setExportRegistrationsError(null)
                         try {
                           await exportTournamentRegistrations(selectedTournamentId)
+                        } catch (error) {
+                          setExportRegistrationsError(await extractDownloadErrorMessage(error))
                         } finally {
                           setExportingRegistrations(false)
                         }
@@ -459,6 +464,7 @@ export function OrganizerPage() {
                     >
                       {exportingRegistrations ? 'Exporting...' : 'Export registrations (CSV)'}
                     </button>
+                    {exportRegistrationsError && <p className="text-xs text-red-600">{exportRegistrationsError}</p>}
                   </div>
                 )}
                 {/* The main organizer gets a read-only scoreboard VIEW —
