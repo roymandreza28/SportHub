@@ -44,7 +44,21 @@ function MenuItem({ label, onClick, danger }: { label: string; onClick: () => vo
 // in it at all) — never anything about the other participant's own copy of
 // the same conversation. See ConversationController's mute/archive/hide/
 // block/report methods for the server side of each.
-export function ConversationRowMenu({ conversation, className }: { conversation: ConversationSummary; className?: string }) {
+//
+// variant="icon" (default) is the small standalone "..." trigger used on a
+// ConversationList row. variant="inline" instead renders its own trigger as
+// plain text + a chevron, meant to sit where a conversation's name already
+// is (see FloatingChatWindows' header) so clicking the name itself opens
+// this same options list, instead of only being reachable from the list.
+export function ConversationRowMenu({
+  conversation,
+  className,
+  variant = 'icon',
+}: {
+  conversation: ConversationSummary
+  className?: string
+  variant?: 'icon' | 'inline'
+}) {
   const { user } = useAuth()
   const [open, setOpen] = useState(false)
   const [muteSubmenu, setMuteSubmenu] = useState(false)
@@ -97,28 +111,51 @@ export function ConversationRowMenu({ conversation, className }: { conversation:
   }
 
   return (
-    <div ref={containerRef} className={className}>
-      <button
-        type="button"
-        onClick={(e) => {
-          // Stops the click from also bubbling into the row's own
-          // onClick={() => onSelect(c.id)} — the two buttons overlap
-          // visually (this one sits absolutely positioned on top of the
-          // row), so without this, opening the menu would ALSO open the
-          // conversation underneath it.
-          e.stopPropagation()
-          setOpen((v) => !v)
-        }}
-        aria-label="Conversation options"
-        className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"
-      >
-        <IconDotsVertical className="h-4 w-4" />
-      </button>
+    // For variant="icon", the caller's own className already sets
+    // position:absolute (ConversationList anchors the "..." trigger to the
+    // corner of its row) — that already makes this element a valid
+    // positioning context for the dropdown below, so `relative` is only
+    // added for variant="inline" (a plain, unpositioned className, if any).
+    <div ref={containerRef} className={`${variant === 'inline' ? 'relative' : ''} ${className ?? ''}`}>
+      {variant === 'icon' ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            // Stops the click from also bubbling into the row's own
+            // onClick={() => onSelect(c.id)} — the two buttons overlap
+            // visually (this one sits absolutely positioned on top of the
+            // row), so without this, opening the menu would ALSO open the
+            // conversation underneath it.
+            e.stopPropagation()
+            setOpen((v) => !v)
+          }}
+          aria-label="Conversation options"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"
+        >
+          <IconDotsVertical className="h-4 w-4" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setOpen((v) => !v)
+          }}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          className="flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 text-left text-sm transition hover:bg-black/10"
+        >
+          <span className="min-w-0 truncate font-semibold">{otherName}</span>
+          <IconChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+      )}
 
       {open && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-0 top-full z-30 mt-1 w-60 overflow-hidden rounded-xl border border-slate-100 bg-white py-1 shadow-2xl"
+          className={`absolute top-full z-30 mt-1 w-60 overflow-hidden rounded-xl border border-slate-100 bg-white py-1 text-slate-900 shadow-2xl ${
+            variant === 'icon' ? 'right-0' : 'left-0'
+          }`}
         >
           {!muteSubmenu ? (
             <>

@@ -4,7 +4,8 @@ import { fetchMessages, sendMessage, type ConversationMessageItem, type Conversa
 import { useAuth } from '../../lib/AuthContext'
 import { formatRelativeTime } from '../../lib/formatRelativeTime'
 import { input, textarea, buttonPrimary } from '../../lib/formStyles'
-import { IconImage, IconX } from '../layout/icons'
+import { IconCornerUpLeft, IconImage, IconPin, IconX } from '../layout/icons'
+import { MessageRowMenu } from './MessageRowMenu'
 
 function AttachmentPreview({ file, onRemove }: { file: File; onRemove: () => void }) {
   return (
@@ -128,6 +129,24 @@ function AdminSupportComposer({
   )
 }
 
+// A small quoted-message preview — used both for the reply banner above the
+// composer (while composing a reply) and inline inside a bubble that has a
+// reply_to or forwarded_from. A removed original just says so instead of
+// showing stale content, since the server clears body/attachment_path the
+// moment it's removed.
+function QuotePreview({ label, name, quote }: { label?: string; name: string; quote: ConversationMessageItem['reply_to'] }) {
+  if (!quote) {
+    return <p className="truncate text-xs italic opacity-70">{label ?? 'Original message unavailable'}</p>
+  }
+  return (
+    <p className="truncate text-xs opacity-70">
+      {label ? <span className="font-semibold">{label} </span> : null}
+      <span className="font-semibold">{name}: </span>
+      {quote.removed_at ? <span className="italic">Original message unavailable</span> : quote.body || (quote.attachment_url ? '[photo]' : '')}
+    </p>
+  )
+}
+
 function AdminChatThread({
   conversationId,
   messages,
@@ -142,6 +161,7 @@ function AdminChatThread({
   const { user } = useAuth()
   const [body, setBody] = useState('')
   const [attachment, setAttachment] = useState<File | null>(null)
+  const [replyTo, setReplyTo] = useState<ConversationMessageItem | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   // See AdminSupportComposer's own comment on this — a conversationId-based
   // id collided across the two ConversationWindow instances FloatingChatWindows
@@ -149,10 +169,11 @@ function AdminChatThread({
   const attachmentInputId = useId()
 
   const mutation = useMutation({
-    mutationFn: () => sendMessage(conversationId, body, attachment ?? undefined),
+    mutationFn: () => sendMessage(conversationId, body, attachment ?? undefined, replyTo?.id),
     onSuccess: () => {
       setBody('')
       setAttachment(null)
+      setReplyTo(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
     },
   })
@@ -162,30 +183,70 @@ function AdminChatThread({
     if (body.trim() || attachment) mutation.mutate()
   }
 
+  function nameFor(u: { id: number; name: string }) {
+    return u.id === adminParticipantId ? 'admin-name' : u.name
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 space-y-2 overflow-y-auto p-3 text-sm">
-        {messages.map((m) => (
-          <div key={m.id} className={m.user.id === user?.id ? 'text-right' : ''}>
-            <span
-              className={`inline-block max-w-[80%] rounded-lg px-3 py-1.5 text-left ${
-                m.user.id === user?.id ? 'bg-teal-600 text-pure-white' : 'bg-slate-100 text-slate-700'
-              }`}
-            >
-              {m.user.id !== user?.id && (
-                <strong className="mr-1.5 block text-xs font-semibold opacity-70">
-                  {m.user.id === adminParticipantId ? 'admin-name' : m.user.name}
-                </strong>
+        {messages.map((m) => {
+          const isOwn = m.user.id === user?.id
+          return (
+            <div key={m.id} className={`group flex items-end gap-1 ${isOwn ? 'flex-row-reverse' : ''}`}>
+              <div className={`max-w-[80%] ${isOwn ? 'text-right' : ''}`}>
+                {m.removed_at ? (
+                  <span className="inline-block rounded-lg bg-slate-50 px-3 py-1.5 text-left text-xs italic text-slate-400">
+                    {isOwn ? 'You removed a message' : `${nameFor(m.user)} removed a message`}
+                  </span>
+                ) : (
+                  <span
+                    className={`inline-block rounded-lg px-3 py-1.5 text-left ${
+                      isOwn ? 'bg-teal-600 text-pure-white' : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {!isOwn && (
+                      <strong className="mr-1.5 block text-xs font-semibold opacity-70">{nameFor(m.user)}</strong>
+                    )}
+                    {m.pinned_at && (
+                      <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide opacity-70">
+                        <IconPin className="h-3 w-3" /> Pinned
+                      </span>
+                    )}
+                    {m.forwarded_from && (
+                      <span className="mb-1 flex items-center gap-1 text-[11px] italic opacity-70">
+                        <IconCornerUpLeft className="h-3 w-3 scale-x-[-1]" /> Forwarded
+                      </span>
+                    )}
+                    {m.reply_to && (
+                      <span className={`mb-1 block rounded border-l-2 pl-1.5 ${isOwn ? 'border-white/40' : 'border-slate-300'}`}>
+                        <QuotePreview
+                          name={m.reply_to.user.id === user?.id ? 'You' : nameFor(m.reply_to.user)}
+                          quote={m.reply_to}
+                        />
+                      </span>
+                    )}
+                    {m.attachment_url && (
+                      <a href={m.attachment_url} target="_blank" rel="noreferrer" className="mb-1 block">
+                        <img src={m.attachment_url} alt="Attachment" className="max-h-48 rounded-md" />
+                      </a>
+                    )}
+                    {m.body}
+                  </span>
+                )}
+              </div>
+              {!m.removed_at && (
+                <MessageRowMenu
+                  conversationId={conversationId}
+                  message={m}
+                  isOwn={isOwn}
+                  align={isOwn ? 'right' : 'left'}
+                  onReply={setReplyTo}
+                />
               )}
-              {m.attachment_url && (
-                <a href={m.attachment_url} target="_blank" rel="noreferrer" className="mb-1 block">
-                  <img src={m.attachment_url} alt="Attachment" className="max-h-48 rounded-md" />
-                </a>
-              )}
-              {m.body}
-            </span>
-          </div>
-        ))}
+            </div>
+          )
+        })}
       </div>
       {blocked ? (
         <p className="border-t border-slate-100 p-3 text-center text-xs text-slate-400">
@@ -193,6 +254,26 @@ function AdminChatThread({
         </p>
       ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-1.5 border-t border-slate-100 p-2">
+          {replyTo && (
+            <div className="flex items-start gap-2 rounded-lg bg-slate-50 px-2 py-1.5">
+              <IconCornerUpLeft className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <div className="min-w-0 flex-1">
+                <QuotePreview
+                  label="Replying to"
+                  name={replyTo.user.id === user?.id ? 'yourself' : nameFor(replyTo.user)}
+                  quote={replyTo}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplyTo(null)}
+                aria-label="Cancel reply"
+                className="shrink-0 text-slate-400 hover:text-slate-600"
+              >
+                <IconX className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
           {attachment && <AttachmentPreview file={attachment} onRemove={() => setAttachment(null)} />}
           <div className="flex gap-2">
             <input

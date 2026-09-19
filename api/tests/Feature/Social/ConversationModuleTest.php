@@ -451,3 +451,118 @@ it('reports a conversation into the admin support thread, visible to the admin l
         ->toContain($b->name)
         ->toContain('Sending inappropriate messages.');
 });
+
+it('lets the author remove their own message (soft, with the file deleted), but not anyone else\'s', function () {
+    Storage::fake('public');
+
+    $a = userWithRole('player');
+    $b = userWithRole('coach');
+    makeFriends($a, $b);
+    $conversation = $this->actingAs($a)->postJson('/api/social/conversations', ['type' => 'direct', 'user_id' => $b->id])->json();
+
+    $message = $this->actingAs($a)->postJson("/api/social/conversations/{$conversation['id']}/messages", [
+        'attachment' => UploadedFile::fake()->create('photo.jpg', 100, 'image/jpeg'),
+    ])->json();
+    $path = \App\Models\ConversationMessage::find($message['id'])->attachment_path;
+    Storage::disk('public')->assertExists($path);
+
+    $this->actingAs($b)->deleteJson("/api/social/conversations/{$conversation['id']}/messages/{$message['id']}")
+        ->assertForbidden();
+
+    $this->actingAs($a)->deleteJson("/api/social/conversations/{$conversation['id']}/messages/{$message['id']}")
+        ->assertNoContent();
+
+    Storage::disk('public')->assertMissing($path);
+
+    $stored = \App\Models\ConversationMessage::find($message['id']);
+    expect($stored->removed_at)->not->toBeNull();
+    expect($stored->body)->toBe('');
+    expect($stored->attachment_path)->toBeNull();
+});
+
+it('lets any participant pin and unpin a message, not just its author', function () {
+    $a = userWithRole('player');
+    $b = userWithRole('coach');
+    makeFriends($a, $b);
+    $conversation = $this->actingAs($a)->postJson('/api/social/conversations', ['type' => 'direct', 'user_id' => $b->id])->json();
+    $message = $this->actingAs($a)->postJson("/api/social/conversations/{$conversation['id']}/messages", ['body' => 'Pin me'])->json();
+
+    $this->actingAs($b)->postJson("/api/social/conversations/{$conversation['id']}/messages/{$message['id']}/pin", ['pinned' => true])
+        ->assertNoContent();
+    expect(\App\Models\ConversationMessage::find($message['id'])->pinned_at)->not->toBeNull();
+
+    $this->actingAs($a)->postJson("/api/social/conversations/{$conversation['id']}/messages/{$message['id']}/pin", ['pinned' => false])
+        ->assertNoContent();
+    expect(\App\Models\ConversationMessage::find($message['id'])->pinned_at)->toBeNull();
+});
+
+it('replies to a message within the same conversation, but rejects a reply target from elsewhere', function () {
+    $a = userWithRole('player');
+    $b = userWithRole('coach');
+    makeFriends($a, $b);
+    $conversation = $this->actingAs($a)->postJson('/api/social/conversations', ['type' => 'direct', 'user_id' => $b->id])->json();
+    $original = $this->actingAs($a)->postJson("/api/social/conversations/{$conversation['id']}/messages", ['body' => 'Original'])->json();
+
+    $reply = $this->actingAs($b)->postJson("/api/social/conversations/{$conversation['id']}/messages", [
+        'body' => 'Replying',
+        'reply_to_message_id' => $original['id'],
+    ]);
+    $reply->assertCreated();
+    $reply->assertJsonPath('reply_to.id', $original['id']);
+    $reply->assertJsonPath('reply_to.body', 'Original');
+
+    $c = userWithRole('player');
+    makeFriends($a, $c);
+    $elsewhere = $this->actingAs($a)->postJson('/api/social/conversations', ['type' => 'direct', 'user_id' => $c->id])->json();
+    $foreignMessage = $this->actingAs($a)->postJson("/api/social/conversations/{$elsewhere['id']}/messages", ['body' => 'Foreign'])->json();
+
+    $this->actingAs($a)->postJson("/api/social/conversations/{$conversation['id']}/messages", [
+        'body' => 'Bad reply',
+        'reply_to_message_id' => $foreignMessage['id'],
+    ])->assertStatus(422);
+});
+
+it('forwards a message into another conversation the sender participates in, tagging its provenance', function () {
+    $a = userWithRole('player');
+    $b = userWithRole('coach');
+    $c = userWithRole('player');
+    makeFriends($a, $b);
+    makeFriends($a, $c);
+    $source = $this->actingAs($a)->postJson('/api/social/conversations', ['type' => 'direct', 'user_id' => $b->id])->json();
+    $target = $this->actingAs($a)->postJson('/api/social/conversations', ['type' => 'direct', 'user_id' => $c->id])->json();
+    $message = $this->actingAs($a)->postJson("/api/social/conversations/{$source['id']}/messages", ['body' => 'Forward me'])->json();
+
+    $forwarded = $this->actingAs($a)->postJson("/api/social/conversations/{$source['id']}/messages/{$message['id']}/forward", [
+        'conversation_id' => $target['id'],
+    ]);
+    $forwarded->assertCreated();
+    $forwarded->assertJsonPath('body', 'Forward me');
+    $forwarded->assertJsonPath('forwarded_from.id', $message['id']);
+
+    // A removed message can't be forwarded — there's nothing left to copy.
+    $this->actingAs($a)->deleteJson("/api/social/conversations/{$source['id']}/messages/{$message['id']}")->assertNoContent();
+    $this->actingAs($a)->postJson("/api/social/conversations/{$source['id']}/messages/{$message['id']}/forward", [
+        'conversation_id' => $target['id'],
+    ])->assertStatus(422);
+});
+
+it('reports a specific message into the admin support thread, quoting it', function () {
+    $admin = userWithRole('admin');
+    $a = userWithRole('player');
+    $b = userWithRole('coach');
+    makeFriends($a, $b);
+    $conversation = $this->actingAs($a)->postJson('/api/social/conversations', ['type' => 'direct', 'user_id' => $b->id])->json();
+    $message = $this->actingAs($b)->postJson("/api/social/conversations/{$conversation['id']}/messages", ['body' => 'Rude thing to say'])->json();
+
+    $this->actingAs($a)->postJson("/api/social/conversations/{$conversation['id']}/messages/{$message['id']}/report", [
+        'reason' => 'Harassment.',
+    ])->assertNoContent();
+
+    $adminThread = $this->actingAs($a)->postJson('/api/social/conversations/contact-admin')->json();
+    $messages = $this->actingAs($admin)->getJson("/api/social/conversations/{$adminThread['id']}/messages")->json('data');
+
+    expect(collect($messages)->last()['body'])
+        ->toContain($b->name)
+        ->toContain('Rude thing to say')
+        ->toContain('Harassment.');
+});

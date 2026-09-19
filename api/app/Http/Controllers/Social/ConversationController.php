@@ -8,6 +8,7 @@ use App\Models\Conversation;
 use App\Models\User;
 use App\Services\BookingConversationCleanupService;
 use App\Support\Broadcasting;
+use App\Support\DirectConversations;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -77,7 +78,7 @@ class ConversationController extends Controller
             abort_if($otherId === $user->id, 422, 'You cannot message yourself.');
             abort_unless($friendIds->contains($otherId), 422, 'You can only message friends.');
 
-            $conversation = $this->directConversationWith($user, User::findOrFail($otherId));
+            $conversation = DirectConversations::between($user, User::findOrFail($otherId));
 
             return response()->json($this->loadParticipants($conversation, $user->id), 201);
         }
@@ -114,7 +115,7 @@ class ConversationController extends Controller
         abort_unless($admin, 503, 'Support is not available right now.');
         abort_if($user->id === $admin->id, 422, 'You are the admin.');
 
-        $conversation = $this->directConversationWith($user, $admin);
+        $conversation = DirectConversations::between($user, $admin);
 
         return response()->json($this->loadParticipants($conversation, $user->id), 201);
     }
@@ -159,31 +160,15 @@ class ConversationController extends Controller
             'That user is not part of the organizer team.'
         );
 
-        $conversation = $this->directConversationWith($user, $colleague);
+        $conversation = DirectConversations::between($user, $colleague);
 
         return response()->json($this->loadParticipants($conversation, $user->id), 201);
     }
 
-    // Shared by store()'s direct branch, contactAdmin(), and
-    // contactColleague() — every one of them ultimately just needs "the one
-    // direct conversation between these two people," created if it doesn't
-    // exist yet, with whatever bypasses the friend-gate handled by the
-    // caller before this runs.
-    private function directConversationWith(User $a, User $b): Conversation
-    {
-        return DB::transaction(function () use ($a, $b) {
-            $conversation = Conversation::firstOrCreate(
-                ['direct_key' => Conversation::directKeyFor($a->id, $b->id)],
-                ['type' => 'direct', 'created_by' => $a->id]
-            );
-
-            if ($conversation->wasRecentlyCreated) {
-                $conversation->participants()->attach([$a->id, $b->id]);
-            }
-
-            return $conversation;
-        });
-    }
+    // "The one direct conversation between these two people," created if
+    // it doesn't exist yet — see App\Support\DirectConversations, shared
+    // with ConversationMessageController::report() (which needs the same
+    // thing to reach the reporter's own Contact Admin thread).
 
     public function markRead(Request $request, Conversation $conversation)
     {
@@ -278,7 +263,7 @@ class ConversationController extends Controller
         abort_unless($admin, 503, 'Support is not available right now.');
         abort_if($user->id === $admin->id, 422, 'You are the admin.');
 
-        $adminThread = $this->directConversationWith($user, $admin);
+        $adminThread = DirectConversations::between($user, $admin);
 
         $otherParticipant = $conversation->participants()->where('users.id', '!=', $user->id)->first();
         $subject = $conversation->type === 'group'

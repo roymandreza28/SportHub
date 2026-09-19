@@ -357,3 +357,17 @@ export function IconDotsVertical(props: IconProps) {
     props
   )
 }
+
+// A pinned message's badge — same glyph as the "Pin" menu action.
+export function IconPin(props: IconProps) {
+  return base(
+    <>
+      <path d="M14.5 3.5 20.5 9.5l-2.3 2.3-1-1-3.7 3.7.7 3.8-1.6 1.6-4-4-4.3 4.3-1-1L7.6 14l-4-4 1.6-1.6 3.8.7 3.7-3.7-1-1Z" />
+    </>,
+    props
+  )
+}
+
+export function IconCornerUpLeft(props: IconProps) {
+  return base(<path d="M9 14 4 9l5-5M4 9h9a6 6 0 0 1 6 6v3" />, props)
+}

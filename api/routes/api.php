@@ -193,6 +193,10 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/conversations/{conversation}/report', [ConversationController::class, 'report']);
             Route::get('/conversations/{conversation}/messages', [ConversationMessageController::class, 'index']);
             Route::post('/conversations/{conversation}/messages', [ConversationMessageController::class, 'store']);
+            Route::delete('/conversations/{conversation}/messages/{message}', [ConversationMessageController::class, 'destroy']);
+            Route::post('/conversations/{conversation}/messages/{message}/pin', [ConversationMessageController::class, 'pin']);
+            Route::post('/conversations/{conversation}/messages/{message}/forward', [ConversationMessageController::class, 'forward']);
+            Route::post('/conversations/{conversation}/messages/{message}/report', [ConversationMessageController::class, 'report']);
         });
 
     Route::middleware('role:venue_facilitator|admin')->group(function () {

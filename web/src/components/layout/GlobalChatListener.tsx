@@ -57,7 +57,17 @@ export function GlobalChatListener() {
           ['social', 'messages', conversationId],
           (old) => {
             if (!old) return old
-            if (old.data.some((m) => m.id === message.id)) return old
+            // Remove/pin also redispatch this same event for the SAME
+            // message id (see ConversationMessageController::destroy()/
+            // pin()) — replace the existing entry in place instead of
+            // no-op'ing, so a remove or pin from the other participant
+            // shows up live instead of only after the next refetch.
+            const existingIndex = old.data.findIndex((m) => m.id === message.id)
+            if (existingIndex !== -1) {
+              const data = [...old.data]
+              data[existingIndex] = message
+              return { ...old, data }
+            }
             return { ...old, data: [...old.data, message] }
           }
         )

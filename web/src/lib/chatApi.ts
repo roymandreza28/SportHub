@@ -17,6 +17,14 @@ export type ConversationParticipant = {
   last_seen_at: string | null
 }
 
+export type ConversationMessageQuote = {
+  id: number
+  body: string
+  attachment_url: string | null
+  removed_at: string | null
+  user: { id: number; name: string }
+}
+
 export type ConversationMessageItem = {
   id: number
   body: string
@@ -24,6 +32,13 @@ export type ConversationMessageItem = {
   conversation_id: number
   user: { id: number; name: string }
   created_at: string
+  // Soft-"unsend" — never a hard delete server-side. When set, body and
+  // attachment_url are already cleared; render a "You removed a message" /
+  // "{name} removed a message" placeholder instead of the (empty) body.
+  removed_at: string | null
+  pinned_at: string | null
+  reply_to: ConversationMessageQuote | null
+  forwarded_from: ConversationMessageQuote | null
 }
 
 export type ConversationSummary = {
@@ -177,11 +192,16 @@ export async function fetchMessages(conversationId: number) {
   return data
 }
 
-export async function sendMessage(conversationId: number, body: string, attachment?: File) {
+export async function sendMessage(
+  conversationId: number,
+  body: string,
+  attachment?: File,
+  replyToMessageId?: number
+) {
   if (!attachment) {
     const { data } = await api.post<ConversationMessageItem>(
       `/api/social/conversations/${conversationId}/messages`,
-      { body }
+      { body, reply_to_message_id: replyToMessageId }
     )
     return data
   }
@@ -189,6 +209,7 @@ export async function sendMessage(conversationId: number, body: string, attachme
   const formData = new FormData()
   if (body) formData.append('body', body)
   formData.append('attachment', attachment)
+  if (replyToMessageId) formData.append('reply_to_message_id', String(replyToMessageId))
 
   // No explicit Content-Type here — the browser needs to generate its own
   // multipart boundary (e.g. `multipart/form-data; boundary=----WebKit...`).
@@ -200,6 +221,31 @@ export async function sendMessage(conversationId: number, body: string, attachme
     formData
   )
   return data
+}
+
+// Author-only, soft "unsend" — the row survives as a placeholder for every
+// participant rather than leaving a silent gap in the thread. See
+// ConversationMessageController::destroy().
+export async function removeMessage(conversationId: number, messageId: number) {
+  await api.delete(`/api/social/conversations/${conversationId}/messages/${messageId}`)
+}
+
+// Any participant, not just the author — a shared pinned-messages list is a
+// property of the conversation, same as a real group chat's pin.
+export async function pinMessage(conversationId: number, messageId: number, pinned: boolean) {
+  await api.post(`/api/social/conversations/${conversationId}/messages/${messageId}/pin`, { pinned })
+}
+
+export async function forwardMessage(conversationId: number, messageId: number, targetConversationId: number) {
+  const { data } = await api.post<ConversationMessageItem>(
+    `/api/social/conversations/${conversationId}/messages/${messageId}/forward`,
+    { conversation_id: targetConversationId }
+  )
+  return data
+}
+
+export async function reportMessage(conversationId: number, messageId: number, reason: string) {
+  await api.post(`/api/social/conversations/${conversationId}/messages/${messageId}/report`, { reason })
 }
 
 export function isConversationUnread(conversation: ConversationSummary, viewerId?: number): boolean {

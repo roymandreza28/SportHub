@@ -14,6 +14,7 @@ import { useChatUI } from '../../lib/ChatUIContext'
 import { Avatar } from './Avatar'
 import { IconMinimize } from './icons'
 import { conversationAvatarUrl, conversationTitle } from '../social/ConversationList'
+import { ConversationRowMenu } from '../social/ConversationRowMenu'
 import { ConversationWindow } from '../social/ConversationWindow'
 
 // Green while they're within the ~90s online window (see isUserOnline()),
@@ -72,56 +73,90 @@ function FloatingChatWindow({
 
   const title = conversationTitle(conversation, user?.id)
   const otherParticipant = conversation.type === 'direct' ? conversation.participants.find((p) => p.id !== user?.id) : null
+  const avatarUrl = conversationAvatarUrl(conversation, user?.id)
+
+  const showBubble = minimized && !fullScreen
+  const online = otherParticipant ? isUserOnline(otherParticipant.last_seen_at) : false
 
   return (
-    <div
-      className={
-        fullScreen
-          ? 'flex h-full w-full flex-col overflow-hidden bg-white'
-          : `flex w-80 flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl ${minimized ? '' : 'h-96'}`
-      }
-    >
-      <div className="flex shrink-0 items-center justify-between gap-2 bg-teal-600 px-3 py-2 text-pure-white">
-        {otherParticipant ? (
-          <Link to={`/profile/${otherParticipant.id}`} className="flex min-w-0 items-center gap-2 hover:opacity-90">
-            <Avatar name={title} url={conversationAvatarUrl(conversation, user?.id)} size="sm" />
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold">{title}</span>
-              <StatusLine blockedByOther={conversation.blocked_by_other} lastSeenAt={otherParticipant.last_seen_at} />
-            </span>
-          </Link>
-        ) : (
-          <span className="flex min-w-0 items-center gap-2">
-            <Avatar name={title} url={null} size="sm" />
-            <span className="truncate text-sm font-semibold">{title}</span>
-          </span>
+    <>
+      {/* Real Messenger's own minimized state: not a collapsed header bar,
+          but the conversation shrinking down to just its round avatar
+          bubble (photo, or Avatar's own first-initial fallback when
+          there's no photo — see Avatar.tsx). A sibling of the full window
+          below, not a replacement for it — see that div's own comment on
+          why both stay mounted at once. */}
+      <button
+        onClick={onToggleMinimize}
+        aria-label={`Expand chat with ${title}`}
+        className={`relative shrink-0 rounded-full shadow-2xl transition hover:scale-105 ${showBubble ? '' : 'hidden'}`}
+      >
+        <Avatar name={title} url={avatarUrl} size="lg" className="ring-2 ring-white" />
+        {otherParticipant && (
+          <span
+            className={`absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white ${
+              conversation.blocked_by_other ? 'bg-red-500' : online ? 'bg-green-500' : 'bg-slate-300'
+            }`}
+          />
         )}
-        <div className="flex shrink-0 items-center gap-1">
-          {!fullScreen && onToggleMinimize && (
+      </button>
+
+      <div
+        className={`${showBubble ? 'hidden' : 'flex'} ${
+          fullScreen
+            ? 'h-full w-full flex-col overflow-hidden bg-white'
+            : 'h-96 w-80 flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl'
+        }`}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-2 bg-teal-600 px-3 py-2 text-pure-white">
+          <div className="flex min-w-0 items-center gap-2">
+            {/* The avatar image still opens the profile (only meaningful for
+                a direct conversation — a group has no single profile to go
+                to); the NAME next to it is its own trigger now, opening the
+                same options list ConversationRowMenu shows from the
+                conversation list row (Mark as read/Mute/Archive/Delete/
+                Block/Report), reachable here too instead of only there. */}
+            {otherParticipant ? (
+              <Link to={`/profile/${otherParticipant.id}`} aria-label={`View ${title}'s profile`} className="shrink-0 hover:opacity-90">
+                <Avatar name={title} url={avatarUrl} size="sm" />
+              </Link>
+            ) : (
+              <Avatar name={title} url={null} size="sm" />
+            )}
+            <div className="min-w-0">
+              <ConversationRowMenu conversation={conversation} variant="inline" />
+              {otherParticipant && (
+                <StatusLine blockedByOther={conversation.blocked_by_other} lastSeenAt={otherParticipant.last_seen_at} />
+              )}
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {!fullScreen && onToggleMinimize && (
+              <button
+                onClick={onToggleMinimize}
+                aria-label={`Minimize chat with ${title}`}
+                className="flex h-6 w-6 items-center justify-center rounded-full text-pure-white/70 transition hover:bg-teal-700 hover:text-pure-white"
+              >
+                <IconMinimize className="h-3.5 w-3.5" />
+              </button>
+            )}
             <button
-              onClick={onToggleMinimize}
-              aria-label={minimized ? `Expand chat with ${title}` : `Minimize chat with ${title}`}
+              onClick={onClose}
+              aria-label={`Close chat with ${title}`}
               className="flex h-6 w-6 items-center justify-center rounded-full text-pure-white/70 transition hover:bg-teal-700 hover:text-pure-white"
             >
-              <IconMinimize className="h-3.5 w-3.5" />
+              ×
             </button>
-          )}
-          <button
-            onClick={onClose}
-            aria-label={`Close chat with ${title}`}
-            className="flex h-6 w-6 items-center justify-center rounded-full text-pure-white/70 transition hover:bg-teal-700 hover:text-pure-white"
-          >
-            ×
-          </button>
+          </div>
+        </div>
+        {/* Always mounted, even while the bubble above is what's actually
+            showing — an in-progress draft in the composer shouldn't vanish
+            just because the window got minimized, same as real Messenger. */}
+        <div className="min-h-0 flex-1">
+          <ConversationWindow conversation={conversation} />
         </div>
       </div>
-      {/* Hidden (kept mounted), not unmounted, while minimized — an
-          in-progress draft in the composer shouldn't vanish just because
-          the window got collapsed, same as real Messenger. */}
-      <div className={`min-h-0 flex-1 ${minimized ? 'hidden' : ''}`}>
-        <ConversationWindow conversation={conversation} />
-      </div>
-    </div>
+    </>
   )
 }
 
