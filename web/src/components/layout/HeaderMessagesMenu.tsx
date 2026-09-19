@@ -10,7 +10,7 @@ import { NewConversationModal } from '../social/NewConversationModal'
 import { ColleagueDirectoryModal } from '../social/ColleagueDirectoryModal'
 import { IconMessageCircle, IconSearch, IconX } from './icons'
 
-type FilterTab = 'all' | 'unread' | 'groups'
+type FilterTab = 'all' | 'unread' | 'groups' | 'archived'
 
 export function HeaderMessagesMenu() {
   const { user, hasRole } = useAuth()
@@ -38,7 +38,16 @@ export function HeaderMessagesMenu() {
   // "inside" there, same as it always has on desktop.
   const panelRef = useRef<HTMLDivElement>(null)
 
-  const { data: conversations } = useQuery({ queryKey: ['social', 'conversations'], queryFn: fetchConversations })
+  const { data: conversations } = useQuery({ queryKey: ['social', 'conversations'], queryFn: () => fetchConversations() })
+  // Archived is its own separate list (same key prefix as above, so both
+  // refresh together whenever ConversationRowMenu's actions invalidate
+  // ['social', 'conversations']) — fetched only once the tab is actually
+  // opened rather than on every render of this menu.
+  const { data: archivedConversations } = useQuery({
+    queryKey: ['social', 'conversations', 'archived'],
+    queryFn: () => fetchConversations({ archived: true }),
+    enabled: tab === 'archived',
+  })
 
   useEffect(() => {
     if (!open) return
@@ -56,9 +65,12 @@ export function HeaderMessagesMenu() {
 
   const unreadCount = (conversations ?? []).filter((c) => isConversationUnread(c, user?.id)).length
 
-  const filtered = (conversations ?? [])
-    .filter((c) => (tab === 'unread' ? isConversationUnread(c, user?.id) : tab === 'groups' ? c.type === 'group' : true))
-    .filter((c) => conversationTitle(c, user?.id).toLowerCase().includes(search.toLowerCase()))
+  const filtered =
+    tab === 'archived'
+      ? (archivedConversations ?? []).filter((c) => conversationTitle(c, user?.id).toLowerCase().includes(search.toLowerCase()))
+      : (conversations ?? [])
+          .filter((c) => (tab === 'unread' ? isConversationUnread(c, user?.id) : tab === 'groups' ? c.type === 'group' : true))
+          .filter((c) => conversationTitle(c, user?.id).toLowerCase().includes(search.toLowerCase()))
 
   function handleSelect(conversationId: number) {
     openChatWindow(conversationId)
@@ -119,7 +131,7 @@ export function HeaderMessagesMenu() {
       </div>
 
       <div className="flex shrink-0 gap-2 px-4 pb-1 pt-3">
-        {(['all', 'unread', 'groups'] as const).map((t) => (
+        {(['all', 'unread', 'groups', 'archived'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}

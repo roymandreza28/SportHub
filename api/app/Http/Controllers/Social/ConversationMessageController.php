@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Support\Broadcasting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ConversationMessageController extends Controller
 {
@@ -20,6 +21,15 @@ class ConversationMessageController extends Controller
     public function store(Request $request, Conversation $conversation)
     {
         $this->authorize('sendMessage', $conversation);
+
+        // Blocked is stored on whichever participant's own row set it (see
+        // ConversationController::block()) — either side blocking silences
+        // both directions in a direct conversation, so this checks the
+        // WHOLE pivot for the thread, not just the sender's own row.
+        if ($conversation->type === 'direct') {
+            $blocked = $conversation->participants()->wherePivotNotNull('blocked_at')->exists();
+            abort_if($blocked, 403, 'You can\'t send messages in this conversation.');
+        }
 
         $data = $request->validate([
             // Either a caption or a photo (e.g. a GCash down-payment
@@ -37,6 +47,14 @@ class ConversationMessageController extends Controller
                 ? $request->file('attachment')->store('conversations/'.$conversation->id, 'public')
                 : null,
         ]);
+
+        // New activity un-hides/un-archives the thread for EVERY
+        // participant (including the sender, if they'd archived their own
+        // copy) — mirrors Messenger: archiving or deleting a chat only
+        // holds until something new happens in it.
+        DB::table('conversation_participants')
+            ->where('conversation_id', $conversation->id)
+            ->update(['archived_at' => null, 'hidden_at' => null]);
 
         $message->load('user:id,name');
 

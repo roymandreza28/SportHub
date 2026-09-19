@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useId, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { fetchMessages, sendMessage, type ConversationMessageItem, type ConversationSummary } from '../../lib/chatApi'
 import { useAuth } from '../../lib/AuthContext'
@@ -24,10 +24,28 @@ function AttachmentPreview({ file, onRemove }: { file: File; onRemove: () => voi
 // in a plain stacked list rather than colored bubbles, since there's no
 // back-and-forth to visually separate yet. The moment the admin replies,
 // AdminChatThread below takes over permanently for this conversation.
-function AdminSupportComposer({ conversationId, messages }: { conversationId: number; messages: ConversationMessageItem[] }) {
+function AdminSupportComposer({
+  conversationId,
+  messages,
+  blocked,
+}: {
+  conversationId: number
+  messages: ConversationMessageItem[]
+  blocked: boolean
+}) {
   const [body, setBody] = useState('')
   const [attachment, setAttachment] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Unique per mounted instance (not derived from conversationId) — the
+  // SAME conversation can have two ConversationWindows mounted at once
+  // (FloatingChatWindows renders both a mobile full-screen variant and a
+  // desktop corner-stack variant simultaneously, toggling which is visible
+  // via CSS breakpoints rather than only mounting one). A conversationId-
+  // based id collided across both instances, so `<label for>` always
+  // resolved to whichever instance's input came first in the DOM — often
+  // the CSS-hidden one — meaning the visible attach button silently picked
+  // a file nobody could see land anywhere, and Send stayed disabled.
+  const attachmentInputId = useId()
 
   const mutation = useMutation({
     mutationFn: () => sendMessage(conversationId, body, attachment ?? undefined),
@@ -71,35 +89,41 @@ function AdminSupportComposer({ conversationId, messages }: { conversationId: nu
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2 border-t border-slate-100 p-3">
-        {attachment && <AttachmentPreview file={attachment} onRemove={() => setAttachment(null)} />}
-        <textarea
-          placeholder="Describe your issue..."
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={4}
-          className={textarea}
-        />
-        <div className="flex items-center justify-between gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
-            className="hidden"
-            id={`admin-attachment-input-${conversationId}`}
+      {blocked ? (
+        <p className="border-t border-slate-100 p-3 text-center text-xs text-slate-400">
+          You can't send messages in this conversation.
+        </p>
+      ) : (
+        <form onSubmit={handleSubmit} className="flex flex-col gap-2 border-t border-slate-100 p-3">
+          {attachment && <AttachmentPreview file={attachment} onRemove={() => setAttachment(null)} />}
+          <textarea
+            placeholder="Describe your issue..."
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            rows={4}
+            className={textarea}
           />
-          <label
-            htmlFor={`admin-attachment-input-${conversationId}`}
-            className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700"
-          >
-            <IconImage className="h-4 w-4" /> Attach a photo
-          </label>
-          <button type="submit" disabled={mutation.isPending || (!body.trim() && !attachment)} className={buttonPrimary}>
-            {mutation.isPending ? 'Sending...' : 'Send'}
-          </button>
-        </div>
-      </form>
+          <div className="flex items-center justify-between gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
+              className="hidden"
+              id={attachmentInputId}
+            />
+            <label
+              htmlFor={attachmentInputId}
+              className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700"
+            >
+              <IconImage className="h-4 w-4" /> Attach a photo
+            </label>
+            <button type="submit" disabled={mutation.isPending || (!body.trim() && !attachment)} className={buttonPrimary}>
+              {mutation.isPending ? 'Sending...' : 'Send'}
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   )
 }
@@ -108,15 +132,21 @@ function AdminChatThread({
   conversationId,
   messages,
   adminParticipantId,
+  blocked,
 }: {
   conversationId: number
   messages: ConversationMessageItem[]
   adminParticipantId: number | undefined
+  blocked: boolean
 }) {
   const { user } = useAuth()
   const [body, setBody] = useState('')
   const [attachment, setAttachment] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // See AdminSupportComposer's own comment on this — a conversationId-based
+  // id collided across the two ConversationWindow instances FloatingChatWindows
+  // keeps simultaneously mounted (mobile full-screen + desktop corner-stack).
+  const attachmentInputId = useId()
 
   const mutation = useMutation({
     mutationFn: () => sendMessage(conversationId, body, attachment ?? undefined),
@@ -157,40 +187,46 @@ function AdminChatThread({
           </div>
         ))}
       </div>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-1.5 border-t border-slate-100 p-2">
-        {attachment && <AttachmentPreview file={attachment} onRemove={() => setAttachment(null)} />}
-        <div className="flex gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
-            className="hidden"
-            id={`attachment-input-${conversationId}`}
-          />
-          <label
-            htmlFor={`attachment-input-${conversationId}`}
-            aria-label="Attach a photo"
-            className="flex shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 px-2.5 text-slate-500 hover:bg-slate-50"
-          >
-            <IconImage className="h-4 w-4" />
-          </label>
-          <input
-            type="text"
-            placeholder="Type a message..."
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            className={`${input} flex-1`}
-          />
-          <button
-            type="submit"
-            disabled={mutation.isPending || (!body.trim() && !attachment)}
-            className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-pure-white hover:bg-teal-700 disabled:opacity-50"
-          >
-            Send
-          </button>
-        </div>
-      </form>
+      {blocked ? (
+        <p className="border-t border-slate-100 p-3 text-center text-xs text-slate-400">
+          You can't send messages in this conversation.
+        </p>
+      ) : (
+        <form onSubmit={handleSubmit} className="flex flex-col gap-1.5 border-t border-slate-100 p-2">
+          {attachment && <AttachmentPreview file={attachment} onRemove={() => setAttachment(null)} />}
+          <div className="flex gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
+              className="hidden"
+              id={attachmentInputId}
+            />
+            <label
+              htmlFor={attachmentInputId}
+              aria-label="Attach a photo"
+              className="flex shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 px-2.5 text-slate-500 hover:bg-slate-50"
+            >
+              <IconImage className="h-4 w-4" />
+            </label>
+            <input
+              type="text"
+              placeholder="Type a message..."
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              className={`${input} flex-1`}
+            />
+            <button
+              type="submit"
+              disabled={mutation.isPending || (!body.trim() && !attachment)}
+              className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-pure-white hover:bg-teal-700 disabled:opacity-50"
+            >
+              Send
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   )
 }
@@ -216,9 +252,13 @@ export function ConversationWindow({ conversation }: { conversation: Conversatio
   const adminParticipant = otherParticipant?.is_admin ? otherParticipant : undefined
   const adminHasReplied = adminParticipant ? messages.some((m) => m.user.id === adminParticipant.id) : false
 
+  const blocked = !!conversation.pivot.blocked_at
+
   if (adminParticipant && !adminHasReplied) {
-    return <AdminSupportComposer conversationId={conversationId} messages={messages} />
+    return <AdminSupportComposer conversationId={conversationId} messages={messages} blocked={blocked} />
   }
 
-  return <AdminChatThread conversationId={conversationId} messages={messages} adminParticipantId={adminParticipant?.id} />
+  return (
+    <AdminChatThread conversationId={conversationId} messages={messages} adminParticipantId={adminParticipant?.id} blocked={blocked} />
+  )
 }

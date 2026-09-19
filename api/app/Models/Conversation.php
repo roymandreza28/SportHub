@@ -34,7 +34,8 @@ class Conversation extends Model
     public function participants(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'conversation_participants')
-            ->withPivot('joined_at', 'last_read_at');
+            ->using(ConversationParticipant::class)
+            ->withPivot('joined_at', 'last_read_at', 'muted_until', 'archived_at', 'hidden_at', 'blocked_at');
     }
 
     public function messages(): HasMany

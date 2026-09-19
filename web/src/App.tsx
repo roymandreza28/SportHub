@@ -8,6 +8,7 @@ import { ProtectedRoute } from './lib/ProtectedRoute'
 import { GuestRoute } from './lib/GuestRoute'
 import { FloatingChatWindows } from './components/layout/FloatingChatWindows'
 import { GlobalChatListener } from './components/layout/GlobalChatListener'
+import { HeartbeatPulse } from './components/layout/HeartbeatPulse'
 import { PushNotificationsBootstrap } from './components/layout/PushNotificationsBootstrap'
 import { LoadingScreen } from './components/layout/LoadingScreen'
 import { LandingPage } from './pages/LandingPage'
@@ -39,6 +40,7 @@ function App() {
         <AuthProvider>
           <ChatUIProvider>
             <GlobalChatListener />
+            <HeartbeatPulse />
             <PushNotificationsBootstrap />
             <BrowserRouter>
               <FloatingChatWindows />

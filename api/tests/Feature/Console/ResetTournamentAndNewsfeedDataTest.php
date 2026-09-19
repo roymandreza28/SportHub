@@ -10,6 +10,7 @@ use App\Models\MatchmakingRequest;
 use App\Models\News;
 use App\Models\PlayerProfile;
 use App\Models\Post;
+use App\Models\PostMedia;
 use App\Models\Sport;
 use App\Models\SportFormat;
 use App\Models\Team;
@@ -55,7 +56,8 @@ it('clears tournament/team/matchmaking/newsfeed/social data while leaving venues
     \Illuminate\Support\Facades\DB::table('conversation_participants')->insert([
         'conversation_id' => $conversation->id, 'user_id' => $player->id, 'joined_at' => now(), 'created_at' => now(), 'updated_at' => now(),
     ]);
-    Post::create(['user_id' => $player->id, 'image_path' => 'x.jpg']);
+    $post = Post::create(['user_id' => $player->id]);
+    $post->media()->create(['path' => 'x.jpg', 'position' => 0]);
     \Illuminate\Support\Facades\DB::table('notifications')->insert([
         'user_id' => $player->id, 'type' => 'test', 'data' => json_encode(['x' => 1]), 'created_at' => now(), 'updated_at' => now(),
     ]);
@@ -75,6 +77,7 @@ it('clears tournament/team/matchmaking/newsfeed/social data while leaving venues
     expect(Conversation::count())->toBe(0);
     expect(\Illuminate\Support\Facades\DB::table('conversation_participants')->count())->toBe(0);
     expect(Post::count())->toBe(0);
+    expect(PostMedia::count())->toBe(0);
     expect(\Illuminate\Support\Facades\DB::table('notifications')->count())->toBe(0);
 
     // Untouched.

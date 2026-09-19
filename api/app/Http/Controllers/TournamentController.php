@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MatchEvent;
 use App\Models\MatchPlayerStat;
 use App\Models\Sport;
 use App\Models\SportFormat;
@@ -13,7 +14,9 @@ use App\Services\NotificationService;
 use App\Support\CsvExport;
 use App\Support\NewsMediaStorage;
 use App\Support\PlayerStatFieldSets;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -377,15 +380,20 @@ class TournamentController extends Controller
     }
 
     // The "complete bracketing result with full statistical detail" export —
-    // one row per match (both sides side by side, same as the bracket view
-    // itself), with each side's individual MatchPlayerStat rows folded into
-    // a readable "Name: key=value, key=value" string per
-    // PlayerStatFieldSets' labels. A team match's whole roster performance
-    // stays on one row instead of exploding the CSV into one row per
-    // player — exportPlayerRankings() below is the per-player view.
-    public function exportResults(Tournament $tournament): StreamedResponse
+    // a PDF report (not CSV, since this is meant to be read/printed, not
+    // opened in a spreadsheet) covering every match grouped by round, each
+    // with both sides' scores, a per-player stats table, and a chronological
+    // point-by-point match log built from MatchEvent, followed by a full
+    // player-rankings leaderboard (via the same computePlayerRankings() the
+    // CSV rankings export below uses, so the two never drift apart).
+    // DomPDF (pure PHP, no headless-Chrome/Node binary) is used specifically
+    // because Render's free-tier deploy has repeatedly proven fragile with
+    // anything requiring an extra system binary.
+    public function exportResults(Tournament $tournament): Response
     {
         $this->authorize('export', $tournament);
+
+        $tournament->load(['sport', 'venue', 'organizer', 'sportFormat', 'champion', 'championTeam']);
 
         $matches = $tournament->bracket
             ?->matches()
@@ -399,67 +407,845 @@ class TournamentController extends Controller
             ->orderBy('id')
             ->get() ?? collect();
 
-        $fieldLabels = collect(PlayerStatFieldSets::for($tournament->sport->name) ?? [])->pluck('label', 'key');
+        $fields = PlayerStatFieldSets::for($tournament->sport->name) ?? [];
+        $fieldLabels = collect($fields)->pluck('label', 'key');
 
         $statsByMatch = MatchPlayerStat::whereIn('match_id', $matches->pluck('id'))
             ->with('user:id,name')
             ->get()
             ->groupBy('match_id');
 
-        $describe = fn (array $stats) => collect($stats)
-            ->map(fn ($value, $key) => ($fieldLabels[$key] ?? $key).'='.$value)
-            ->implode(', ');
+        $eventsByMatch = MatchEvent::whereIn('match_id', $matches->pluck('id'))
+            ->orderBy('created_at')
+            ->get()
+            ->groupBy('match_id');
 
-        $rows = $matches->map(function ($match) use ($statsByMatch, $describe) {
-            $matchStats = $statsByMatch->get($match->id, collect());
-
-            if ($match->participant_a_team_id) {
-                $nameA = $match->participantATeam?->name;
-                $statsA = $matchStats->where('team_id', $match->participant_a_team_id)
-                    ->map(fn ($s) => ($s->user?->name ?? 'Player').': '.$describe($s->stats ?? []))
-                    ->implode(' | ');
-            } else {
-                $nameA = $match->participantA?->name;
-                $statA = $matchStats->firstWhere('user_id', $match->participant_a_id);
-                $statsA = $statA ? $describe($statA->stats ?? []) : '';
+        $roundLabel = function ($match) {
+            if ($match->bracket_type === 'final') {
+                return 'Grand Final';
+            }
+            if ($match->group_number !== null) {
+                return 'Group '.($match->group_number + 1).' — Round '.$match->round;
+            }
+            if ($match->bracket_type && $match->bracket_type !== 'main') {
+                return ucfirst($match->bracket_type).' Bracket — Round '.$match->round;
             }
 
-            if ($match->participant_b_team_id) {
-                $nameB = $match->participantBTeam?->name;
-                $statsB = $matchStats->where('team_id', $match->participant_b_team_id)
-                    ->map(fn ($s) => ($s->user?->name ?? 'Player').': '.$describe($s->stats ?? []))
-                    ->implode(' | ');
-            } else {
-                $nameB = $match->participantB?->name;
-                $statB = $matchStats->firstWhere('user_id', $match->participant_b_id);
-                $statsB = $statB ? $describe($statB->stats ?? []) : '';
+            return 'Round '.$match->round;
+        };
+
+        $matchesByRound = $matches
+            ->groupBy($roundLabel)
+            ->map(fn ($roundMatches) => $roundMatches->map(
+                fn ($match) => $this->describeMatchForReport($match, $statsByMatch, $eventsByMatch)
+            ));
+
+        // The visual bracket display — one builder per format, each
+        // mirroring BracketView.tsx's own layout for that format as closely
+        // as a static PDF can (see each builder's own comment for specifics):
+        // single_elimination is one clean tree; double_elimination gets the
+        // full picture (winners bracket, losers bracket, and the grand
+        // final); swiss gets round columns sub-divided into record buckets
+        // with lines tracing each player's previous match; round_robin gets
+        // plain round columns with no connectors (round_robin has no
+        // bracket to advance through — see BracketService::advanceWinner()'s
+        // own comment); group_stage gets both a standings card per group
+        // AND, once knockout play has started, the same tree treatment as
+        // single_elimination (a group_stage knockout match is structurally
+        // identical to one — see BracketView.tsx's own isTreeRound comment).
+        $bracketTree = match (true) {
+            $tournament->format === 'single_elimination' && $matches->whereNull('group_number')->isNotEmpty()
+                => $this->buildEliminationTree($matches->whereNull('group_number')),
+            $tournament->format === 'double_elimination' => $this->buildDoubleEliminationTree($matches),
+            $tournament->format === 'swiss' => $this->buildSwissTree($matches),
+            $tournament->format === 'round_robin' => $this->buildRoundRobinLayout($matches),
+            $tournament->format === 'group_stage' && $matches->whereNull('group_number')->isNotEmpty()
+                => $this->buildEliminationTree($matches->whereNull('group_number')),
+            default => null,
+        };
+
+        $groupStandings = $tournament->format === 'group_stage'
+            ? $this->computeGroupStandingsForReport($matches->whereNotNull('group_number'))
+            : null;
+
+        ['primaryKey' => $primaryKey, 'ranked' => $ranked] = $this->computePlayerRankings($tournament, $matches->pluck('id'));
+
+        $rankings = $ranked->map(function ($entry) use ($primaryKey) {
+            $primaryTotal = $primaryKey ? $entry['totals'][$primaryKey] : null;
+            $gamesPlayed = $entry['games_played'];
+
+            return [
+                'player' => $entry['user']?->name ?? 'Unknown',
+                'team' => $entry['team']?->name ?: 'Individual',
+                'games' => $gamesPlayed,
+                'primary_total' => $primaryTotal,
+                'per_game' => $primaryTotal !== null && $gamesPlayed > 0 ? round($primaryTotal / $gamesPlayed, 2) : '—',
+                'totals' => $entry['totals'],
+            ];
+        })->values()->all();
+
+        $pdf = Pdf::loadView('pdf.tournament-report', [
+            'tournament' => $tournament,
+            'bracketTree' => $bracketTree,
+            'groupStandings' => $groupStandings,
+            'matchesByRound' => $matchesByRound,
+            'fieldLabels' => $fieldLabels,
+            'rankings' => $rankings,
+            'primaryStatLabel' => $primaryKey ? ($fieldLabels[$primaryKey] ?? $primaryKey) : 'Primary Stat',
+            // Landscape (not the rest of the report's natural portrait) —
+            // a bracket tree needs real horizontal room for its round
+            // columns, and there's no reliable way to mix page orientations
+            // within one DomPDF document.
+        ])->setPaper('a4', 'landscape');
+
+        $filename = 'tournament-'.$tournament->id.'-full-report-'.now()->format('Y-m-d').'.pdf';
+
+        return $pdf->download($filename);
+    }
+
+    // One match's worth of report data: both sides' names/scores, the
+    // per-player stat rows recorded for it, and its chronological
+    // point-by-point log (built from MatchEvent's 'point' events — the same
+    // events MatchController writes on every score update, win-by-default,
+    // and best-of-sets set change).
+    private function describeMatchForReport($match, $statsByMatch, $eventsByMatch): array
+    {
+        [$nameA, $nameB] = $this->matchSideNames($match);
+
+        $stats = $statsByMatch->get($match->id, collect())->map(function ($s) use ($match, $nameA, $nameB) {
+            $side = $s->team_id
+                ? ($s->team_id === $match->participant_a_team_id ? $nameA : $nameB)
+                : ($s->user_id === $match->participant_a_id ? $nameA : $nameB);
+
+            return ['player' => $s->user?->name ?? 'Player', 'side' => $side, 'values' => $s->stats ?? []];
+        })->values()->all();
+
+        $log = $eventsByMatch->get($match->id, collect())->map(function ($event) {
+            $payload = $event->payload ?? [];
+            $score = (array_key_exists('score_a', $payload) || array_key_exists('score_b', $payload))
+                ? ($payload['score_a'] ?? '—').' - '.($payload['score_b'] ?? '—')
+                : '—';
+
+            $noteParts = [];
+            if (! empty($payload['period_label'])) {
+                $noteParts[] = $payload['period_label'];
+            }
+            if (isset($payload['clock_seconds_remaining'])) {
+                $noteParts[] = gmdate('i:s', (int) $payload['clock_seconds_remaining']).' remaining';
+            }
+            if (! empty($payload['sets'])) {
+                $noteParts[] = 'Sets: '.collect($payload['sets'])
+                    ->map(fn ($set) => ($set['score_a'] ?? '?').'-'.($set['score_b'] ?? '?'))
+                    ->implode(', ');
+            }
+            if (! empty($payload['won_by_default'])) {
+                $noteParts[] = 'Won by default'.(isset($payload['winner_side']) ? ' ('.strtoupper($payload['winner_side']).')' : '');
             }
 
             return [
-                $match->round,
-                $match->bracket_type ?: 'main',
-                $match->group_number !== null ? $match->group_number + 1 : '',
-                $match->status,
-                $match->scheduled_at?->toIso8601String(),
-                $match->court?->name,
-                $nameA,
-                $match->score_a,
-                $nameB,
-                $match->score_b,
-                $match->won_by_default ? 'Yes' : 'No',
-                $match->winner_team_id ? $match->winnerTeam?->name : $match->winner?->name,
-                $statsA,
-                $statsB,
+                'time' => $event->created_at?->format('g:i:s A'),
+                'score' => $score,
+                'note' => $noteParts ? implode(' · ', $noteParts) : '—',
             ];
-        });
+        })->values()->all();
 
-        $filename = 'tournament-'.$tournament->id.'-full-results-'.now()->format('Y-m-d').'.csv';
+        return [
+            'name_a' => $nameA ?: 'TBD',
+            'name_b' => $nameB ?: 'TBD',
+            'score_a' => $match->score_a,
+            'score_b' => $match->score_b,
+            'status' => ucfirst(str_replace('_', ' ', $match->status)),
+            'court' => $match->court?->name,
+            'scheduled_at' => $match->scheduled_at?->format('M j, Y g:i A'),
+            'winner' => $match->winner_team_id ? $match->winnerTeam?->name : $match->winner?->name,
+            'won_by_default' => (bool) $match->won_by_default,
+            'stats' => $stats,
+            'log' => $log,
+        ];
+    }
 
-        return CsvExport::download($filename, [
-            'Round', 'Bracket', 'Group', 'Status', 'Scheduled At', 'Court',
-            'Side A', 'Score A', 'Side B', 'Score B', 'Won By Default', 'Winner',
-            'Side A Player Stats', 'Side B Player Stats',
-        ], $rows);
+    // Both sides' display names for one match — a team match shows the
+    // team's name, an individual match shows the participant's own name.
+    // Shared by describeMatchForReport() and buildEliminationTree() so the
+    // two never show a match under different names.
+    private function matchSideNames($match): array
+    {
+        return [
+            ($match->participant_a_team_id ? $match->participantATeam?->name : $match->participantA?->name) ?: 'TBD',
+            ($match->participant_b_team_id ? $match->participantBTeam?->name : $match->participantB?->name) ?: 'TBD',
+        ];
+    }
+
+    // 'a', 'b', or null (not yet decided) — whichever side the recorded
+    // winner (team or individual) corresponds to, for bolding the winning
+    // side in the bracket tree.
+    private function matchWinnerSide($match): ?string
+    {
+        if ($match->participant_a_team_id || $match->participant_b_team_id) {
+            return match ($match->winner_team_id) {
+                null => null,
+                $match->participant_a_team_id => 'a',
+                default => 'b',
+            };
+        }
+
+        return match ($match->winner_id) {
+            null => null,
+            $match->participant_a_id => 'a',
+            default => 'b',
+        };
+    }
+
+    // Both sides' raw ids (team id for a team match, participant id
+    // otherwise) — used wherever a match needs to be tied to a PLAYER
+    // identity rather than a display name (Swiss's per-player connector
+    // tracing, a group's standings table).
+    private function matchSideIds($match): array
+    {
+        return [
+            $match->participant_a_team_id ?: $match->participant_a_id,
+            $match->participant_b_team_id ?: $match->participant_b_id,
+        ];
+    }
+
+    private function matchWinnerId($match): ?int
+    {
+        return $match->winner_team_id ?: $match->winner_id;
+    }
+
+    // Shared box geometry — see buildEliminationTree()'s own comment for
+    // why these are pixel-positioned instead of table rowspans.
+    private const BRACKET_ROW_HEIGHT = 56;
+
+    private const BRACKET_BOX_WIDTH = 185;
+
+    private const BRACKET_BOX_HEIGHT = 46;
+
+    private const BRACKET_CONNECTOR_WIDTH = 40;
+
+    private const BRACKET_LABEL_HEIGHT = 20;
+
+    // One round's worth of boxes, evenly distributed (not merely stacked)
+    // across $trackHeight — for a track whose round sizes are a clean
+    // power-of-two halving (single_elimination, or double_elimination's
+    // winners bracket), this is mathematically identical to centering each
+    // box exactly between the two boxes that feed it; for an irregular
+    // track (the losers bracket, whose round sizes don't halve cleanly —
+    // see BracketService::losersBracketRoundSize()) it still spaces every
+    // round out across the SAME shared height, the same "stretch every
+    // round-column to the tallest one" effect BracketView.tsx gets for free
+    // from its own `items-stretch` + `justify-around` flex layout.
+    private function layoutBracketRound($roundMatches, float $x, float $trackHeight, float $yOffset): array
+    {
+        $count = $roundMatches->count();
+        $slot = $count > 0 ? $trackHeight / $count : $trackHeight;
+        $boxes = [];
+
+        foreach ($roundMatches->values() as $i => $match) {
+            $centerY = $slot * ($i + 0.5) + $yOffset;
+            [$nameA, $nameB] = $this->matchSideNames($match);
+            $decided = $match->status === 'completed' || $match->won_by_default;
+
+            $boxes[] = [
+                'match_id' => $match->id,
+                'x' => $x,
+                'top' => $centerY - self::BRACKET_BOX_HEIGHT / 2,
+                'center_y' => $centerY,
+                'name_a' => $nameA,
+                'name_b' => $nameB,
+                'score_a' => $decided ? $match->score_a : null,
+                'score_b' => $decided ? $match->score_b : null,
+                'winner_side' => $this->matchWinnerSide($match),
+            ];
+        }
+
+        return $boxes;
+    }
+
+    // One SVG document (batched, not one <img> per line) containing every
+    // connector as a 3-segment elbow path from a box's right edge into its
+    // target's left edge — embedded as a base64 data-URI <img>, since
+    // DomPDF has no reliable way to draw vector lines from inline `<svg>`
+    // markup (verified empirically against this project's installed
+    // dompdf/php-svg-lib: it only engages through <img>/background-image,
+    // never inline <svg> in the HTML body — an <svg> written directly into
+    // the page silently renders nothing). $edges are {from, to, dashed} —
+    // 'from'/'to' are match ids, resolved here against $boxByMatchId.
+    private function buildConnectorImage(array $edges, array $boxByMatchId, float $width, float $height): string
+    {
+        $paths = [];
+
+        foreach ($edges as $edge) {
+            $from = $boxByMatchId[$edge['from']] ?? null;
+            $to = $boxByMatchId[$edge['to']] ?? null;
+            if (! $from || ! $to) {
+                continue;
+            }
+
+            $fromX = $from['x'] + self::BRACKET_BOX_WIDTH;
+            $fromY = $from['center_y'];
+            $toX = $to['x'];
+            $toY = $to['center_y'];
+            $midX = ($fromX + $toX) / 2;
+
+            // Amber + dashed marks a LOSER dropping into the losers bracket
+            // (mirrors BracketView.tsx's own dashed/amber treatment for the
+            // same relationship) — every other connector is a winner
+            // advancing, drawn solid teal.
+            $color = $edge['dashed'] ? '#fbbf24' : '#5eead4';
+            $dash = $edge['dashed'] ? ' stroke-dasharray="4 3"' : '';
+
+            $paths[] = '<path d="M '.$fromX.' '.$fromY.' L '.$midX.' '.$fromY.' L '.$midX.' '.$toY.' L '.$toX.' '.$toY.'"'
+                .' fill="none" stroke="'.$color.'" stroke-width="2"'.$dash.'/>';
+        }
+
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="'.$width.'" height="'.$height.'">'.implode('', $paths).'</svg>';
+
+        return 'data:image/svg+xml;base64,'.base64_encode($svg);
+    }
+
+    private function eliminationRoundLabel(int $roundIndex, int $totalRounds): string
+    {
+        return match ($totalRounds - $roundIndex) {
+            0 => 'Final',
+            1 => 'Semifinal',
+            2 => 'Quarterfinal',
+            default => 'Round '.$roundIndex,
+        };
+    }
+
+    // single_elimination's visual bracket tree: one clean track, left to
+    // right, connected by BracketService::advanceWinner()'s own
+    // round[i*2]/[i*2+1] -> round+1[i] adjacency.
+    private function buildEliminationTree($matches): array
+    {
+        $columnWidth = self::BRACKET_BOX_WIDTH + self::BRACKET_CONNECTOR_WIDTH;
+
+        $byRound = $matches->groupBy('round')->values();
+        $totalRounds = $byRound->count();
+        $trackHeight = max($byRound->first()?->count() ?? 0, 1) * self::BRACKET_ROW_HEIGHT;
+
+        $labels = [];
+        $boxes = [];
+        $boxByMatchId = [];
+
+        foreach ($byRound as $idx => $roundMatches) {
+            $x = $idx * $columnWidth;
+            $labels[] = ['x' => $x, 'y' => 0, 'width' => self::BRACKET_BOX_WIDTH, 'text' => $this->eliminationRoundLabel($idx + 1, $totalRounds)];
+
+            foreach ($this->layoutBracketRound($roundMatches, $x, $trackHeight, self::BRACKET_LABEL_HEIGHT) as $box) {
+                $boxes[] = $box;
+                $boxByMatchId[$box['match_id']] = $box;
+            }
+        }
+
+        $edges = [];
+        foreach ($byRound as $idx => $roundMatches) {
+            $nextRound = $byRound->get($idx + 1);
+            if (! $nextRound) {
+                continue;
+            }
+            foreach ($roundMatches->values() as $j => $match) {
+                $target = $nextRound->values()->get(intdiv($j, 2));
+                if ($target) {
+                    $edges[] = ['from' => $match->id, 'to' => $target->id, 'dashed' => false];
+                }
+            }
+        }
+
+        $width = $totalRounds > 0 ? ($totalRounds - 1) * $columnWidth + self::BRACKET_BOX_WIDTH : 0;
+        $height = $trackHeight + self::BRACKET_LABEL_HEIGHT;
+
+        return [
+            'width' => $width,
+            'height' => $height,
+            'box_width' => self::BRACKET_BOX_WIDTH,
+            'box_height' => self::BRACKET_BOX_HEIGHT,
+            'connector_image' => $this->buildConnectorImage($edges, $boxByMatchId, $width, $height),
+            'labels' => $labels,
+            'boxes' => $boxes,
+        ];
+    }
+
+    // double_elimination's full picture: the winners bracket AND the
+    // losers bracket (stacked, both left-aligned) plus the grand final off
+    // to the right — the same three-part layout BracketView.tsx's own
+    // isDoubleElimination branch renders. Returns null only if there's no
+    // winners bracket at all (bracket generation failed partway through).
+    private function buildDoubleEliminationTree($matches): ?array
+    {
+        $columnWidth = self::BRACKET_BOX_WIDTH + self::BRACKET_CONNECTOR_WIDTH;
+        $trackTitleHeight = 16;
+        $trackGap = 26;
+
+        $wbByRound = $matches->where('bracket_type', 'winners')->groupBy('round')->sortKeys()->values();
+        $lbByRound = $matches->where('bracket_type', 'losers')->groupBy('round')->sortKeys()->values();
+        $finalMatch = $matches->first(fn ($m) => $m->bracket_type === 'final');
+
+        if ($wbByRound->isEmpty()) {
+            return null;
+        }
+
+        $labels = [];
+        $boxes = [];
+        $boxByMatchId = [];
+
+        $wbTrackHeight = ($wbByRound->map->count()->max() ?? 1) * self::BRACKET_ROW_HEIGHT;
+        $wbTotalRounds = $wbByRound->count();
+        $wbTopY = $trackTitleHeight + self::BRACKET_LABEL_HEIGHT;
+        $wbWidth = $wbTotalRounds > 0 ? ($wbTotalRounds - 1) * $columnWidth + self::BRACKET_BOX_WIDTH : 0;
+
+        $labels[] = ['x' => 0, 'y' => 0, 'width' => $wbWidth, 'text' => 'Winners Bracket', 'color' => '#0d9488'];
+        foreach ($wbByRound as $idx => $roundMatches) {
+            $x = $idx * $columnWidth;
+            $label = $idx === $wbTotalRounds - 1 ? 'WB Final' : $this->eliminationRoundLabel($idx + 1, $wbTotalRounds);
+            $labels[] = ['x' => $x, 'y' => $trackTitleHeight, 'width' => self::BRACKET_BOX_WIDTH, 'text' => $label];
+
+            foreach ($this->layoutBracketRound($roundMatches, $x, $wbTrackHeight, $wbTopY) as $box) {
+                $boxes[] = $box;
+                $boxByMatchId[$box['match_id']] = $box;
+            }
+        }
+
+        $lbWidth = 0;
+        $lbTrackHeight = 0;
+        if ($lbByRound->isNotEmpty()) {
+            $lbTrackHeight = ($lbByRound->map->count()->max() ?? 1) * self::BRACKET_ROW_HEIGHT;
+            $lbTotalRounds = $lbByRound->count();
+            $lbTrackY = $wbTopY + $wbTrackHeight + $trackGap;
+            $lbTopY = $lbTrackY + $trackTitleHeight + self::BRACKET_LABEL_HEIGHT;
+            $lbWidth = $lbTotalRounds > 0 ? ($lbTotalRounds - 1) * $columnWidth + self::BRACKET_BOX_WIDTH : 0;
+
+            $labels[] = ['x' => 0, 'y' => $lbTrackY, 'width' => $lbWidth, 'text' => 'Losers Bracket', 'color' => '#b45309'];
+            foreach ($lbByRound as $idx => $roundMatches) {
+                $x = $idx * $columnWidth;
+                $label = $idx === $lbTotalRounds - 1 ? 'LB Final' : 'LB Round '.($idx + 1);
+                $labels[] = ['x' => $x, 'y' => $lbTrackY + $trackTitleHeight, 'width' => self::BRACKET_BOX_WIDTH, 'text' => $label];
+
+                foreach ($this->layoutBracketRound($roundMatches, $x, $lbTrackHeight, $lbTopY) as $box) {
+                    $boxes[] = $box;
+                    $boxByMatchId[$box['match_id']] = $box;
+                }
+            }
+        }
+
+        $leftWidth = max($wbWidth, $lbWidth);
+        $leftHeight = $wbTopY + $wbTrackHeight + ($lbByRound->isNotEmpty() ? $trackGap + $trackTitleHeight + self::BRACKET_LABEL_HEIGHT + $lbTrackHeight : 0);
+
+        $totalWidth = $leftWidth;
+        if ($finalMatch) {
+            $finalX = $leftWidth + self::BRACKET_CONNECTOR_WIDTH;
+            $centerY = $leftHeight / 2;
+            [$nameA, $nameB] = $this->matchSideNames($finalMatch);
+            $decided = $finalMatch->status === 'completed' || $finalMatch->won_by_default;
+
+            $finalBox = [
+                'match_id' => $finalMatch->id,
+                'x' => $finalX,
+                'top' => $centerY - self::BRACKET_BOX_HEIGHT / 2,
+                'center_y' => $centerY,
+                'name_a' => $nameA,
+                'name_b' => $nameB,
+                'score_a' => $decided ? $finalMatch->score_a : null,
+                'score_b' => $decided ? $finalMatch->score_b : null,
+                'winner_side' => $this->matchWinnerSide($finalMatch),
+            ];
+            $boxes[] = $finalBox;
+            $boxByMatchId[$finalBox['match_id']] = $finalBox;
+            $labels[] = [
+                'x' => $finalX, 'y' => max($centerY - self::BRACKET_BOX_HEIGHT / 2 - self::BRACKET_LABEL_HEIGHT, 0),
+                'width' => self::BRACKET_BOX_WIDTH, 'text' => 'Grand Final', 'color' => '#7e22ce',
+            ];
+            $totalWidth = $finalX + self::BRACKET_BOX_WIDTH;
+        }
+
+        $edges = $this->computeDoubleEliminationEdges($wbByRound, $lbByRound, $finalMatch);
+
+        return [
+            'width' => $totalWidth,
+            'height' => $leftHeight,
+            'box_width' => self::BRACKET_BOX_WIDTH,
+            'box_height' => self::BRACKET_BOX_HEIGHT,
+            'connector_image' => $this->buildConnectorImage($edges, $boxByMatchId, $totalWidth, $leftHeight),
+            'labels' => $labels,
+            'boxes' => $boxes,
+        ];
+    }
+
+    // Direct port of BracketView.tsx's computeDoubleEliminationConnectors()
+    // — same three rules, same order: (1) a winners-bracket round's winner
+    // advances to the next WB round, or the grand final once there's no
+    // next WB round; (2) a WB round's LOSER drops into the losers bracket —
+    // round 1's two losers pair up directly at LB round 1, a later round's
+    // single loser instead joins the "merge" LB round 100+2*(wbRound-1) at
+    // its own bracket_position; (3) a losers-bracket round's winner feeds
+    // the next LB round (odd->even at the same position, even->odd at
+    // floor(position/2) — see BracketService::advanceDoubleEliminationLosers()),
+    // or the grand final once there's no next LB round. Kept in lockstep
+    // with the frontend on purpose: this is what makes the drawn lines
+    // match what actually happens when a result is reported, not just a
+    // visual approximation of one.
+    private function computeDoubleEliminationEdges($wbRounds, $lbRounds, $finalMatch): array
+    {
+        $wbRounds = $wbRounds->values();
+        $lbRounds = $lbRounds->values();
+        $edges = [];
+
+        foreach ($wbRounds as $i => $round) {
+            $nextRound = $wbRounds->get($i + 1);
+            if ($nextRound) {
+                foreach ($round->values() as $j => $m) {
+                    $target = $nextRound->values()->get(intdiv($j, 2));
+                    if ($target) {
+                        $edges[] = ['from' => $m->id, 'to' => $target->id, 'dashed' => false];
+                    }
+                }
+            } elseif ($finalMatch) {
+                foreach ($round as $m) {
+                    $edges[] = ['from' => $m->id, 'to' => $finalMatch->id, 'dashed' => false];
+                }
+            }
+        }
+
+        foreach ($wbRounds as $i => $round) {
+            $wbRoundNumber = $i + 1;
+            if ($wbRoundNumber === 1) {
+                $lbRound1 = $lbRounds->get(0);
+                if (! $lbRound1) {
+                    continue;
+                }
+                foreach ($round->values() as $j => $m) {
+                    $target = $lbRound1->first(fn ($lm) => $lm->bracket_position === intdiv($j, 2));
+                    if ($target) {
+                        $edges[] = ['from' => $m->id, 'to' => $target->id, 'dashed' => true];
+                    }
+                }
+            } else {
+                $lbRound = $lbRounds->first(fn ($r) => $r->first() && $r->first()->round === 100 + 2 * ($wbRoundNumber - 1));
+                if (! $lbRound) {
+                    continue;
+                }
+                foreach ($round->values() as $j => $m) {
+                    $target = $lbRound->first(fn ($lm) => $lm->bracket_position === $j);
+                    if ($target) {
+                        $edges[] = ['from' => $m->id, 'to' => $target->id, 'dashed' => true];
+                    }
+                }
+            }
+        }
+
+        foreach ($lbRounds as $i => $round) {
+            $lbRoundNumber = $i + 1;
+            $isLast = $i === $lbRounds->count() - 1;
+            if ($isLast) {
+                if ($finalMatch) {
+                    foreach ($round as $m) {
+                        $edges[] = ['from' => $m->id, 'to' => $finalMatch->id, 'dashed' => false];
+                    }
+                }
+
+                continue;
+            }
+
+            $nextRound = $lbRounds->get($i + 1);
+            if (! $nextRound) {
+                continue;
+            }
+
+            if ($lbRoundNumber % 2 === 1) {
+                foreach ($round as $m) {
+                    $target = $nextRound->first(fn ($lm) => $lm->bracket_position === $m->bracket_position);
+                    if ($target) {
+                        $edges[] = ['from' => $m->id, 'to' => $target->id, 'dashed' => false];
+                    }
+                }
+            } else {
+                foreach ($round as $m) {
+                    $nextPos = intdiv($m->bracket_position ?? 0, 2);
+                    $target = $nextRound->first(fn ($lm) => $lm->bracket_position === $nextPos);
+                    if ($target) {
+                        $edges[] = ['from' => $m->id, 'to' => $target->id, 'dashed' => false];
+                    }
+                }
+            }
+        }
+
+        return $edges;
+    }
+
+    // round_robin's visual: plain round columns, no connectors at all —
+    // round_robin has no bracket to advance through (a result only affects
+    // a standings row, never routes anyone into a "next match" — see
+    // BracketService::advanceWinner()'s own comment on this), so unlike
+    // every other format's tree there is nothing here to draw a line
+    // between. Reuses the exact same {width, height, box_width, box_height,
+    // connector_image, labels, boxes} shape every other builder returns
+    // (connector_image is just an empty SVG) so the Blade template's
+    // bracket-wrap markup stays identical across every format.
+    private function buildRoundRobinLayout($matches): ?array
+    {
+        $columnWidth = self::BRACKET_BOX_WIDTH + 30;
+
+        $byRound = $matches->groupBy('round')->sortKeys()->values();
+        if ($byRound->isEmpty()) {
+            return null;
+        }
+
+        $labels = [];
+        $boxes = [];
+        $maxBottom = 0;
+
+        foreach ($byRound as $idx => $roundMatches) {
+            $x = $idx * $columnWidth;
+            $labels[] = ['x' => $x, 'y' => 0, 'width' => self::BRACKET_BOX_WIDTH, 'text' => 'Round '.($idx + 1)];
+
+            foreach ($roundMatches->values() as $i => $match) {
+                $top = self::BRACKET_LABEL_HEIGHT + $i * self::BRACKET_ROW_HEIGHT;
+                [$nameA, $nameB] = $this->matchSideNames($match);
+                $decided = $match->status === 'completed' || $match->won_by_default;
+
+                $boxes[] = [
+                    'match_id' => $match->id,
+                    'x' => $x,
+                    'top' => $top,
+                    'center_y' => $top + self::BRACKET_BOX_HEIGHT / 2,
+                    'name_a' => $nameA,
+                    'name_b' => $nameB,
+                    'score_a' => $decided ? $match->score_a : null,
+                    'score_b' => $decided ? $match->score_b : null,
+                    'winner_side' => $this->matchWinnerSide($match),
+                ];
+                $maxBottom = max($maxBottom, $top + self::BRACKET_BOX_HEIGHT);
+            }
+        }
+
+        $width = $byRound->count() > 0 ? ($byRound->count() - 1) * $columnWidth + self::BRACKET_BOX_WIDTH : 0;
+        $height = $maxBottom + 10;
+
+        return [
+            'width' => $width,
+            'height' => $height,
+            'box_width' => self::BRACKET_BOX_WIDTH,
+            'box_height' => self::BRACKET_BOX_HEIGHT,
+            'connector_image' => $this->buildConnectorImage([], [], $width, $height),
+            'labels' => $labels,
+            'boxes' => $boxes,
+        ];
+    }
+
+    // swiss's visual: one column per round, each sub-divided into labeled
+    // "record" buckets (the record a player carried INTO that round — same
+    // grouping BracketView.tsx's own computeSwissRecordBuckets() derives
+    // from the match results already on hand), connected round-to-round by
+    // a plain line tracing each PLAYER's previous match — not an
+    // advancement rule the way every other format's connectors are (swiss
+    // pairing can pair a player with anyone still fresh each round, so
+    // there's no fixed topology to encode), a direct port of
+    // computeSwissConnectors()'s own "this player's previous game was
+    // here" re-derivation. A round-1 match has no previous round, so it's
+    // simply unconnected, same as the web version.
+    private function buildSwissTree($matches): ?array
+    {
+        $swissMatches = $matches->where('bracket_type', 'swiss');
+        if ($swissMatches->isEmpty()) {
+            return null;
+        }
+
+        $columnWidth = self::BRACKET_BOX_WIDTH + 34;
+        $bucketHeaderHeight = 14;
+        $bucketGap = 8;
+        $matchGap = 8;
+
+        $rounds = $swissMatches->pluck('round')->unique()->sort()->values();
+        $record = []; // player/team id => ['wins' => int, 'losses' => int]
+        // A plain closure with an explicit by-reference `use`, not a `fn`
+        // arrow function — `fn` captures $record BY VALUE at the moment
+        // this closure is created, so every call would keep reading the
+        // empty array from before the loop even started, never the tallies
+        // folded in after each round.
+        $recordLabel = function ($id) use (&$record) {
+            return ($record[$id]['wins'] ?? 0).'-'.($record[$id]['losses'] ?? 0);
+        };
+
+        $labels = [];
+        $boxes = [];
+        $boxByMatchId = [];
+        $edges = [];
+        $maxBottom = 0;
+        $prevRoundMatches = null;
+
+        foreach ($rounds as $roundIdx => $round) {
+            $roundMatches = $swissMatches->where('round', $round)->sortBy('id')->values();
+            $x = $roundIdx * $columnWidth;
+            $labels[] = ['x' => $x, 'y' => 0, 'width' => self::BRACKET_BOX_WIDTH, 'text' => 'Round '.$round];
+
+            // Same-record matches grouped together, most-wins bucket first
+            // (mirrors the reference layout's top-to-bottom order).
+            $byLabel = [];
+            foreach ($roundMatches as $match) {
+                [$idA] = $this->matchSideIds($match);
+                $label = $idA !== null ? $recordLabel($idA) : 'TBD';
+                $byLabel[$label][] = $match;
+            }
+            $bucketLabels = array_keys($byLabel);
+            usort($bucketLabels, fn ($a, $b) => (int) strtok($b, '-') <=> (int) strtok($a, '-'));
+
+            $y = self::BRACKET_LABEL_HEIGHT;
+            foreach ($bucketLabels as $label) {
+                $labels[] = [
+                    'x' => $x, 'y' => $y, 'width' => self::BRACKET_BOX_WIDTH, 'text' => $label,
+                    'color' => '#0d9488', 'bucket' => true,
+                ];
+                $y += $bucketHeaderHeight;
+
+                foreach ($byLabel[$label] as $match) {
+                    [$nameA, $nameB] = $this->matchSideNames($match);
+                    $decided = $match->status === 'completed' || $match->won_by_default;
+
+                    $box = [
+                        'match_id' => $match->id,
+                        'x' => $x,
+                        'top' => $y,
+                        'center_y' => $y + self::BRACKET_BOX_HEIGHT / 2,
+                        'name_a' => $nameA,
+                        'name_b' => $nameB,
+                        'score_a' => $decided ? $match->score_a : null,
+                        'score_b' => $decided ? $match->score_b : null,
+                        'winner_side' => $this->matchWinnerSide($match),
+                    ];
+                    $boxes[] = $box;
+                    $boxByMatchId[$box['match_id']] = $box;
+                    $y += self::BRACKET_BOX_HEIGHT + $matchGap;
+                }
+
+                $y += $bucketGap;
+            }
+            $maxBottom = max($maxBottom, $y);
+
+            if ($prevRoundMatches) {
+                $lastMatchByParticipant = [];
+                foreach ($prevRoundMatches as $pm) {
+                    foreach ($this->matchSideIds($pm) as $pid) {
+                        if ($pid) {
+                            $lastMatchByParticipant[$pid] = $pm;
+                        }
+                    }
+                }
+
+                $seen = [];
+                foreach ($roundMatches as $match) {
+                    foreach ($this->matchSideIds($match) as $pid) {
+                        if (! $pid || ! isset($lastMatchByParticipant[$pid])) {
+                            continue;
+                        }
+                        $prevMatch = $lastMatchByParticipant[$pid];
+                        $key = $prevMatch->id.'-'.$match->id;
+                        if (isset($seen[$key])) {
+                            continue;
+                        }
+                        $seen[$key] = true;
+                        $edges[] = ['from' => $prevMatch->id, 'to' => $match->id, 'dashed' => false];
+                    }
+                }
+            }
+
+            // Fold this round's actual results into the running tally
+            // before the NEXT round's bucket labels are computed.
+            foreach ($roundMatches as $match) {
+                if ($match->status !== 'completed') {
+                    continue;
+                }
+                $winnerId = $this->matchWinnerId($match);
+                foreach ($this->matchSideIds($match) as $pid) {
+                    if (! $pid) {
+                        continue;
+                    }
+                    $record[$pid] ??= ['wins' => 0, 'losses' => 0];
+                    if ($winnerId === $pid) {
+                        $record[$pid]['wins']++;
+                    } elseif ($winnerId) {
+                        $record[$pid]['losses']++;
+                    }
+                }
+            }
+
+            $prevRoundMatches = $roundMatches;
+        }
+
+        $width = $rounds->count() > 0 ? ($rounds->count() - 1) * $columnWidth + self::BRACKET_BOX_WIDTH : 0;
+        $height = $maxBottom + 10;
+
+        return [
+            'width' => $width,
+            'height' => $height,
+            'box_width' => self::BRACKET_BOX_WIDTH,
+            'box_height' => self::BRACKET_BOX_HEIGHT,
+            'connector_image' => $this->buildConnectorImage($edges, $boxByMatchId, $width, $height),
+            'labels' => $labels,
+            'boxes' => $boxes,
+        ];
+    }
+
+    // group_stage's standings cards — one per group, ranked by the exact
+    // same rule BracketService::rankGroup() uses to decide who really
+    // advances (wins, then score differential, then total scored — see its
+    // own doc comment), so the highlighted "advancing" rows here are never
+    // just a display approximation. $groupMatches is every match with a
+    // group_number set, across every group.
+    private function computeGroupStandingsForReport($groupMatches): array
+    {
+        // Mirrors BracketService::ADVANCE_PER_GROUP (private to that
+        // class, so duplicated here rather than reflected out) — the
+        // qualifier count group_stage's knockout draw actually seeds from
+        // each group.
+        $advancePerGroup = 2;
+
+        return $groupMatches->groupBy('group_number')->sortKeys()->map(function ($matches, $groupNumber) use ($advancePerGroup) {
+            $names = [];
+            $stats = [];
+
+            foreach ($matches as $match) {
+                [$idA, $idB] = $this->matchSideIds($match);
+                [$nameA, $nameB] = $this->matchSideNames($match);
+                if ($idA) {
+                    $names[$idA] = $nameA;
+                }
+                if ($idB) {
+                    $names[$idB] = $nameB;
+                }
+
+                foreach ([[$idA, $match->score_a, $match->score_b], [$idB, $match->score_b, $match->score_a]] as [$id, $for, $against]) {
+                    if (! $id) {
+                        continue;
+                    }
+                    $stats[$id] ??= ['id' => $id, 'wins' => 0, 'for' => 0, 'against' => 0];
+                    $stats[$id]['for'] += $for ?? 0;
+                    $stats[$id]['against'] += $against ?? 0;
+                }
+
+                $winnerId = $this->matchWinnerId($match);
+                if ($winnerId && isset($stats[$winnerId])) {
+                    $stats[$winnerId]['wins']++;
+                }
+            }
+
+            $ranked = collect($stats)->sort(fn ($a, $b) => $b['wins'] <=> $a['wins']
+                ?: ($b['for'] - $b['against']) <=> ($a['for'] - $a['against'])
+                ?: $b['for'] <=> $a['for']
+            )->values();
+
+            return [
+                'label' => 'Group '.chr(65 + $groupNumber),
+                'advance_count' => $advancePerGroup,
+                'standings' => $ranked->map(fn ($s) => [
+                    'name' => $names[$s['id']] ?? 'Unknown',
+                    'wins' => $s['wins'],
+                    'for' => $s['for'],
+                    'against' => $s['against'],
+                    'diff' => $s['for'] - $s['against'],
+                ])->all(),
+            ];
+        })->values()->all();
     }
 
     // The "ranking" export — every player who recorded at least one stat
@@ -475,37 +1261,7 @@ class TournamentController extends Controller
         $this->authorize('export', $tournament);
 
         $matchIds = $tournament->bracket?->matches()->pluck('id') ?? collect();
-        $fields = PlayerStatFieldSets::for($tournament->sport->name) ?? [];
-        $primaryKey = $fields[0]['key'] ?? null;
-
-        $stats = MatchPlayerStat::whereIn('match_id', $matchIds)
-            ->with(['user:id,name', 'team:id,name'])
-            ->get();
-
-        $byPlayer = $stats->groupBy('user_id')->map(function ($rows) use ($fields) {
-            $totals = array_fill_keys(array_column($fields, 'key'), 0);
-            foreach ($rows as $row) {
-                foreach ($row->stats ?? [] as $key => $value) {
-                    if (array_key_exists($key, $totals)) {
-                        $totals[$key] += (float) $value;
-                    }
-                }
-            }
-
-            return [
-                'user' => $rows->first()->user,
-                // A player who switched teams mid-tournament (the roster/
-                // registration flow doesn't forbid it) shows whichever team
-                // their most recent stat row was recorded under.
-                'team' => $rows->sortByDesc('created_at')->first()->team,
-                'games_played' => $rows->pluck('match_id')->unique()->count(),
-                'totals' => $totals,
-            ];
-        });
-
-        $ranked = $byPlayer
-            ->sortByDesc(fn ($p) => $primaryKey ? $p['totals'][$primaryKey] : array_sum($p['totals']))
-            ->values();
+        ['fields' => $fields, 'primaryKey' => $primaryKey, 'ranked' => $ranked] = $this->computePlayerRankings($tournament, $matchIds);
 
         $fieldLabels = collect($fields)->pluck('label', 'key');
 
@@ -538,6 +1294,50 @@ class TournamentController extends Controller
         }
 
         return CsvExport::download($filename, $headers, $rows);
+    }
+
+    // Shared player-ranking aggregation — used by both exportPlayerRankings()
+    // above (CSV) and exportResults()'s PDF rankings section, so the two
+    // never drift apart. $matchIds may be any collection/array of match IDs
+    // to include (both callers pass every match in the tournament's
+    // bracket). Returns individual PLAYERS ranked by the sport's primary
+    // stat — never grouped by team, since the point is finding the
+    // best-performing player, not the winning team.
+    private function computePlayerRankings(Tournament $tournament, $matchIds): array
+    {
+        $fields = PlayerStatFieldSets::for($tournament->sport->name) ?? [];
+        $primaryKey = $fields[0]['key'] ?? null;
+
+        $stats = MatchPlayerStat::whereIn('match_id', $matchIds)
+            ->with(['user:id,name', 'team:id,name'])
+            ->get();
+
+        $byPlayer = $stats->groupBy('user_id')->map(function ($rows) use ($fields) {
+            $totals = array_fill_keys(array_column($fields, 'key'), 0);
+            foreach ($rows as $row) {
+                foreach ($row->stats ?? [] as $key => $value) {
+                    if (array_key_exists($key, $totals)) {
+                        $totals[$key] += (float) $value;
+                    }
+                }
+            }
+
+            return [
+                'user' => $rows->first()->user,
+                // A player who switched teams mid-tournament (the roster/
+                // registration flow doesn't forbid it) shows whichever team
+                // their most recent stat row was recorded under.
+                'team' => $rows->sortByDesc('created_at')->first()->team,
+                'games_played' => $rows->pluck('match_id')->unique()->count(),
+                'totals' => $totals,
+            ];
+        });
+
+        $ranked = $byPlayer
+            ->sortByDesc(fn ($p) => $primaryKey ? $p['totals'][$primaryKey] : array_sum($p['totals']))
+            ->values();
+
+        return ['fields' => $fields, 'primaryKey' => $primaryKey, 'ranked' => $ranked];
     }
 
     public function bracket(Tournament $tournament, BracketService $bracketService)

@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Social;
 
+use App\Events\ConversationMessageSent;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\User;
 use App\Services\BookingConversationCleanupService;
+use App\Support\Broadcasting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -17,15 +19,39 @@ class ConversationController extends Controller
     {
         BookingConversationCleanupService::run();
 
+        // Archived and hidden ("deleted for me") threads are both excluded
+        // from the normal list by default — ?archived=1 flips to showing
+        // ONLY the archived ones (their own separate view, same as
+        // Messenger's Archived Chats list), which never includes a hidden
+        // one either. There's no "show hidden" view at all — same as
+        // Messenger, a deleted chat has no recovery UI; it just silently
+        // reappears the next time someone sends a new message into it (see
+        // ConversationMessageController::store()).
+        $showArchived = $request->boolean('archived');
+
         return $request->user()->conversations()
+            ->wherePivotNull('hidden_at')
+            // Not .when(...)->wherePivotNull(...) — a when() callback
+            // receives the plain underlying query builder, not the
+            // BelongsToMany relation, so wherePivotNull() inside one
+            // resolves through Eloquent's magic dynamic-where parser
+            // instead of the real pivot-aware method, silently building a
+            // nonsense `where "pivot_null" = 'archived_at'` clause. Plain
+            // whereNull/whereNotNull against the fully-qualified pivot
+            // column name works fine on that same raw builder.
+            ->when(
+                $showArchived,
+                fn ($q) => $q->whereNotNull('conversation_participants.archived_at'),
+                fn ($q) => $q->whereNull('conversation_participants.archived_at')
+            )
             ->with([
-                'participants:id,name,avatar_path',
+                'participants:id,name,avatar_path,last_seen_at',
                 'participants.roles:name',
                 'messages' => fn ($q) => $q->latest()->limit(1),
                 'messages.user:id,name',
             ])
             ->get()
-            ->each(fn (Conversation $c) => $this->flagAdminParticipants($c))
+            ->each(fn (Conversation $c) => $this->decorateConversation($c, $request->user()->id))
             ->sortByDesc(fn (Conversation $c) => $c->messages->first()?->created_at ?? $c->created_at)
             ->values();
     }
@@ -53,7 +79,7 @@ class ConversationController extends Controller
 
             $conversation = $this->directConversationWith($user, User::findOrFail($otherId));
 
-            return response()->json($this->loadParticipants($conversation), 201);
+            return response()->json($this->loadParticipants($conversation, $user->id), 201);
         }
 
         $participantIds = collect($data['participant_ids'])->map(fn ($id) => (int) $id);
@@ -68,7 +94,7 @@ class ConversationController extends Controller
 
         $conversation->participants()->attach($participantIds->push($user->id)->unique());
 
-        return response()->json($this->loadParticipants($conversation), 201);
+        return response()->json($this->loadParticipants($conversation, $user->id), 201);
     }
 
     // The "FAQ" button in the settings dropdown for every role except admin
@@ -90,7 +116,7 @@ class ConversationController extends Controller
 
         $conversation = $this->directConversationWith($user, $admin);
 
-        return response()->json($this->loadParticipants($conversation), 201);
+        return response()->json($this->loadParticipants($conversation, $user->id), 201);
     }
 
     // The organizer, venue_organizer, and livestream_organizer roles have no
@@ -135,7 +161,7 @@ class ConversationController extends Controller
 
         $conversation = $this->directConversationWith($user, $colleague);
 
-        return response()->json($this->loadParticipants($conversation), 201);
+        return response()->json($this->loadParticipants($conversation, $user->id), 201);
     }
 
     // Shared by store()'s direct branch, contactAdmin(), and
@@ -168,6 +194,108 @@ class ConversationController extends Controller
         return response()->noContent();
     }
 
+    // Mute/archive/hide/block are all per-VIEWER flags on the requester's
+    // own conversation_participants row — never something that affects the
+    // other participant's own view of the same conversation.
+    public function mute(Request $request, Conversation $conversation)
+    {
+        $this->authorize('manageParticipation', $conversation);
+
+        $data = $request->validate(['duration' => ['required', 'in:15m,1h,8h,24h,forever,off']]);
+
+        // A single nullable timestamp column covers every duration,
+        // including "until I turn it back on" — stored as a far-future
+        // timestamp rather than needing a second boolean column. `off`
+        // (unmute) just clears it.
+        $mutedUntil = match ($data['duration']) {
+            '15m' => now()->addMinutes(15),
+            '1h' => now()->addHour(),
+            '8h' => now()->addHours(8),
+            '24h' => now()->addDay(),
+            'forever' => now()->addYears(50),
+            'off' => null,
+        };
+
+        $conversation->participants()->updateExistingPivot($request->user()->id, ['muted_until' => $mutedUntil]);
+
+        return response()->json(['muted_until' => $mutedUntil?->toIso8601String()]);
+    }
+
+    public function archive(Request $request, Conversation $conversation)
+    {
+        $this->authorize('manageParticipation', $conversation);
+
+        $data = $request->validate(['archived' => ['required', 'boolean']]);
+
+        $conversation->participants()->updateExistingPivot($request->user()->id, [
+            'archived_at' => $data['archived'] ? now() : null,
+        ]);
+
+        return response()->noContent();
+    }
+
+    // "Delete" in the UI — Messenger-style: clears the thread from the
+    // requester's own list only, and (see ConversationMessageController::
+    // store()'s own comment) reappears there the next time anyone sends a
+    // new message into it, same as archiving does. Never touches the
+    // conversation or the other participant's row.
+    public function hide(Request $request, Conversation $conversation)
+    {
+        $this->authorize('manageParticipation', $conversation);
+
+        $conversation->participants()->updateExistingPivot($request->user()->id, ['hidden_at' => now()]);
+
+        return response()->noContent();
+    }
+
+    // Conversation-scoped, not account-wide — blocks further messages in
+    // THIS thread only (checked from either side in ConversationMessageController::
+    // store()), without touching the friendship/matchmaking system. Direct
+    // conversations only; "block" has no obvious meaning against a whole
+    // group.
+    public function block(Request $request, Conversation $conversation)
+    {
+        $this->authorize('manageParticipation', $conversation);
+        abort_unless($conversation->type === 'direct', 422, 'Only a direct conversation can be blocked.');
+
+        $conversation->participants()->updateExistingPivot($request->user()->id, ['blocked_at' => now()]);
+
+        return response()->noContent();
+    }
+
+    // No admin moderation inbox exists in this app yet — reusing the same
+    // "Contact admin" thread contactAdmin() already creates/reuses is the
+    // only place a report can actually reach a human today, rather than
+    // writing to a table nobody has a screen to read from.
+    public function report(Request $request, Conversation $conversation)
+    {
+        $this->authorize('manageParticipation', $conversation);
+
+        $data = $request->validate(['reason' => ['required', 'string', 'max:1000']]);
+
+        $user = $request->user();
+        $admin = User::role('admin')->orderBy('id')->first();
+        abort_unless($admin, 503, 'Support is not available right now.');
+        abort_if($user->id === $admin->id, 422, 'You are the admin.');
+
+        $adminThread = $this->directConversationWith($user, $admin);
+
+        $otherParticipant = $conversation->participants()->where('users.id', '!=', $user->id)->first();
+        $subject = $conversation->type === 'group'
+            ? 'the group "'.($conversation->name ?: 'Unnamed group').'"'
+            : ($otherParticipant?->name ?? 'a user');
+
+        $message = $adminThread->messages()->create([
+            'user_id' => $user->id,
+            'body' => "\u{26A0} Reported conversation #{$conversation->id} with {$subject}:\n\n{$data['reason']}",
+        ]);
+        $message->load('user:id,name');
+
+        Broadcasting::safely(fn () => ConversationMessageSent::dispatch($message));
+
+        return response()->noContent();
+    }
+
     public function addParticipant(Request $request, Conversation $conversation)
     {
         $this->authorize('addParticipant', $conversation);
@@ -181,7 +309,7 @@ class ConversationController extends Controller
 
         $conversation->participants()->syncWithoutDetaching([$newUserId]);
 
-        return $this->loadParticipants($conversation);
+        return $this->loadParticipants($conversation, $request->user()->id);
     }
 
     // The FAQ conversation's other participant is always whichever admin
@@ -190,19 +318,32 @@ class ConversationController extends Controller
     // label and to switch between the email-style composer (no admin reply
     // yet) and the normal chat thread (see AdminSupportThread.tsx), without
     // exposing which specific admin staff member is handling the thread.
-    private function loadParticipants(Conversation $conversation): Conversation
+    private function loadParticipants(Conversation $conversation, int $viewerId): Conversation
     {
-        $conversation->load(['participants:id,name,avatar_path', 'participants.roles:name']);
+        $conversation->load(['participants:id,name,avatar_path,last_seen_at', 'participants.roles:name']);
 
-        return $this->flagAdminParticipants($conversation);
+        return $this->decorateConversation($conversation, $viewerId);
     }
 
-    private function flagAdminParticipants(Conversation $conversation): Conversation
+    private function decorateConversation(Conversation $conversation, int $viewerId): Conversation
     {
         $conversation->participants->each(function (User $participant) {
             $participant->is_admin = $participant->roles->contains('name', 'admin');
             $participant->makeHidden('roles');
         });
+
+        // True only when someone OTHER than the viewer set the block — the
+        // viewer's own pivot.blocked_at (see ConversationSummary.pivot on
+        // the frontend) already tells them when THEY blocked the other
+        // side; this is the one piece "am I the one who got blocked"
+        // needs that pivot row can never answer on its own, since sending
+        // is silenced from BOTH directions once either side blocks (see
+        // ConversationMessageController::store()).
+        $conversation->blocked_by_other = DB::table('conversation_participants')
+            ->where('conversation_id', $conversation->id)
+            ->where('user_id', '!=', $viewerId)
+            ->whereNotNull('blocked_at')
+            ->exists();
 
         return $conversation;
     }

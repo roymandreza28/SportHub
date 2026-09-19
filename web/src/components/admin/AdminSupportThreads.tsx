@@ -10,7 +10,7 @@ import { ConversationList } from '../social/ConversationList'
 // existing floating chat window (see FloatingChatWindows.tsx) rather than
 // duplicating a whole conversation UI inline.
 export function AdminSupportThreads() {
-  const { data: conversations, isLoading } = useQuery({ queryKey: ['social', 'conversations'], queryFn: fetchConversations })
+  const { data: conversations, isLoading } = useQuery({ queryKey: ['social', 'conversations'], queryFn: () => fetchConversations() })
   const { openChatWindow } = useChatUI()
 
   return (

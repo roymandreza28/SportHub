@@ -233,11 +233,11 @@ export async function generateBracket(tournamentId: number) {
   return data
 }
 
-// Shared by every tournament CSV export below. responseType: 'blob' (not
-// the JSON-export pattern accountApi.ts uses) because the backend
-// genuinely streams CSV text, not a JSON body to re-serialize client-side —
-// the browser just needs to save the response bytes as-is.
-async function downloadCsv(path: string, filename: string): Promise<void> {
+// Shared by every tournament export below. responseType: 'blob' (not the
+// JSON-export pattern accountApi.ts uses) because the backend genuinely
+// streams file bytes (CSV or PDF), not a JSON body to re-serialize
+// client-side — the browser just needs to save the response bytes as-is.
+async function downloadFile(path: string, filename: string): Promise<void> {
   const response = await api.get(path, { responseType: 'blob' })
   const url = URL.createObjectURL(response.data as Blob)
   const link = document.createElement('a')
@@ -252,15 +252,15 @@ async function downloadCsv(path: string, filename: string): Promise<void> {
 // Who's registered — individual players and team rosters, with status and
 // who registered them. Good for a sign-in sheet or a roster cross-check.
 export async function exportTournamentRegistrations(tournamentId: number): Promise<void> {
-  await downloadCsv(`/api/tournaments/${tournamentId}/registrations/export`, `tournament-${tournamentId}-registrations.csv`)
+  await downloadFile(`/api/tournaments/${tournamentId}/registrations/export`, `tournament-${tournamentId}-registrations.csv`)
 }
 
-// The complete bracket result, one row per match (both sides side by
-// side): round, score, court, schedule, and every recorded player's
-// individual stat line for that match — the full "what happened in every
-// game" report.
+// The complete tournament report — a PDF covering every match grouped by
+// round (full bracket results), each with both sides' scores, a per-player
+// stats table, and a chronological point-by-point match log, followed by
+// the full player-rankings leaderboard.
 export async function exportTournamentResults(tournamentId: number): Promise<void> {
-  await downloadCsv(`/api/tournaments/${tournamentId}/results/export`, `tournament-${tournamentId}-full-results.csv`)
+  await downloadFile(`/api/tournaments/${tournamentId}/results/export`, `tournament-${tournamentId}-full-report.pdf`)
 }
 
 // Every player who recorded a stat this tournament, ranked individually by
@@ -268,7 +268,7 @@ export async function exportTournamentResults(tournamentId: number): Promise<voi
 // tournament, where this is the only place to see who the single
 // best-performing PLAYER was, as opposed to which team won.
 export async function exportTournamentPlayerRankings(tournamentId: number): Promise<void> {
-  await downloadCsv(`/api/tournaments/${tournamentId}/rankings/export`, `tournament-${tournamentId}-player-rankings.csv`)
+  await downloadFile(`/api/tournaments/${tournamentId}/rankings/export`, `tournament-${tournamentId}-player-rankings.csv`)
 }
 
 export async function fetchBracket(tournamentId: number) {

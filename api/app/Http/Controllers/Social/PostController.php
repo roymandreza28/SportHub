@@ -16,7 +16,7 @@ class PostController extends Controller
         $target = User::findOrFail($userId);
         abort_unless($target->hasAnyRole(['player', 'coach']), 404);
 
-        return Post::where('user_id', $userId)->latest()->paginate(20);
+        return Post::where('user_id', $userId)->with('media')->latest()->paginate(20);
     }
 
     public function store(Request $request)
@@ -24,26 +24,40 @@ class PostController extends Controller
         $this->authorize('create', Post::class);
 
         $data = $request->validate([
-            'image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            // Instagram-style carousel post — 1 to 10 images, uploaded and
+            // displayed in the order they're attached (position = array
+            // index, same convention as News/NewsMediaStorage).
+            'images' => ['required', 'array', 'min:1', 'max:10'],
+            'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'caption' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $path = $request->file('image')->store('posts/'.$request->user()->id, 'public');
-
         $post = Post::create([
             'user_id' => $request->user()->id,
-            'image_path' => $path,
             'caption' => $data['caption'] ?? null,
         ]);
 
-        return response()->json($post, 201);
+        foreach (array_values($request->file('images')) as $position => $file) {
+            $post->media()->create([
+                'path' => $file->store('posts/'.$request->user()->id, 'public'),
+                'position' => $position,
+            ]);
+        }
+
+        return response()->json($post->load('media'), 201);
     }
 
     public function destroy(Request $request, Post $post)
     {
         $this->authorize('delete', $post);
 
-        Storage::disk('public')->delete($post->image_path);
+        foreach ($post->media as $media) {
+            Storage::disk('public')->delete($media->path);
+        }
+
+        // Cascades to post_media via the FK's onDelete('cascade'), but the
+        // files themselves still need deleting from disk first — the
+        // cascade only drops the DB rows, not the stored images.
         $post->delete();
 
         return response()->noContent();

@@ -38,7 +38,7 @@ class ResetTournamentAndNewsfeedData extends Command
         'skill_levels',         // -> evaluations
         'friendships',
         'conversations',        // -> conversation_participants, conversation_messages
-        'posts',
+        'posts',                // -> post_media
         'notifications',
     ];
 

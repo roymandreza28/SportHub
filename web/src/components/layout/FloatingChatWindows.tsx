@@ -1,20 +1,58 @@
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
-import { fetchConversations, fetchMessages, markConversationRead, type ConversationSummary } from '../../lib/chatApi'
+import {
+  fetchConversations,
+  fetchMessages,
+  isUserOnline,
+  markConversationRead,
+  type ConversationSummary,
+} from '../../lib/chatApi'
+import { formatRelativeTime } from '../../lib/formatRelativeTime'
 import { useAuth } from '../../lib/AuthContext'
 import { useChatUI } from '../../lib/ChatUIContext'
 import { Avatar } from './Avatar'
+import { IconMinimize } from './icons'
 import { conversationAvatarUrl, conversationTitle } from '../social/ConversationList'
 import { ConversationWindow } from '../social/ConversationWindow'
+
+// Green while they're within the ~90s online window (see isUserOnline()),
+// gray once they've aged past it (with "Active {relative} ago" if we at
+// least know when), red if the reason they can't be reached isn't absence
+// at all — they've blocked this conversation (see
+// ConversationSummary.blocked_by_other's own comment on why that's the
+// only direction this can mean "blocked ME", not "I blocked them").
+function StatusLine({ blockedByOther, lastSeenAt }: { blockedByOther: boolean; lastSeenAt: string | null }) {
+  if (blockedByOther) {
+    return (
+      <span className="flex items-center gap-1 text-[11px] text-pure-white/80">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
+        Blocked you
+      </span>
+    )
+  }
+
+  const online = isUserOnline(lastSeenAt)
+
+  return (
+    <span className="flex items-center gap-1 text-[11px] text-pure-white/80">
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${online ? 'bg-green-400' : 'bg-slate-300'}`} />
+      {online ? 'Active now' : lastSeenAt ? `Active ${formatRelativeTime(lastSeenAt)} ago` : 'Offline'}
+    </span>
+  )
+}
 
 function FloatingChatWindow({
   conversation,
   onClose,
+  minimized = false,
+  onToggleMinimize,
   fullScreen = false,
 }: {
   conversation: ConversationSummary
   onClose: () => void
+  minimized?: boolean
+  onToggleMinimize?: () => void
   fullScreen?: boolean
 }) {
   const { user } = useAuth()
@@ -40,14 +78,17 @@ function FloatingChatWindow({
       className={
         fullScreen
           ? 'flex h-full w-full flex-col overflow-hidden bg-white'
-          : 'flex h-96 w-80 flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl'
+          : `flex w-80 flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl ${minimized ? '' : 'h-96'}`
       }
     >
       <div className="flex shrink-0 items-center justify-between gap-2 bg-teal-600 px-3 py-2 text-pure-white">
         {otherParticipant ? (
           <Link to={`/profile/${otherParticipant.id}`} className="flex min-w-0 items-center gap-2 hover:opacity-90">
             <Avatar name={title} url={conversationAvatarUrl(conversation, user?.id)} size="sm" />
-            <span className="truncate text-sm font-semibold">{title}</span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold">{title}</span>
+              <StatusLine blockedByOther={conversation.blocked_by_other} lastSeenAt={otherParticipant.last_seen_at} />
+            </span>
           </Link>
         ) : (
           <span className="flex min-w-0 items-center gap-2">
@@ -55,15 +96,29 @@ function FloatingChatWindow({
             <span className="truncate text-sm font-semibold">{title}</span>
           </span>
         )}
-        <button
-          onClick={onClose}
-          aria-label={`Close chat with ${title}`}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-pure-white/70 transition hover:bg-teal-700 hover:text-pure-white"
-        >
-          ×
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          {!fullScreen && onToggleMinimize && (
+            <button
+              onClick={onToggleMinimize}
+              aria-label={minimized ? `Expand chat with ${title}` : `Minimize chat with ${title}`}
+              className="flex h-6 w-6 items-center justify-center rounded-full text-pure-white/70 transition hover:bg-teal-700 hover:text-pure-white"
+            >
+              <IconMinimize className="h-3.5 w-3.5" />
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            aria-label={`Close chat with ${title}`}
+            className="flex h-6 w-6 items-center justify-center rounded-full text-pure-white/70 transition hover:bg-teal-700 hover:text-pure-white"
+          >
+            ×
+          </button>
+        </div>
       </div>
-      <div className="min-h-0 flex-1">
+      {/* Hidden (kept mounted), not unmounted, while minimized — an
+          in-progress draft in the composer shouldn't vanish just because
+          the window got collapsed, same as real Messenger. */}
+      <div className={`min-h-0 flex-1 ${minimized ? 'hidden' : ''}`}>
         <ConversationWindow conversation={conversation} />
       </div>
     </div>
@@ -72,7 +127,7 @@ function FloatingChatWindow({
 
 export function FloatingChatWindows() {
   const { user, hasRole } = useAuth()
-  const { openWindows, closeChatWindow } = useChatUI()
+  const { openWindows, minimizedIds, closeChatWindow, toggleMinimizeChatWindow } = useChatUI()
   // venue_facilitator included: they can't start chats, but can be dropped
   // into a booking-triggered conversation once a booking is approved.
   // admin/organizer/venue_organizer/livestream_organizer included: none of
@@ -84,7 +139,7 @@ export function FloatingChatWindows() {
 
   const { data: conversations } = useQuery({
     queryKey: ['social', 'conversations'],
-    queryFn: fetchConversations,
+    queryFn: () => fetchConversations(),
     enabled: enabled && openWindows.length > 0,
   })
 
@@ -118,7 +173,15 @@ export function FloatingChatWindows() {
         {openWindows.map((id) => {
           const conversation = conversations?.find((c) => c.id === id)
           if (!conversation) return null
-          return <FloatingChatWindow key={id} conversation={conversation} onClose={() => closeChatWindow(id)} />
+          return (
+            <FloatingChatWindow
+              key={id}
+              conversation={conversation}
+              onClose={() => closeChatWindow(id)}
+              minimized={minimizedIds.includes(id)}
+              onToggleMinimize={() => toggleMinimizeChatWindow(id)}
+            />
+          )
         })}
       </div>
     </>

@@ -88,6 +88,16 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_active' => 'boolean',
             'birthday' => 'date',
+            // A real `datetime` cast, not left as the raw DB string — a
+            // bare "2026-09-19 21:36:39" (no timezone marker) gets
+            // misparsed by every browser's `new Date(...)` as LOCAL time
+            // instead of UTC, which silently shifted a chat "muted until"
+            // timestamp hours into the past for this exact reason earlier
+            // this session (see ConversationParticipant's own comment) —
+            // last_seen_at drives the SAME kind of "is this within the
+            // last 90 seconds" client-side comparison, so it's exactly as
+            // exposed to the same bug without this cast.
+            'last_seen_at' => 'datetime',
         ];
     }
 
@@ -198,6 +208,7 @@ class User extends Authenticatable
     public function conversations(): BelongsToMany
     {
         return $this->belongsToMany(Conversation::class, 'conversation_participants')
-            ->withPivot('joined_at', 'last_read_at');
+            ->using(ConversationParticipant::class)
+            ->withPivot('joined_at', 'last_read_at', 'muted_until', 'archived_at', 'hidden_at', 'blocked_at');
     }
 }

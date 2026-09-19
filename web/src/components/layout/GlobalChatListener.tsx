@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchConversations, type ConversationMessageItem } from '../../lib/chatApi'
+import { fetchConversations, isConversationMuted, type ConversationMessageItem } from '../../lib/chatApi'
 import type { Paginated } from '../../lib/socialApi'
 import { echo } from '../../lib/echo'
 import { useAuth } from '../../lib/AuthContext'
@@ -22,9 +22,17 @@ export function GlobalChatListener() {
 
   const { data: conversations } = useQuery({
     queryKey: ['social', 'conversations'],
-    queryFn: fetchConversations,
+    queryFn: () => fetchConversations(),
     enabled,
   })
+
+  // The channel listener closures below are set up once per idsKey (see the
+  // comment on that below) and never torn down just because mute status
+  // changed — a ref keeps them reading the CURRENT conversations list
+  // (including fresh mute state) without needing to re-subscribe every
+  // channel each time the list refetches.
+  const conversationsRef = useRef(conversations)
+  conversationsRef.current = conversations
 
   // Keyed on the *set* of conversation ids (not the array reference, which
   // changes on every refetch) so an incoming message's own cache
@@ -56,7 +64,9 @@ export function GlobalChatListener() {
         queryClient.invalidateQueries({ queryKey: ['social', 'conversations'] })
 
         if (message.user.id !== user?.id) {
-          openChatWindow(conversationId)
+          const conversation = conversationsRef.current?.find((c) => c.id === conversationId)
+          const muted = conversation ? isConversationMuted(conversation) : false
+          if (!muted) openChatWindow(conversationId)
         }
       })
     })

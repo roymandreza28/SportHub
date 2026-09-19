@@ -319,3 +319,41 @@ export function IconSun(props: IconProps) {
 export function IconMoon(props: IconProps) {
   return base(<path d="M20 14.5a8.5 8.5 0 1 1-9.5-9.4 7 7 0 0 0 9.5 9.4Z" />, props)
 }
+
+export function IconBellOff(props: IconProps) {
+  return base(
+    <>
+      <path d="M4 4l16 16" />
+      <path d="M8.5 5.6A5 5 0 0 1 17 9v3.5c0 .9.3 1.7.8 2.4M6.2 9.3V12.5c0 1-.4 2-1.2 2.7L4 16h11" />
+      <path d="M10 19a2 2 0 0 0 3.5 1.3" />
+    </>,
+    props
+  )
+}
+
+// Instagram's own "this post has more than one photo" badge — two
+// overlapping squares, used on grid tiles for a carousel post.
+export function IconStack(props: IconProps) {
+  return base(
+    <>
+      <rect x="3" y="3" width="13" height="13" rx="2.5" />
+      <path d="M8 21h10a2 2 0 0 0 2-2V9" />
+    </>,
+    props
+  )
+}
+
+export function IconMinimize(props: IconProps) {
+  return base(<path d="M5 12h14" />, props)
+}
+
+export function IconDotsVertical(props: IconProps) {
+  return base(
+    <>
+      <circle cx="12" cy="5" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="19" r="1.1" fill="currentColor" stroke="none" />
+    </>,
+    props
+  )
+}

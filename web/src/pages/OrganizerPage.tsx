@@ -157,7 +157,7 @@ export function OrganizerPage() {
 
   const EXPORT_KIND_LABEL: Record<'registrations' | 'results' | 'rankings', string> = {
     registrations: 'Export registrations',
-    results: 'Export full results',
+    results: 'Export full report',
     rankings: 'Export player rankings',
   }
 
@@ -476,7 +476,7 @@ export function OrganizerPage() {
                       disabled={exportingKind !== null}
                       className={`${buttonSecondary} flex items-center gap-1.5 text-xs`}
                     >
-                      {exportingKind ? `${EXPORT_KIND_LABEL[exportingKind]}...` : 'Export (CSV)'}
+                      {exportingKind ? `${EXPORT_KIND_LABEL[exportingKind]}...` : 'Export'}
                       {!exportingKind && (
                         <IconChevronDown className={`h-3.5 w-3.5 transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`} />
                       )}
@@ -495,9 +495,10 @@ export function OrganizerPage() {
                           onClick={() => runExport('results', selectedTournamentId)}
                           className="block w-full px-3 py-2.5 text-left text-xs text-slate-700 hover:bg-slate-50"
                         >
-                          <span className="font-medium text-slate-800">Full results</span>
+                          <span className="font-medium text-slate-800">Full tournament report (PDF)</span>
                           <p className="mt-0.5 text-slate-500">
-                            Every match's score and every player's stat line — the complete bracket report.
+                            Bracket results, per-match stat lines, point-by-point match logs, and rankings —
+                            the complete report.
                           </p>
                         </button>
                         <button

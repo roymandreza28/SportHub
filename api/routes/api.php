@@ -8,6 +8,7 @@ use App\Http\Controllers\ChatMessageController;
 use App\Http\Controllers\CourtController;
 use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\EvaluationController;
+use App\Http\Controllers\HeartbeatController;
 use App\Http\Controllers\LivestreamController;
 use App\Http\Controllers\MatchController;
 use App\Http\Controllers\MatchmakingRequestController;
@@ -112,6 +113,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
 
     Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store']);
+
+    // Any authenticated role, fired every ~25s from any open tab — see
+    // HeartbeatController's own comment.
+    Route::post('/heartbeat', [HeartbeatController::class, 'touch']);
     Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy']);
 
     Route::middleware('role:admin')->prefix('admin')->group(function () {
@@ -181,6 +186,11 @@ Route::middleware('auth:sanctum')->group(function () {
         ->prefix('social')->group(function () {
             Route::get('/conversations', [ConversationController::class, 'index']);
             Route::post('/conversations/{conversation}/read', [ConversationController::class, 'markRead']);
+            Route::post('/conversations/{conversation}/mute', [ConversationController::class, 'mute']);
+            Route::post('/conversations/{conversation}/archive', [ConversationController::class, 'archive']);
+            Route::post('/conversations/{conversation}/hide', [ConversationController::class, 'hide']);
+            Route::post('/conversations/{conversation}/block', [ConversationController::class, 'block']);
+            Route::post('/conversations/{conversation}/report', [ConversationController::class, 'report']);
             Route::get('/conversations/{conversation}/messages', [ConversationMessageController::class, 'index']);
             Route::post('/conversations/{conversation}/messages', [ConversationMessageController::class, 'store']);
         });
