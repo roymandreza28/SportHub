@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MatchPlayerStat;
 use App\Models\Sport;
 use App\Models\SportFormat;
 use App\Models\Tournament;
@@ -11,6 +12,7 @@ use App\Services\BracketService;
 use App\Services\NotificationService;
 use App\Support\CsvExport;
 use App\Support\NewsMediaStorage;
+use App\Support\PlayerStatFieldSets;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -372,6 +374,170 @@ class TournamentController extends Controller
         return CsvExport::download($filename, [
             'Registration ID', 'Type', 'Name', 'Email', 'Team Roster', 'Status', 'Registered By', 'Registered At',
         ], $rows);
+    }
+
+    // The "complete bracketing result with full statistical detail" export —
+    // one row per match (both sides side by side, same as the bracket view
+    // itself), with each side's individual MatchPlayerStat rows folded into
+    // a readable "Name: key=value, key=value" string per
+    // PlayerStatFieldSets' labels. A team match's whole roster performance
+    // stays on one row instead of exploding the CSV into one row per
+    // player — exportPlayerRankings() below is the per-player view.
+    public function exportResults(Tournament $tournament): StreamedResponse
+    {
+        $this->authorize('export', $tournament);
+
+        $matches = $tournament->bracket
+            ?->matches()
+            ->with([
+                'participantA:id,name', 'participantB:id,name',
+                'participantATeam:id,name', 'participantBTeam:id,name',
+                'winner:id,name', 'winnerTeam:id,name',
+                'court:id,name',
+            ])
+            ->orderBy('round')
+            ->orderBy('id')
+            ->get() ?? collect();
+
+        $fieldLabels = collect(PlayerStatFieldSets::for($tournament->sport->name) ?? [])->pluck('label', 'key');
+
+        $statsByMatch = MatchPlayerStat::whereIn('match_id', $matches->pluck('id'))
+            ->with('user:id,name')
+            ->get()
+            ->groupBy('match_id');
+
+        $describe = fn (array $stats) => collect($stats)
+            ->map(fn ($value, $key) => ($fieldLabels[$key] ?? $key).'='.$value)
+            ->implode(', ');
+
+        $rows = $matches->map(function ($match) use ($statsByMatch, $describe) {
+            $matchStats = $statsByMatch->get($match->id, collect());
+
+            if ($match->participant_a_team_id) {
+                $nameA = $match->participantATeam?->name;
+                $statsA = $matchStats->where('team_id', $match->participant_a_team_id)
+                    ->map(fn ($s) => ($s->user?->name ?? 'Player').': '.$describe($s->stats ?? []))
+                    ->implode(' | ');
+            } else {
+                $nameA = $match->participantA?->name;
+                $statA = $matchStats->firstWhere('user_id', $match->participant_a_id);
+                $statsA = $statA ? $describe($statA->stats ?? []) : '';
+            }
+
+            if ($match->participant_b_team_id) {
+                $nameB = $match->participantBTeam?->name;
+                $statsB = $matchStats->where('team_id', $match->participant_b_team_id)
+                    ->map(fn ($s) => ($s->user?->name ?? 'Player').': '.$describe($s->stats ?? []))
+                    ->implode(' | ');
+            } else {
+                $nameB = $match->participantB?->name;
+                $statB = $matchStats->firstWhere('user_id', $match->participant_b_id);
+                $statsB = $statB ? $describe($statB->stats ?? []) : '';
+            }
+
+            return [
+                $match->round,
+                $match->bracket_type ?: 'main',
+                $match->group_number !== null ? $match->group_number + 1 : '',
+                $match->status,
+                $match->scheduled_at?->toIso8601String(),
+                $match->court?->name,
+                $nameA,
+                $match->score_a,
+                $nameB,
+                $match->score_b,
+                $match->won_by_default ? 'Yes' : 'No',
+                $match->winner_team_id ? $match->winnerTeam?->name : $match->winner?->name,
+                $statsA,
+                $statsB,
+            ];
+        });
+
+        $filename = 'tournament-'.$tournament->id.'-full-results-'.now()->format('Y-m-d').'.csv';
+
+        return CsvExport::download($filename, [
+            'Round', 'Bracket', 'Group', 'Status', 'Scheduled At', 'Court',
+            'Side A', 'Score A', 'Side B', 'Score B', 'Won By Default', 'Winner',
+            'Side A Player Stats', 'Side B Player Stats',
+        ], $rows);
+    }
+
+    // The "ranking" export — every player who recorded at least one stat
+    // row in this tournament, ranked by the sport's primary stat (the first
+    // axis in PlayerStatFieldSets — Points for Basketball, Kills for
+    // Volleyball, Points Won for the racquet sports — the same "top
+    // scorer" metric a real leaderboard would use). Ranks individual
+    // PLAYERS directly even in a team-sport tournament — team_id is shown
+    // for context only, never used to group the ranking, since the point
+    // is finding the single best-performing player, not the best team.
+    public function exportPlayerRankings(Tournament $tournament): StreamedResponse
+    {
+        $this->authorize('export', $tournament);
+
+        $matchIds = $tournament->bracket?->matches()->pluck('id') ?? collect();
+        $fields = PlayerStatFieldSets::for($tournament->sport->name) ?? [];
+        $primaryKey = $fields[0]['key'] ?? null;
+
+        $stats = MatchPlayerStat::whereIn('match_id', $matchIds)
+            ->with(['user:id,name', 'team:id,name'])
+            ->get();
+
+        $byPlayer = $stats->groupBy('user_id')->map(function ($rows) use ($fields) {
+            $totals = array_fill_keys(array_column($fields, 'key'), 0);
+            foreach ($rows as $row) {
+                foreach ($row->stats ?? [] as $key => $value) {
+                    if (array_key_exists($key, $totals)) {
+                        $totals[$key] += (float) $value;
+                    }
+                }
+            }
+
+            return [
+                'user' => $rows->first()->user,
+                // A player who switched teams mid-tournament (the roster/
+                // registration flow doesn't forbid it) shows whichever team
+                // their most recent stat row was recorded under.
+                'team' => $rows->sortByDesc('created_at')->first()->team,
+                'games_played' => $rows->pluck('match_id')->unique()->count(),
+                'totals' => $totals,
+            ];
+        });
+
+        $ranked = $byPlayer
+            ->sortByDesc(fn ($p) => $primaryKey ? $p['totals'][$primaryKey] : array_sum($p['totals']))
+            ->values();
+
+        $fieldLabels = collect($fields)->pluck('label', 'key');
+
+        $rows = $ranked->map(function ($entry, $index) use ($fields, $primaryKey, $fieldLabels) {
+            $primaryTotal = $primaryKey ? $entry['totals'][$primaryKey] : null;
+            $gamesPlayed = $entry['games_played'];
+
+            $row = [
+                $index + 1,
+                $entry['user']?->name,
+                $entry['team']?->name ?: 'Individual',
+                $gamesPlayed,
+                $primaryKey ? ($fieldLabels[$primaryKey] ?? $primaryKey) : '',
+                $primaryTotal,
+                $primaryTotal !== null && $gamesPlayed > 0 ? round($primaryTotal / $gamesPlayed, 2) : '',
+            ];
+
+            foreach ($fields as $field) {
+                $row[] = $entry['totals'][$field['key']];
+            }
+
+            return $row;
+        });
+
+        $filename = 'tournament-'.$tournament->id.'-player-rankings-'.now()->format('Y-m-d').'.csv';
+
+        $headers = ['Rank', 'Player', 'Team', 'Games Played', 'Ranked By', 'Ranking Total', 'Per Game'];
+        foreach ($fields as $field) {
+            $headers[] = $field['label'].' (Total)';
+        }
+
+        return CsvExport::download($filename, $headers, $rows);
     }
 
     public function bracket(Tournament $tournament, BracketService $bracketService)

@@ -9,6 +9,8 @@ import {
   cancelTournament,
   generateBracket,
   exportTournamentRegistrations,
+  exportTournamentResults,
+  exportTournamentPlayerRankings,
   type Tournament,
   type BracketMatch,
 } from '../lib/organizerApi'
@@ -149,8 +151,30 @@ export function OrganizerPage() {
 
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
   const [activeMatchId, setActiveMatchId] = useState<number | null>(null)
-  const [exportingRegistrations, setExportingRegistrations] = useState(false)
-  const [exportRegistrationsError, setExportRegistrationsError] = useState<string | null>(null)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const [exportingKind, setExportingKind] = useState<'registrations' | 'results' | 'rankings' | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
+
+  const EXPORT_KIND_LABEL: Record<'registrations' | 'results' | 'rankings', string> = {
+    registrations: 'Export registrations',
+    results: 'Export full results',
+    rankings: 'Export player rankings',
+  }
+
+  async function runExport(kind: 'registrations' | 'results' | 'rankings', tournamentId: number) {
+    setExportMenuOpen(false)
+    setExportingKind(kind)
+    setExportError(null)
+    try {
+      if (kind === 'registrations') await exportTournamentRegistrations(tournamentId)
+      else if (kind === 'results') await exportTournamentResults(tournamentId)
+      else await exportTournamentPlayerRankings(tournamentId)
+    } catch (error) {
+      setExportError(await extractDownloadErrorMessage(error))
+    } finally {
+      setExportingKind(null)
+    }
+  }
   // A not-yet-started match a venue organizer just clicked — shown the
   // win-by-default/start-game choice (MatchStartOptionsModal) before the
   // real scoreboard ever opens. A match already live/completed skips this
@@ -446,25 +470,49 @@ export function OrganizerPage() {
                   </p>
                 )}
                 {canManageTournaments && (
-                  <div className="mb-3 flex flex-col items-end gap-1">
+                  <div className="relative mb-3 flex flex-col items-end gap-1">
                     <button
-                      onClick={async () => {
-                        setExportingRegistrations(true)
-                        setExportRegistrationsError(null)
-                        try {
-                          await exportTournamentRegistrations(selectedTournamentId)
-                        } catch (error) {
-                          setExportRegistrationsError(await extractDownloadErrorMessage(error))
-                        } finally {
-                          setExportingRegistrations(false)
-                        }
-                      }}
-                      disabled={exportingRegistrations}
-                      className={`${buttonSecondary} text-xs`}
+                      onClick={() => setExportMenuOpen((v) => !v)}
+                      disabled={exportingKind !== null}
+                      className={`${buttonSecondary} flex items-center gap-1.5 text-xs`}
                     >
-                      {exportingRegistrations ? 'Exporting...' : 'Export registrations (CSV)'}
+                      {exportingKind ? `${EXPORT_KIND_LABEL[exportingKind]}...` : 'Export (CSV)'}
+                      {!exportingKind && (
+                        <IconChevronDown className={`h-3.5 w-3.5 transition-transform ${exportMenuOpen ? 'rotate-180' : ''}`} />
+                      )}
                     </button>
-                    {exportRegistrationsError && <p className="text-xs text-red-600">{exportRegistrationsError}</p>}
+
+                    {exportMenuOpen && (
+                      <div className="absolute top-full z-10 mt-1 w-64 divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white shadow-lg">
+                        <button
+                          onClick={() => runExport('registrations', selectedTournamentId)}
+                          className="block w-full px-3 py-2.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+                        >
+                          <span className="font-medium text-slate-800">Registrations</span>
+                          <p className="mt-0.5 text-slate-500">Who's registered — players, team rosters, status.</p>
+                        </button>
+                        <button
+                          onClick={() => runExport('results', selectedTournamentId)}
+                          className="block w-full px-3 py-2.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+                        >
+                          <span className="font-medium text-slate-800">Full results</span>
+                          <p className="mt-0.5 text-slate-500">
+                            Every match's score and every player's stat line — the complete bracket report.
+                          </p>
+                        </button>
+                        <button
+                          onClick={() => runExport('rankings', selectedTournamentId)}
+                          className="block w-full px-3 py-2.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+                        >
+                          <span className="font-medium text-slate-800">Player rankings</span>
+                          <p className="mt-0.5 text-slate-500">
+                            Every player ranked individually by their top stat — even in a team sport.
+                          </p>
+                        </button>
+                      </div>
+                    )}
+
+                    {exportError && <p className="text-xs text-red-600">{exportError}</p>}
                   </div>
                 )}
                 {/* The main organizer gets a read-only scoreboard VIEW —
