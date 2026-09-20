@@ -240,6 +240,32 @@ it('rejects a non-image avatar upload', function () {
     ])->assertStatus(422);
 });
 
+it('lets a venue facilitator upload their own payment QR code, replacing the old file, but denies every other role', function () {
+    Storage::fake('public');
+    $facilitator = userWithRole('venue_facilitator');
+
+    $first = $this->actingAs($facilitator)->post('/api/user/qr-code', [
+        'qr_code' => UploadedFile::fake()->image('gcash.png'),
+    ]);
+    $first->assertOk();
+    $firstPath = $facilitator->fresh()->qr_code_path;
+    Storage::disk('public')->assertExists($firstPath);
+    expect($first->json('qr_code_url'))->toContain($firstPath);
+
+    $second = $this->actingAs($facilitator)->post('/api/user/qr-code', [
+        'qr_code' => UploadedFile::fake()->image('gcash-new.png'),
+    ]);
+    $second->assertOk();
+    Storage::disk('public')->assertMissing($firstPath);
+    Storage::disk('public')->assertExists($facilitator->fresh()->qr_code_path);
+
+    foreach (['player', 'coach', 'admin', 'organizer'] as $role) {
+        $this->actingAs(userWithRole($role))->post('/api/user/qr-code', [
+            'qr_code' => UploadedFile::fake()->image('gcash.png'),
+        ])->assertForbidden();
+    }
+});
+
 it('lets a user edit their own name, phone, and address, recomposing the display name', function () {
     $user = userWithRole('player');
     $user->update(['first_name' => 'Juan', 'middle_name' => 'Santos', 'last_name' => 'Dela Cruz', 'name' => 'Juan Santos Dela Cruz']);

@@ -27,6 +27,15 @@ export async function updateOwnAvatar(file: File) {
   await api.post('/api/user/avatar', form)
 }
 
+// venue_facilitator only (enforced server-side) — the facilitator's own
+// payment QR (e.g. GCash), shown to a matched player/coach on the
+// down-payment receipt (see DownPaymentPrompt.tsx).
+export async function updateOwnQrCode(file: File) {
+  const form = new FormData()
+  form.append('qr_code', file)
+  await api.post('/api/user/qr-code', form)
+}
+
 // Downloads a JSON file of everything this account has on record — profile,
 // registrations, bookings, skill history, authored content. The backend
 // sets a Content-Disposition header, but that only drives browser behavior

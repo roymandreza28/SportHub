@@ -82,8 +82,21 @@ export async function deleteUser(userId: number) {
   await api.delete(`/api/admin/users/${userId}`)
 }
 
-export async function createFacilitator(input: { name: string; email: string; phone: string; password: string }) {
-  const { data } = await api.post<AdminUser>('/api/admin/facilitators', input)
+export async function createFacilitator(input: {
+  name: string
+  email: string
+  phone: string
+  password: string
+  qr_code?: File | null
+}) {
+  const form = new FormData()
+  form.append('name', input.name)
+  form.append('email', input.email)
+  form.append('phone', input.phone)
+  form.append('password', input.password)
+  if (input.qr_code) form.append('qr_code', input.qr_code)
+
+  const { data } = await api.post<AdminUser>('/api/admin/facilitators', form)
   return data
 }
 

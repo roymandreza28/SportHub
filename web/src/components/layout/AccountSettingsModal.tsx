@@ -1,9 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { useAuth } from '../../lib/AuthContext'
-import { deleteOwnAccount, exportOwnData, updateOwnPassword, updateOwnProfile } from '../../lib/accountApi'
+import {
+  deleteOwnAccount,
+  exportOwnData,
+  updateOwnPassword,
+  updateOwnProfile,
+  updateOwnQrCode,
+} from '../../lib/accountApi'
 import { buttonDanger, buttonPrimary, buttonSecondary, fieldGroup, input, label } from '../../lib/formStyles'
 import {
   disablePushNotifications,
@@ -25,7 +31,7 @@ function extractErrorMessage(error: unknown): string {
 }
 
 export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
-  const { user, refreshUser, logout } = useAuth()
+  const { user, hasRole, refreshUser, logout } = useAuth()
   const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
   const [pushState, setPushState] = useState<PushPermissionState>('unsupported')
@@ -63,6 +69,12 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
         phone,
         address,
       }),
+    onSuccess: () => refreshUser(),
+  })
+
+  const qrFileInputRef = useRef<HTMLInputElement>(null)
+  const qrCodeMutation = useMutation({
+    mutationFn: (file: File) => updateOwnQrCode(file),
     onSuccess: () => refreshUser(),
   })
 
@@ -190,6 +202,50 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
             {profileMutation.isPending ? 'Saving...' : 'Save details'}
           </button>
         </div>
+
+        {hasRole('venue_facilitator') && (
+          <div className="mt-4 flex flex-col gap-3 border-b border-slate-100 pb-4">
+            <div className={fieldGroup}>
+              <label className={label}>Payment QR code</label>
+              <p className="text-xs text-slate-500">
+                Shown to a player/coach once they're matched and your venue is reserved, so they can scan to pay a
+                down payment (e.g. via GCash) directly.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {user?.qr_code_url ? (
+                <img src={user.qr_code_url} alt="Your payment QR code" className="h-20 w-20 rounded-lg border border-slate-200 object-cover" />
+              ) : (
+                <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-dashed border-slate-300 text-center text-[10px] text-slate-400">
+                  No QR yet
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <input
+                  ref={qrFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) qrCodeMutation.mutate(file)
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => qrFileInputRef.current?.click()}
+                  disabled={qrCodeMutation.isPending}
+                  className={`${buttonSecondary} self-start`}
+                >
+                  {qrCodeMutation.isPending ? 'Uploading...' : user?.qr_code_url ? 'Replace QR code' : 'Upload QR code'}
+                </button>
+                {qrCodeMutation.isError && (
+                  <p className="text-xs text-red-600">{extractErrorMessage(qrCodeMutation.error)}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mt-4 flex flex-col gap-3">
           <div className={fieldGroup}>

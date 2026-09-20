@@ -38,7 +38,8 @@ class MatchmakingRequestController extends Controller
                 ->with([
                     'venueRegistration:id,venue_id,court_id,status,starts_at,ends_at',
                     'venueRegistration.court:id,name,block_hours,block_price',
-                    'venueRegistration.venue:id,price_per_hour',
+                    'venueRegistration.venue:id,price_per_hour,facilitator_id',
+                    'venueRegistration.venue.facilitator:id,name,phone,qr_code_path',
                 ])
                 ->first();
 
@@ -61,6 +62,7 @@ class MatchmakingRequestController extends Controller
                 if ($registration = $match->venueRegistration) {
                     $conversation = $registration->conversation()->first(['conversations.id']);
                     $hours = Carbon::parse($registration->starts_at)->diffInMinutes(Carbon::parse($registration->ends_at), true) / 60;
+                    $facilitator = $registration->venue?->facilitator;
 
                     $mmr->venue_registration = [
                         'id' => $registration->id,
@@ -70,6 +72,16 @@ class MatchmakingRequestController extends Controller
                         'conversation_id' => $conversation?->id,
                         'court' => $registration->court ? ['id' => $registration->court->id, 'name' => $registration->court->name] : null,
                         'total_amount' => VenueBookingService::calculateTotalAmount($registration->venue, $registration->court, $hours),
+                        // Powers the down-payment "receipt" card — see
+                        // DownPaymentPrompt.tsx. qr_code_url is the
+                        // facilitator's own payment QR (set via
+                        // AuthController::updateQrCode()), null until
+                        // they've uploaded one.
+                        'facilitator' => $facilitator ? [
+                            'name' => $facilitator->name,
+                            'phone' => $facilitator->phone,
+                            'qr_code_url' => $facilitator->qr_code_url,
+                        ] : null,
                     ];
                 }
             }

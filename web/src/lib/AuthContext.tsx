@@ -24,6 +24,11 @@ export type User = {
   email: string
   roles: Role[]
   avatar_url: string | null
+  // A venue facilitator's own payment QR (e.g. GCash) — null for every
+  // other role, and for a facilitator who hasn't uploaded one yet. See
+  // AccountSettingsModal.tsx's upload field and DownPaymentPrompt.tsx's
+  // receipt card, which is the only place this is actually shown.
+  qr_code_url: string | null
   verification_status: VerificationStatus
   // Already present on every /api/user response (User::$fillable spreads
   // straight through — see AuthController::withRoles()) but left unused by

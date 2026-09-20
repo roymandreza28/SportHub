@@ -60,6 +60,25 @@ it('lets an admin create a facilitator account, defaults it to the venue_facilit
     $this->assertDatabaseHas('audit_logs', ['action' => 'facilitator.created']);
 });
 
+it('lets an admin attach a payment QR code when creating a facilitator account', function () {
+    Storage::fake('public');
+    $admin = userWithRole('admin');
+
+    $response = $this->actingAs($admin)->postJson('/api/admin/facilitators', [
+        'name' => 'QR Facilitator',
+        'email' => 'qrfac@example.com',
+        'phone' => '09171234567',
+        'password' => 'password123',
+        'qr_code' => UploadedFile::fake()->image('gcash-qr.png'),
+    ]);
+
+    $response->assertCreated();
+    expect($response->json('qr_code_url'))->not->toBeNull();
+
+    $facilitator = User::where('email', 'qrfac@example.com')->first();
+    Storage::disk('public')->assertExists($facilitator->qr_code_path);
+});
+
 it('lets an admin create each of the 3 organizer account types', function () {
     $admin = userWithRole('admin');
 

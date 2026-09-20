@@ -112,6 +112,20 @@ it('auto-reserves the pair\'s venue+time the instant they match, and opens a fac
     $conversationId = $mineA->json('0.venue_registration.conversation_id');
     expect($conversationId)->not->toBeNull();
 
+    // Powers the down-payment receipt card — name/phone always present,
+    // qr_code_url null until the facilitator uploads one.
+    $facilitator = \App\Models\User::find($venue->facilitator_id);
+    expect($mineA->json('0.venue_registration.facilitator.name'))->toBe($facilitator->name);
+    expect($mineA->json('0.venue_registration.facilitator.phone'))->toBe($facilitator->phone);
+    expect($mineA->json('0.venue_registration.facilitator.qr_code_url'))->toBeNull();
+
+    \Illuminate\Support\Facades\Storage::fake('public');
+    $this->actingAs($facilitator)->post('/api/user/qr-code', [
+        'qr_code' => \Illuminate\Http\UploadedFile::fake()->image('gcash.png'),
+    ])->assertOk();
+    $mineAAfterQr = $this->actingAs($playerA)->getJson('/api/matchmaking-requests/mine')->assertOk();
+    expect($mineAAfterQr->json('0.venue_registration.facilitator.qr_code_url'))->not->toBeNull();
+
     $mineB = $this->actingAs($playerB)->getJson('/api/matchmaking-requests/mine')->assertOk();
     expect($mineB->json('0.venue_registration.id'))->toBe($registration->id);
 

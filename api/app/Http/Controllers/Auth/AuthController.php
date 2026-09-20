@@ -219,6 +219,27 @@ class AuthController extends Controller
         return response()->json($this->withRoles($user->fresh()));
     }
 
+    // A facilitator's own payment QR (e.g. GCash) — surfaced on the
+    // matchmaking down-payment receipt so a paired player/coach can scan to
+    // pay directly. Gated to venue_facilitator at the route level, same as
+    // every other role-restricted endpoint in this app.
+    public function updateQrCode(Request $request)
+    {
+        $data = $request->validate([
+            'qr_code' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        $user = $request->user();
+
+        if ($user->qr_code_path) {
+            Storage::disk('public')->delete($user->qr_code_path);
+        }
+
+        $user->update(['qr_code_path' => $request->file('qr_code')->store('qr-codes/'.$user->id, 'public')]);
+
+        return response()->json($this->withRoles($user->fresh()));
+    }
+
     // Self-service data export — a JSON download of everything this
     // account has ever submitted or has recorded against it, covering the
     // same ground an admin could see via the various profile/history

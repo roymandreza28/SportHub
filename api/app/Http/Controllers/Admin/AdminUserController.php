@@ -150,6 +150,9 @@ class AdminUserController extends Controller
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['required', 'string', 'max:20'],
             'password' => ['required', 'string', 'min:8'],
+            // Optional at creation time — a facilitator can also add/replace
+            // it later themselves via AuthController::updateQrCode().
+            'qr_code' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
 
         $facilitator = User::create([
@@ -158,6 +161,10 @@ class AdminUserController extends Controller
             'phone' => $data['phone'],
             'password' => Hash::make($data['password']),
         ]);
+
+        if ($request->hasFile('qr_code')) {
+            $facilitator->update(['qr_code_path' => $request->file('qr_code')->store('qr-codes/'.$facilitator->id, 'public')]);
+        }
 
         $facilitator->assignRole('venue_facilitator');
 

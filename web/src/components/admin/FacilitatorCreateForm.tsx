@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createFacilitator } from '../../lib/adminApi'
-import { buttonPrimary, fieldGroup, input, label } from '../../lib/formStyles'
+import { buttonPrimary, buttonSecondary, fieldGroup, input, label } from '../../lib/formStyles'
 
 export function FacilitatorCreateForm() {
   const queryClient = useQueryClient()
@@ -9,7 +9,9 @@ export function FacilitatorCreateForm() {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
+  const [qrCode, setQrCode] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const qrFileInputRef = useRef<HTMLInputElement>(null)
 
   const mutation = useMutation({
     mutationFn: createFacilitator,
@@ -18,6 +20,8 @@ export function FacilitatorCreateForm() {
       setEmail('')
       setPhone('')
       setPassword('')
+      setQrCode(null)
+      if (qrFileInputRef.current) qrFileInputRef.current.value = ''
       setError(null)
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'audit-log'] })
@@ -27,7 +31,7 @@ export function FacilitatorCreateForm() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    mutation.mutate({ name, email, phone, password })
+    mutation.mutate({ name, email, phone, password, qr_code: qrCode })
   }
 
   return (
@@ -79,6 +83,26 @@ export function FacilitatorCreateForm() {
           className={input}
           required
         />
+      </div>
+      <div className={fieldGroup}>
+        <label className={label} htmlFor="facilitator-qr">Payment QR code (optional)</label>
+        <p className="text-xs text-slate-500">
+          The facilitator can also add or replace this themselves later from their own account settings.
+        </p>
+        <div className="flex items-center gap-3">
+          <input
+            id="facilitator-qr"
+            ref={qrFileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => setQrCode(e.target.files?.[0] ?? null)}
+          />
+          <button type="button" onClick={() => qrFileInputRef.current?.click()} className={buttonSecondary}>
+            {qrCode ? 'Change file' : 'Choose file'}
+          </button>
+          {qrCode && <span className="truncate text-xs text-slate-500">{qrCode.name}</span>}
+        </div>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={mutation.isPending} className={`${buttonPrimary} self-start`}>

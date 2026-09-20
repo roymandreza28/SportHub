@@ -41,6 +41,7 @@ class User extends Authenticatable
         'verification_status',
         'avatar_path',
         'cover_path',
+        'qr_code_path',
         'proof_of_address_path',
         'coach_eligibility_proof_path',
     ];
@@ -51,6 +52,7 @@ class User extends Authenticatable
     protected $appends = [
         'avatar_url',
         'cover_url',
+        'qr_code_url',
     ];
 
     /**
@@ -109,6 +111,11 @@ class User extends Authenticatable
     protected function coverUrl(): Attribute
     {
         return Attribute::get(fn () => $this->cover_path ? Storage::disk('public')->url($this->cover_path) : null);
+    }
+
+    protected function qrCodeUrl(): Attribute
+    {
+        return Attribute::get(fn () => $this->qr_code_path ? Storage::disk('public')->url($this->qr_code_path) : null);
     }
 
     public function playerProfile(): HasOne
