@@ -25,6 +25,47 @@ it('rejects an individual tournament for a team-category sport', function () {
     $response->assertJsonValidationErrors('sport_format_id');
 });
 
+it('lets an organizer set (or omit) a gender restriction when creating a tournament', function () {
+    $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
+    $sport = Sport::create(['name' => 'Test Open Sport']);
+
+    $restricted = $this->actingAs($organizer)->postJson('/api/tournaments', [
+        'sport_id' => $sport->id,
+        'name' => 'Women\'s Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek()->toIso8601String(),
+        'venue_organizer_id' => $venueOrganizer->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
+        'required_gender' => 'female',
+    ]);
+    $restricted->assertCreated();
+    $restricted->assertJsonPath('required_gender', 'female');
+
+    $open = $this->actingAs($organizer)->postJson('/api/tournaments', [
+        'sport_id' => $sport->id,
+        'name' => 'Open Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek()->toIso8601String(),
+        'venue_organizer_id' => $venueOrganizer->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
+        // required_gender omitted — open to everyone
+    ]);
+    $open->assertCreated();
+    $open->assertJsonPath('required_gender', null);
+
+    $this->actingAs($organizer)->postJson('/api/tournaments', [
+        'sport_id' => $sport->id,
+        'name' => 'Bad Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek()->toIso8601String(),
+        'venue_organizer_id' => $venueOrganizer->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
+        'required_gender' => 'nonbinary',
+    ])->assertStatus(422)->assertJsonValidationErrors('required_gender');
+});
+
 it('allows a team-category sport tournament when sport_format_id is given', function () {
     $organizer = userWithRole('organizer');
     $venueOrganizer = userWithRole('venue_organizer');

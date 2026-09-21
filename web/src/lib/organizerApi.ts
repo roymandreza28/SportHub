@@ -27,6 +27,10 @@ export type Tournament = {
   // individual-registration behavior unchanged.
   sport_format_id: number | null
   sport_format?: SportFormat | null
+  // Null = open to any gender. Enforced at registration time (see
+  // TournamentRegistrationController) — applies to every player on a
+  // team too, not just individual registrations.
+  required_gender: 'male' | 'female' | null
   // Only set once status is 'completed' — whichever of champion/champion_team
   // is non-null tells you if this was an individual or team tournament.
   champion?: { id: number; name: string } | null
@@ -173,6 +177,7 @@ export async function fetchOrganizerTournaments() {
 export async function createTournament(input: {
   sport_id: number
   sport_format_id?: number
+  required_gender?: 'male' | 'female'
   name: string
   format: TournamentFormat
   starts_at: string

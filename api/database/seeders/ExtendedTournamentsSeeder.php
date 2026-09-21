@@ -30,12 +30,21 @@ class ExtendedTournamentsSeeder extends Seeder
         'Jomar', 'Kim', 'Rico', 'Angelo', 'Bianca', 'Trisha', 'Dennis', 'Michelle', 'Arnel', 'Josie',
     ];
 
+    // Indexed the same as PLAYER_FIRST_NAMES — gender is a first-name
+    // property here, so it doesn't need its own per-player-last-name-combo
+    // list; see the player-generation loop in run() below.
+    private const PLAYER_FIRST_NAME_GENDERS = [
+        'male', 'female', 'male', 'male', 'female', 'female', 'male', 'female', 'male', 'female',
+    ];
+
     private const PLAYER_LAST_NAMES = ['Perez', 'Lim', 'Gonzales', 'Tolentino', 'Mercado'];
 
     private const COACH_NAMES = [
         'Ramil Torres', 'Cristina Del Rosario', 'Bayani Santos', 'Ligaya Ramos',
         'Edgar Villanueva', 'Marissa Cruz', 'Jun Aquino', 'Precious Domingo',
     ];
+
+    private const COACH_GENDERS = ['male', 'female', 'male', 'female', 'male', 'female', 'male', 'female'];
 
     private const TEAM_NAMES = [
         'Layunan Hawks', 'Poblacion Titans', 'Bilibiran Gladiators', 'Calumpang Marksmen',
@@ -64,13 +73,14 @@ class ExtendedTournamentsSeeder extends Seeder
         $bracketService = app(BracketService::class);
 
         $coaches = collect(self::COACH_NAMES)->map(fn ($name, $i) => $this->makeUser(
-            "coach" . ($i + 1) . "@sporthub.test", $name, 'coach'
+            "coach" . ($i + 1) . "@sporthub.test", $name, 'coach', self::COACH_GENDERS[$i]
         ))->values();
 
         $players = collect(range(0, 39))->map(fn ($i) => $this->makeUser(
             "player" . ($i + 21) . "@sporthub.test",
             self::PLAYER_FIRST_NAMES[$i % 10] . ' ' . self::PLAYER_LAST_NAMES[intdiv($i, 10)],
-            'player'
+            'player',
+            self::PLAYER_FIRST_NAME_GENDERS[$i % 10]
         ))->values();
 
         if ($basketball) {
@@ -133,12 +143,15 @@ class ExtendedTournamentsSeeder extends Seeder
         }
     }
 
-    private function makeUser(string $email, string $name, string $role): User
+    private function makeUser(string $email, string $name, string $role, ?string $gender = null): User
     {
-        $user = User::firstOrCreate(['email' => $email], ['name' => $name, 'password' => bcrypt('password')]);
+        $user = User::firstOrCreate(['email' => $email], ['name' => $name, 'gender' => $gender, 'password' => bcrypt('password')]);
 
         if ($user->name !== $name) {
             $user->update(['name' => $name]);
+        }
+        if ($gender && $user->gender !== $gender) {
+            $user->update(['gender' => $gender]);
         }
         if (! $user->hasRole($role)) {
             $user->assignRole($role);

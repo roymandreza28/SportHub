@@ -235,6 +235,50 @@ it('registers a ready team for a tournament and rejects double registration', fu
         ->assertStatus(422);
 });
 
+it('enforces a tournament\'s gender restriction on every accepted team member, not just the captain', function () {
+    [$sport, $format] = doublesSetup();
+    $organizer = userWithRole('organizer');
+    $coach = userWithRole('coach');
+    $playerA = userWithRole('player');
+    $playerA->update(['gender' => 'female']);
+    $playerB = userWithRole('player');
+    $playerB->update(['gender' => 'male']); // the mismatch
+    befriend($coach, $playerA);
+    befriend($coach, $playerB);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $organizer->id,
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+        'name' => 'Women\'s Doubles Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(),
+        'status' => 'registration',
+        'required_gender' => 'female',
+    ]);
+
+    $team = $this->actingAs($coach)->postJson('/api/teams', [
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+    ])->json();
+    $this->actingAs($coach)->postJson("/api/teams/{$team['id']}/members", ['user_id' => $playerA->id]);
+    $memberB = $this->actingAs($coach)->postJson("/api/teams/{$team['id']}/members", ['user_id' => $playerB->id])->json();
+
+    $response = $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/team-registrations", ['team_id' => $team['id']]);
+    $response->assertStatus(422)->assertJsonValidationErrors('team_id');
+    expect($response->json('errors.team_id.0'))->toContain($playerB->name);
+
+    // Swap the mismatched player out for one matching the restriction — should register cleanly now.
+    $this->actingAs($coach)->deleteJson("/api/teams/{$team['id']}/members/{$memberB['id']}");
+    $playerC = userWithRole('player');
+    $playerC->update(['gender' => 'female']);
+    befriend($coach, $playerC);
+    $this->actingAs($coach)->postJson("/api/teams/{$team['id']}/members", ['user_id' => $playerC->id]);
+
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/team-registrations", ['team_id' => $team['id']])
+        ->assertCreated();
+});
+
 it('rejects a coach registering a second team they captain for a tournament they already registered a team for', function () {
     [$sport, $format] = doublesSetup();
     $organizer = userWithRole('organizer');

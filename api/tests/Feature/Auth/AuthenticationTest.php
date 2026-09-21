@@ -14,6 +14,7 @@ function baseRegistrationPayload(array $overrides = []): array
         'last_name' => 'User',
         'email' => 'newuser'.uniqid().'@example.com',
         'birthday' => '2000-05-15',
+        'gender' => 'male',
         'address' => '123 Rizal St, Binangonan, Rizal',
         'phone' => '09171234567',
         'proof_of_address' => UploadedFile::fake()->create('id.jpg', 100, 'image/jpeg'),
@@ -34,9 +35,25 @@ it('registers a new player, combines the name parts, logs them in, and stores th
     expect($response->json('token'))->toBeString()->not->toBeEmpty();
 
     $user = User::where('email', $response->json('email'))->first();
-    $this->assertDatabaseHas('users', ['id' => $user->id, 'first_name' => 'New', 'last_name' => 'User']);
+    $this->assertDatabaseHas('users', ['id' => $user->id, 'first_name' => 'New', 'last_name' => 'User', 'gender' => 'male']);
     expect($user->proof_of_address_path)->not->toBeNull();
     Storage::disk('public')->assertExists($user->proof_of_address_path);
+});
+
+it('requires a valid gender on registration', function () {
+    Storage::fake('public');
+
+    $this->postJson('/api/register', baseRegistrationPayload(['gender' => null]))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('gender');
+
+    $this->postJson('/api/register', baseRegistrationPayload(['gender' => 'other']))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('gender');
+
+    $this->postJson('/api/register', baseRegistrationPayload(['gender' => 'female']))
+        ->assertOk()
+        ->assertJsonPath('gender', 'female');
 });
 
 it('starts a freshly-registered account pending verification and notifies them of it', function () {

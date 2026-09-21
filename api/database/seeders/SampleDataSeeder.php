@@ -94,15 +94,23 @@ class SampleDataSeeder extends Seeder
                 7 => 'Enzo Manalo', 8 => 'Julienne Castro', 9 => 'Rafael Navarro',
                 10 => 'Diana Salazar', 11 => 'Christian Ocampo',
             ];
+            $extraPlayerGenders = [
+                1 => 'male', 2 => 'female', 3 => 'male', 4 => 'female', 5 => 'male', 6 => 'female',
+                7 => 'male', 8 => 'female', 9 => 'male', 10 => 'female', 11 => 'male',
+            ];
 
-            $extraPlayers = collect(range(1, 11))->map(function (int $n) use ($extraPlayerNames) {
+            $extraPlayers = collect(range(1, 11))->map(function (int $n) use ($extraPlayerNames, $extraPlayerGenders) {
                 $name = $extraPlayerNames[$n];
+                $gender = $extraPlayerGenders[$n];
                 $user = User::firstOrCreate(
                     ['email' => "player{$n}@sporthub.test"],
-                    ['name' => $name, 'password' => bcrypt('password')]
+                    ['name' => $name, 'gender' => $gender, 'password' => bcrypt('password')]
                 );
                 if ($user->name !== $name) {
                     $user->update(['name' => $name]);
+                }
+                if ($user->gender !== $gender) {
+                    $user->update(['gender' => $gender]);
                 }
                 if (! $user->hasRole('player')) {
                     $user->assignRole('player');

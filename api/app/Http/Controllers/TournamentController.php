@@ -18,6 +18,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -62,6 +63,12 @@ class TournamentController extends Controller
         $data = $request->validate([
             'sport_id' => ['required', 'exists:sports,id'],
             'sport_format_id' => ['nullable', 'exists:sport_formats,id'],
+            // Null/omitted = open to any gender. Enforced at registration
+            // time in TournamentRegistrationController::store()/storeTeam(),
+            // not editable after creation (see update() below) to avoid
+            // stranding already-registered players/teams under a changed
+            // restriction.
+            'required_gender' => ['nullable', Rule::in(['male', 'female'])],
             'name' => ['required', 'string', 'max:255'],
             'format' => ['required', 'in:single_elimination,double_elimination,round_robin,group_stage,swiss'],
             'starts_at' => ['required', 'date'],

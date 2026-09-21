@@ -87,11 +87,18 @@ export function TeamTournamentWizard({
                   className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
                 >
                   <span>{t.name}</span>
-                  {t.sport_format_id && (
-                    <span className="shrink-0 rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">
-                      Team ({t.sport_format?.players_per_side} per side)
-                    </span>
-                  )}
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {t.required_gender && (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 capitalize">
+                        {t.required_gender} only
+                      </span>
+                    )}
+                    {t.sport_format_id && (
+                      <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">
+                        Team ({t.sport_format?.players_per_side} per side)
+                      </span>
+                    )}
+                  </span>
                 </button>
               </li>
             ))}
@@ -103,6 +110,11 @@ export function TeamTournamentWizard({
         <div className={fieldGroup}>
           <label className={label}>3. {tournament.sport_format_id ? 'Build your team' : 'Register a player'}</label>
           <p className="text-sm text-slate-600">{tournament.name}</p>
+          {tournament.required_gender && (
+            <p className="text-xs text-slate-500">
+              Every player on your roster must be <strong>{tournament.required_gender}</strong> for this tournament.
+            </p>
+          )}
           {!isVerified && (
             <p className="text-xs text-amber-700">Tournament registration is unavailable until your account is verified.</p>
           )}

@@ -4,6 +4,7 @@ import { extractErrorMessage, extractFieldErrors } from '../../lib/errors'
 import { buttonPrimary, fieldGroup, input, label, textarea } from '../../lib/formStyles'
 
 type Role = 'player' | 'coach'
+type Gender = 'male' | 'female'
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null
@@ -97,6 +98,7 @@ export function RegisterForm({
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [birthday, setBirthday] = useState('')
+  const [gender, setGender] = useState<Gender | ''>('')
   const [address, setAddress] = useState('')
   const [phone, setPhone] = useState('')
   const [proofOfAddress, setProofOfAddress] = useState<File | null>(null)
@@ -133,6 +135,7 @@ export function RegisterForm({
       form.append('last_name', lastName)
       form.append('email', email)
       form.append('birthday', birthday)
+      form.append('gender', gender)
       form.append('address', address)
       form.append('phone', phone)
       if (proofOfAddress) form.append('proof_of_address', proofOfAddress)
@@ -198,18 +201,36 @@ export function RegisterForm({
             <FieldError message={fieldErrors.email} />
           </div>
         </div>
-        <div className={fieldGroup}>
-          <label className={label} htmlFor="phone">Mobile number</label>
-          <input
-            id="phone"
-            type="tel"
-            placeholder="09XX XXX XXXX"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className={input}
-            required
-          />
-          <FieldError message={fieldErrors.phone} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className={fieldGroup}>
+            <label className={label} htmlFor="gender">Gender</label>
+            <select
+              id="gender"
+              value={gender}
+              onChange={(e) => setGender(e.target.value as Gender)}
+              className={input}
+              required
+            >
+              <option value="" disabled>Select...</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-400">Used to determine eligibility for gender-restricted tournaments.</p>
+            <FieldError message={fieldErrors.gender} />
+          </div>
+          <div className={fieldGroup}>
+            <label className={label} htmlFor="phone">Mobile number</label>
+            <input
+              id="phone"
+              type="tel"
+              placeholder="09XX XXX XXXX"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className={input}
+              required
+            />
+            <FieldError message={fieldErrors.phone} />
+          </div>
         </div>
         <div className={fieldGroup}>
           <label className={label} htmlFor="address">Address</label>

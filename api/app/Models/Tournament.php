@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Tournament extends Model
 {
     protected $fillable = [
-        'organizer_id', 'sport_id', 'sport_format_id', 'name', 'format', 'starts_at', 'ends_at', 'venue_id', 'status',
+        'organizer_id', 'sport_id', 'sport_format_id', 'required_gender', 'name', 'format', 'starts_at', 'ends_at', 'venue_id', 'status',
         'venue_organizer_id', 'livestream_organizer_id', 'scoring_type', 'sets_to_win',
         'champion_id', 'champion_team_id',
     ];

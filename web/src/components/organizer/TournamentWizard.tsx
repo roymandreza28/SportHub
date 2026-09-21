@@ -126,6 +126,7 @@ export function TournamentWizard() {
   const [sportFormatId, setSportFormatId] = useState<number | ''>('')
   const [name, setName] = useState('')
   const [format, setFormat] = useState<TournamentFormat>('single_elimination')
+  const [requiredGender, setRequiredGender] = useState<'' | 'male' | 'female'>('')
   const [scoringChoice, setScoringChoice] = useState(SCORING_OPTIONS[0].value)
   const [startsAt, setStartsAt] = useState('')
   const [venueId, setVenueId] = useState<number | ''>('')
@@ -166,6 +167,7 @@ export function TournamentWizard() {
     mutationFn: () => createTournament({
       sport_id: Number(sportId),
       sport_format_id: sportFormatId ? Number(sportFormatId) : undefined,
+      required_gender: requiredGender || undefined,
       name,
       format,
       starts_at: new Date(startsAt).toISOString(),
@@ -260,6 +262,23 @@ export function TournamentWizard() {
           {selectedSportName && FORMAT_NOTES[selectedSportName]?.[format] && (
             <p className="text-xs text-slate-500">{FORMAT_NOTES[selectedSportName][format]}</p>
           )}
+        </div>
+        <div className={fieldGroup}>
+          <label className={label}>Gender restriction</label>
+          <select
+            value={requiredGender}
+            onChange={(e) => setRequiredGender(e.target.value as '' | 'male' | 'female')}
+            className={select}
+          >
+            <option value="">Open to any gender</option>
+            <option value="male">Male only</option>
+            <option value="female">Female only</option>
+          </select>
+          <p className="text-xs text-slate-500">
+            {requiredGender
+              ? `Only ${requiredGender} players may register — this applies to every player on a team too.`
+              : 'Any player or team can register, regardless of gender.'}
+          </p>
         </div>
         <div className={`${fieldGroup} sm:col-span-2`}>
           <label className={label}>Tournament name</label>

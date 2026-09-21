@@ -29,6 +29,10 @@ class AuthController extends Controller
             'last_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'birthday' => ['required', 'date', 'before:today'],
+            // Drives tournament gender-eligibility (see
+            // TournamentRegistrationController::store()/storeTeam()) — not
+            // just a profile field.
+            'gender' => ['required', Rule::in(['male', 'female'])],
             'address' => ['required', 'string', 'max:500'],
             'phone' => ['required', 'string', 'max:20'],
             // Proof of address: a valid ID or a billing statement, either as
@@ -64,6 +68,7 @@ class AuthController extends Controller
                 'last_name' => $data['last_name'],
                 'email' => $data['email'],
                 'birthday' => $data['birthday'],
+                'gender' => $data['gender'],
                 'address' => $data['address'],
                 'phone' => $data['phone'],
                 'password' => Hash::make($data['password']),

@@ -17,6 +17,7 @@ export function TournamentRegistrationForm({
     enabled: !fixedTournamentId,
   })
   const [tournamentId, setTournamentId] = useState<number | ''>(fixedTournamentId ?? '')
+  const selectedTournament = tournaments?.find((t) => t.id === tournamentId)
   const [player, setPlayer] = useState<PlayerSearchResult | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const queryClient = useQueryClient()
@@ -50,11 +51,18 @@ export function TournamentRegistrationForm({
             <option value="">Choose a tournament...</option>
             {tournaments?.map((t) => (
               <option key={t.id} value={t.id}>
-                {t.name} ({t.sport.name})
+                {t.name} ({t.sport.name}
+                {t.required_gender ? `, ${t.required_gender} only` : ''})
               </option>
             ))}
           </select>
         </div>
+      )}
+
+      {selectedTournament?.required_gender && (
+        <p className="text-xs text-slate-500">
+          This tournament is restricted to <strong>{selectedTournament.required_gender}</strong> players.
+        </p>
       )}
 
       <div className={fieldGroup}>

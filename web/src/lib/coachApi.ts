@@ -16,6 +16,10 @@ export type Tournament = {
   // team via /api/teams first, instead of registering a lone player.
   sport_format_id: number | null
   sport_format?: { id: number; name: string; players_per_side: number } | null
+  // Null = open to any gender. See TournamentWizard.tsx's own field for
+  // where this gets set, and TournamentRegistrationController for where
+  // it's actually enforced (applies to every player on a team too).
+  required_gender: 'male' | 'female' | null
 }
 
 export type CoachTournamentRegistration = {

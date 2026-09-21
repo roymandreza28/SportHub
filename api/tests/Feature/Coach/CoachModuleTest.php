@@ -26,6 +26,33 @@ it('lets a coach register a player for an open tournament and rejects duplicate 
         ->assertStatus(422);
 });
 
+it('enforces a tournament\'s gender restriction on individual registration', function () {
+    $coach = userWithRole('coach');
+    $male = userWithRole('player');
+    $male->update(['gender' => 'male']);
+    $female = userWithRole('player');
+    $female->update(['gender' => 'female']);
+    $organizer = userWithRole('organizer');
+    $sport = Sport::create(['name' => 'Basketball']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $organizer->id,
+        'sport_id' => $sport->id,
+        'name' => 'Women\'s Open Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(),
+        'status' => 'registration',
+        'required_gender' => 'female',
+    ]);
+
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $male->id])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('user_id');
+
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $female->id])
+        ->assertCreated();
+});
+
 it('rejects a coach registering a second, different player for a tournament they already registered someone for', function () {
     $coach = userWithRole('coach');
     $playerA = userWithRole('player');

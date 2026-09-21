@@ -79,6 +79,15 @@ class TournamentRegistrationController extends Controller
             throw ValidationException::withMessages(['user_id' => ['Your player is already registered in this tournament.']]);
         }
 
+        if ($tournament->required_gender) {
+            $player = User::find($data['user_id']);
+            if ($player->gender !== $tournament->required_gender) {
+                throw ValidationException::withMessages([
+                    'user_id' => ["This tournament is restricted to {$tournament->required_gender} players."],
+                ]);
+            }
+        }
+
         $registration = TournamentRegistration::create([
             'tournament_id' => $tournament->id,
             'user_id' => $data['user_id'],
@@ -129,6 +138,26 @@ class TournamentRegistrationController extends Controller
             'This team\'s format does not match the tournament\'s required format.'
         );
         abort_if($team->status !== 'ready', 422, 'This team is not full yet.');
+
+        if ($tournament->required_gender) {
+            // whereNull too — SQL's != never matches a NULL row, so a
+            // player with no gender set on their profile would otherwise
+            // silently slip through a gender-restricted tournament instead
+            // of being correctly treated as "doesn't match."
+            $mismatchedMember = $team->members()
+                ->where('status', 'accepted')
+                ->whereHas('user', fn ($q) => $q->where('gender', '!=', $tournament->required_gender)->orWhereNull('gender'))
+                ->with('user:id,name,gender')
+                ->first();
+
+            if ($mismatchedMember) {
+                throw ValidationException::withMessages([
+                    'team_id' => [
+                        "This tournament is restricted to {$tournament->required_gender} players — {$mismatchedMember->user->name} isn't.",
+                    ],
+                ]);
+            }
+        }
 
         // A coach registers one entrant per tournament, full stop — never a
         // second team (even one they also captain) once they've already
