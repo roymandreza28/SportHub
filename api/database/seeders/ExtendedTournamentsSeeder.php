@@ -572,6 +572,12 @@ class ExtendedTournamentsSeeder extends Seeder
             'organizer_id' => $organizer->id,
             'name' => 'Binangonan Tennis Singles Championship',
             'sport_id' => $sport->id,
+            // Was missing entirely before — StatSheetFieldSets/
+            // PlayerStatSheetLinkage key Tennis by its SportFormat name
+            // ('Singles' vs 'Doubles'), so without this a stat sheet
+            // could never be generated for this tournament's matches even
+            // though they're genuinely singles matches.
+            'sport_format_id' => SportFormat::where('sport_id', $sport->id)->where('name', 'Singles')->value('id'),
             'format' => 'single_elimination',
             'starts_at' => now()->subDays(4),
             'ends_at' => now()->subDays(4)->addHours(3),

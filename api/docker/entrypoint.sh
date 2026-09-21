@@ -106,6 +106,16 @@ if [ "$1" = "supervisord" ]; then
         php artisan db:seed --class=CompletedMensBasketballFinalsSeeder --force || echo "CompletedMensBasketballFinalsSeeder failed — continuing boot anyway"
         php artisan db:seed --class=CompletedMensBasketballShowdownSeeder --force || echo "CompletedMensBasketballShowdownSeeder failed — continuing boot anyway"
     fi
+
+    # Unlike every other flag in this block, DetailedMatchHistoryBackfillSeeder
+    # IS safe to leave set across multiple boots — it skips any match that
+    # already has a stat sheet + event log (see its own doc comment), so
+    # re-running it is always a no-op for matches it already filled in.
+    # Separate flag from SEED_BASKETBALL_FORMATS_ON_BOOT above since this one
+    # sweeps every sport's completed matches, not just basketball's.
+    if [ "$SEED_MATCH_HISTORY_ON_BOOT" = "true" ]; then
+        php artisan db:seed --class=DetailedMatchHistoryBackfillSeeder --force || echo "DetailedMatchHistoryBackfillSeeder failed — continuing boot anyway"
+    fi
 fi
 
 exec "$@"
