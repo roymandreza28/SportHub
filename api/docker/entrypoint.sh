@@ -127,6 +127,15 @@ if [ "$1" = "supervisord" ]; then
     if [ "$SEED_MATCH_HISTORY_ON_BOOT" = "true" ]; then
         php artisan db:seed --class=DetailedMatchHistoryBackfillSeeder --force || echo "DetailedMatchHistoryBackfillSeeder failed — continuing boot anyway"
     fi
+
+    # Also safe to leave set — deletes-by-name is naturally idempotent (see
+    # the seeder's own doc comment). Exists to clean up after
+    # SEED_BASKETBALL_FORMATS_ON_BOOT accidentally getting left/set true
+    # across two boots, which duplicates its four non-idempotent
+    # tournament seeders.
+    if [ "$DEDUPE_SHOWCASE_TOURNAMENTS_ON_BOOT" = "true" ]; then
+        php artisan db:seed --class=DedupeShowcaseTournamentsSeeder --force || echo "DedupeShowcaseTournamentsSeeder failed — continuing boot anyway"
+    fi
 fi
 
 exec "$@"
