@@ -373,3 +373,105 @@ real public launch.
 in the original deployment on explicit request, as a temporary/demo setup
 rather than a real public launch — the first instance of the same
 knowing deviation from §8's guidance.
+
+## 10. Backup deployment: Railway + a second Vercel project
+
+A standby copy of the whole stack on genuinely different infrastructure, so
+a Render-specific outage doesn't take the app down entirely. **Not**
+automatic failover — there's no health-checking proxy switching traffic —
+it's a second, always-live site at its own URL that already works, so
+sharing that URL (or updating a DNS/status page to point at it) is the
+entire "failover" step whenever it's actually needed.
+
+| Resource | Name | URL |
+|---|---|---|
+| Vercel project | `sporthub-backup` | `https://sporthub-backup.vercel.app` |
+| Railway `web` service (Laravel) | `web` | `https://web-production-6dda6.up.railway.app` |
+| Railway `reverb` service | `reverb` | `https://reverb-production-4a4c.up.railway.app` |
+| Railway Postgres | `Postgres` | internal only; external via the TCP proxy (Railway dashboard → Postgres → Connect) |
+
+Railway project: `dependable-gentleness` (workspace `roymandreza28's Projects`).
+
+**What's shared with production, what isn't:**
+- **File storage is shared** — the backup points at the exact same
+  Supabase S3-compatible bucket (`AWS_*`/`FILESYSTEM_PUBLIC_*` env vars) as
+  Render. Any file a synced-in row references (avatars, QR codes, post/news
+  media) resolves correctly on both sides without copying anything.
+- **The database is separate** (Railway's own Postgres, a different
+  account/provider entirely from Render's) — see the sync script below.
+  It started out seeded with only `RolesAndPermissionsSeeder` +
+  `SportsSeeder` (no real accounts), per the same guidance in §4.
+  `REVERB_APP_ID`/`REVERB_APP_KEY`/`REVERB_APP_SECRET` and `APP_KEY` are
+  also independently generated, not shared with Render/Vercel's.
+- **VAPID keys are not yet synced** — if you want push notifications to
+  keep working for a user whose subscription row gets copied over by a DB
+  sync, copy Render's `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` onto both
+  Railway services too (a browser's push subscription is cryptographically
+  tied to the exact public key used to create it — mismatched keys silently
+  fail to deliver, they don't error).
+
+**Config-as-code note**: `api/railway.web.json`/`api/railway.reverb.json`
+describe the intended build/deploy settings but Railway has since
+deprecated that mechanism in favor of `.railway/railway.ts` — these files
+are no longer actually read. The equivalent settings (Dockerfile build,
+`preDeployCommand` on `web` only, restart policy, reverb's overridden start
+command) were instead set directly on each service instance via the
+GraphQL API (`serviceInstanceUpdate`). If Railway's dashboard UI for
+"Config File Path" is gone/errors when you look, that's why — the two JSON
+files are left in the repo as documentation of intent, not as active config.
+
+**Gotcha hit during setup**: `chown -R www-data:www-data` in the Dockerfile
+sets ownership but not the write bit — worked fine building from a Linux git
+checkout (Render, GitHub Actions), but a local `railway up` from a Windows
+machine packaged `storage/`/`bootstrap/cache` with no write bit at all
+(NTFS has no real POSIX permission bits to preserve), so every request
+500'd. Fixed with an explicit `chmod -R u+rwX,g+rwX` alongside the chown —
+see the Dockerfile's own comment.
+
+**Gotcha**: a `startCommand` set via the API (rather than through
+Railway's dashboard, which apparently wraps it for you) is run directly as
+argv, not through a shell — `--port=$PORT` in reverb's start command never
+got expanded and Reverb crash-looped on `Invalid URI "tcp://0.0.0.0:$PORT"`.
+Fixed by wrapping it: `sh -c "php artisan reverb:start --host=0.0.0.0 --port=$PORT"`.
+
+**Gotcha**: `variableCollectionUpsert` without an explicit `serviceId`
+silently does nothing useful — it neither errors nor actually reaches a
+running service's environment (confirmed via `railway ssh`: the variable
+existed in `railway api`'s own `variables()` query but was empty at
+runtime). Always pass `serviceId` explicitly per service, even when setting
+the same value on both `web` and `reverb`.
+
+**Gotcha**: the Railway CLI's own top-level commands (`whoami`, `list`,
+`link`, `add`, ...) do an internal auth check that a *team* API token fails,
+even though the same token works fine for `railway api` raw GraphQL calls
+and for the GitHub Actions `railway up` flow. A *personal* token from
+`railway login` (browser or `--browserless` device-code flow) is what the
+CLI's own commands actually need.
+
+### Keeping the backup database from going too stale
+
+The backup database is a point-in-time copy, not live-replicated. Refresh
+it with:
+
+```
+./api/scripts/sync-backup-db.sh "<Render External Database URL>" "<Railway Postgres public URL>"
+```
+
+Get each URL from that provider's dashboard → the Postgres instance →
+Connect (Render calls it "External Database URL"; Railway's is under the
+TCP Proxy domain it assigns when you expose the database publicly). This
+is the same `pg_dump`/`pg_restore` procedure as §4a, just wired into one
+command — run it manually on whatever cadence you're comfortable with
+(there's no scheduled job doing this automatically).
+
+### CI: keeping the backup's code in sync automatically
+
+`.github/workflows/deploy-api.yml` already deploys to Railway (`railway up
+-s web`, `railway up -s reverb`) after every CI-green push to `main` — the
+same workflow originally written for the Railway-primary plan, now doing
+double duty. It needs a `RAILWAY_TOKEN` repo secret (Settings → Secrets and
+variables → Actions) — a **project token** (Railway dashboard → this
+project → Settings → Tokens), not a personal or team token; those don't
+work for `railway up` the way this project token does. Vercel's own GitHub
+integration deploys `sporthub-backup` automatically on every push the same
+way it already does for the primary project — nothing extra needed there.
