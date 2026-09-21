@@ -103,6 +103,8 @@ if [ "$1" = "supervisord" ]; then
         php artisan db:seed --class=RoundRobinBadmintonTournamentSeeder --force || echo "RoundRobinBadmintonTournamentSeeder failed — continuing boot anyway"
         php artisan db:seed --class=GroupStageBadmintonTournamentSeeder --force || echo "GroupStageBadmintonTournamentSeeder failed — continuing boot anyway"
         php artisan db:seed --class=SwissBadmintonTournamentSeeder --force || echo "SwissBadmintonTournamentSeeder failed — continuing boot anyway"
+        php artisan db:seed --class=CompletedMensBasketballFinalsSeeder --force || echo "CompletedMensBasketballFinalsSeeder failed — continuing boot anyway"
+        php artisan db:seed --class=CompletedMensBasketballShowdownSeeder --force || echo "CompletedMensBasketballShowdownSeeder failed — continuing boot anyway"
     fi
 fi
 
