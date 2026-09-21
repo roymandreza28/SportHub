@@ -572,12 +572,15 @@ class ExtendedTournamentsSeeder extends Seeder
             'organizer_id' => $organizer->id,
             'name' => 'Binangonan Tennis Singles Championship',
             'sport_id' => $sport->id,
-            // Was missing entirely before — StatSheetFieldSets/
-            // PlayerStatSheetLinkage key Tennis by its SportFormat name
-            // ('Singles' vs 'Doubles'), so without this a stat sheet
-            // could never be generated for this tournament's matches even
-            // though they're genuinely singles matches.
-            'sport_format_id' => SportFormat::where('sport_id', $sport->id)->where('name', 'Singles')->value('id'),
+            // Deliberately no sport_format_id — that's what marks this an
+            // INDIVIDUAL tournament throughout the app (see
+            // BracketService::generate()'s isTeamTournament flag and
+            // TournamentRegistrationController's own check), same pattern
+            // as RoundRobinBadmintonTournamentSeeder et al. Setting it
+            // would silently switch this tournament over to requiring
+            // team registration. DetailedMatchHistoryBackfillSeeder
+            // derives "Singles" for stat-sheet purposes from each match's
+            // own individual (non-team) shape instead, not from this.
             'format' => 'single_elimination',
             'starts_at' => now()->subDays(4),
             'ends_at' => now()->subDays(4)->addHours(3),

@@ -54,14 +54,15 @@ class DetailedMatchHistoryBackfillSeeder extends Seeder
             }
 
             $tournament = $match->bracket->tournament;
-            $fieldSet = StatSheetFieldSets::for($tournament->sport->name, $tournament->sportFormat?->name);
+            $formatName = $this->effectiveFormatName($match, $tournament);
+            $fieldSet = StatSheetFieldSets::for($tournament->sport->name, $formatName);
             if ($fieldSet === null) {
                 $skippedNoFieldSet++;
 
                 continue;
             }
 
-            $this->buildStatSheets($match, $tournament, $fieldSet);
+            $this->buildStatSheets($match, $tournament, $fieldSet, $formatName);
             $this->buildMatchEvents($match, $tournament);
             $filled++;
         }
@@ -76,12 +77,33 @@ class DetailedMatchHistoryBackfillSeeder extends Seeder
             && MatchEvent::where('match_id', $match->id)->exists();
     }
 
+    // Racquet-sport tournaments that are genuinely individual (Tennis
+    // Singles Championship, every *BadmintonTournamentSeeder) deliberately
+    // leave sport_format_id NULL — that's what marks them as individual
+    // throughout the app (BracketService::generate()'s isTeamTournament
+    // flag, TournamentRegistrationController's own check) — so
+    // $tournament->sportFormat is never a safe way to ask "is this
+    // singles or doubles". A match's own shape already answers that
+    // unambiguously: no team on either side can only mean singles here,
+    // and StatSheetFieldSets/PlayerStatSheetLinkage are keyed by exactly
+    // that Singles/Doubles distinction. Basketball/Volleyball ignore the
+    // format argument entirely (see StatSheetFieldSets::for()), so this
+    // is harmless for those two regardless of what it resolves to.
+    private function effectiveFormatName(GameMatch $match, Tournament $tournament): ?string
+    {
+        if ($tournament->sportFormat !== null) {
+            return $tournament->sportFormat->name;
+        }
+
+        return $match->participant_a_team_id === null ? 'Singles' : 'Doubles';
+    }
+
     // ---- stat sheets -------------------------------------------------
 
-    private function buildStatSheets(GameMatch $match, Tournament $tournament, array $fieldSet): void
+    private function buildStatSheets(GameMatch $match, Tournament $tournament, array $fieldSet, ?string $formatName): void
     {
         $sportId = $tournament->sport_id;
-        $linkage = PlayerStatSheetLinkage::for($tournament->sport->name, $tournament->sportFormat?->name);
+        $linkage = PlayerStatSheetLinkage::for($tournament->sport->name, $formatName);
         $isTeamMatch = $match->participant_a_team_id !== null;
 
         if ($isTeamMatch) {
