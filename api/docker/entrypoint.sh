@@ -103,6 +103,17 @@ if [ "$1" = "supervisord" ]; then
         php artisan db:seed --class=RoundRobinBadmintonTournamentSeeder --force || echo "RoundRobinBadmintonTournamentSeeder failed — continuing boot anyway"
         php artisan db:seed --class=GroupStageBadmintonTournamentSeeder --force || echo "GroupStageBadmintonTournamentSeeder failed — continuing boot anyway"
         php artisan db:seed --class=SwissBadmintonTournamentSeeder --force || echo "SwissBadmintonTournamentSeeder failed — continuing boot anyway"
+
+        # Unlike the tournament seeders below, these two ARE safe to leave
+        # set across multiple boots (update/firstOrCreate-only, no
+        # Tournament::create()) — they're here because
+        # CompletedMensBasketballFinalsSeeder/ShowdownSeeder need 40 distinct
+        # male players with gender already set to succeed, which an
+        # environment whose accounts predate the gender feature (or was
+        # restored from a dump taken before it) won't have yet.
+        php artisan db:seed --class=GenderBackfillSeeder --force || echo "GenderBackfillSeeder failed — continuing boot anyway"
+        php artisan db:seed --class=MalePlayerTopUpSeeder --force || echo "MalePlayerTopUpSeeder failed — continuing boot anyway"
+
         php artisan db:seed --class=CompletedMensBasketballFinalsSeeder --force || echo "CompletedMensBasketballFinalsSeeder failed — continuing boot anyway"
         php artisan db:seed --class=CompletedMensBasketballShowdownSeeder --force || echo "CompletedMensBasketballShowdownSeeder failed — continuing boot anyway"
     fi
