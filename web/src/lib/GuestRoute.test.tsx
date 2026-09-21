@@ -61,6 +61,7 @@ describe('GuestRoute', () => {
         email: 't@test.com',
         roles: ['player'],
         avatar_url: null,
+        qr_code_url: null,
         verification_status: 'verified' as const,
         first_name: null,
         middle_name: null,

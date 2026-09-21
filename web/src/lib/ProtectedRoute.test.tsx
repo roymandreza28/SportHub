@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ProtectedRoute } from './ProtectedRoute'
 import * as AuthContext from './AuthContext'
 
-const PROFILE_DEFAULTS = { first_name: null, middle_name: null, last_name: null, phone: null, address: null } as const
+const PROFILE_DEFAULTS = { first_name: null, middle_name: null, last_name: null, phone: null, address: null, qr_code_url: null } as const
 
 function mockAuth(overrides: Partial<ReturnType<typeof AuthContext.useAuth>>) {
   vi.spyOn(AuthContext, 'useAuth').mockReturnValue({

@@ -11,6 +11,7 @@ function mockAuth(roles: string[]) {
       email: 't@test.com',
       roles: roles as never,
       avatar_url: null,
+      qr_code_url: null,
       verification_status: 'verified',
       first_name: null,
       middle_name: null,
