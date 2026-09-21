@@ -57,8 +57,19 @@ COPY --from=vendor /app ./
 # .gitignore placeholders), so recreate the directories Laravel expects to
 # exist and be writable at runtime rather than relying on COPY to preserve
 # otherwise-empty directories.
+#
+# chmod alongside chown, not just chown: the actual permission bits here
+# otherwise come from whatever mode storage/ had in the build context at
+# COPY time (line 54/15 above) — fine from a Linux git checkout (Render, or
+# GitHub Actions' own `railway up`), but a local `railway up` from a Windows
+# machine packaged these directories with no write bit at all, since NTFS
+# has no real POSIX permission bits to preserve. www-data (the user php-fpm
+# actually runs requests as) then can't write logs/cache/sessions and every
+# request 500s. The explicit chmod makes this deterministic regardless of
+# which OS the build was triggered from.
 RUN mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs \
-    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R u+rwX,g+rwX /var/www/html/storage /var/www/html/bootstrap/cache
 
 COPY docker/nginx.conf.template /etc/nginx/nginx.conf.template
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
