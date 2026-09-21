@@ -44,7 +44,7 @@ export function DownPaymentPrompt({ req }: { req: MatchmakingRequestItem }) {
   const facilitator = reservation.facilitator
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4">
+    <div className="mx-auto flex w-full max-w-sm flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4">
       <p className="text-sm font-semibold text-slate-800">
         Matched{opponentName ? ` with ${opponentName}` : ''} — {req.venue?.name} reserved
       </p>
