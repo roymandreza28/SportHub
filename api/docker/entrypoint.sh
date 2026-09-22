@@ -64,6 +64,19 @@ if [ "$1" = "supervisord" ]; then
         php artisan db:seed --class=RolesAndPermissionsSeeder --force || echo "RolesAndPermissionsSeeder failed — continuing boot anyway"
     fi
 
+    # Another narrow sibling of SEED_ON_BOOT — backfills team logos and
+    # player/coach photos onto whatever teams/users already exist, without
+    # touching tournaments or newsfeed posts the way DatabaseSeeder's other
+    # seeders (SampleDataSeeder's Tournament::query()->delete(),
+    # NewsfeedSeeder's News::query()->delete()) would. Safe to leave set
+    # across multiple boots — TeamAndPlayerImagerySeeder only fills in
+    # teams/users that don't already have an image, so a second run is a
+    # no-op — but still unset once it's done so ordinary restarts don't pay
+    # the extra query cost checking for images to fill in.
+    if [ "$SEED_TEAM_AND_PLAYER_IMAGERY_ON_BOOT" = "true" ]; then
+        php artisan db:seed --class=TeamAndPlayerImagerySeeder --force || echo "TeamAndPlayerImagerySeeder failed — continuing boot anyway"
+    fi
+
     # Same one-shot-hook pattern as SEED_ON_BOOT above, for the opposite
     # operation — wiping every table except accounts/roles/sports back to a
     # fresh state. --force skips the interactive confirmation prompt, which
