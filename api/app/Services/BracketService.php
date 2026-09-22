@@ -1121,8 +1121,8 @@ class BracketService
             // be normalized to the same {id, name} shape as an individual
             // match's — see MatchParticipants.
             ->with([
-                'participantA:id,name', 'participantB:id,name', 'winner:id,name',
-                'participantATeam:id,name', 'participantBTeam:id,name', 'winnerTeam:id,name',
+                'participantA:id,name,avatar_path', 'participantB:id,name,avatar_path', 'winner:id,name,avatar_path',
+                'participantATeam:id,name,logo_path', 'participantBTeam:id,name,logo_path', 'winnerTeam:id,name,logo_path',
             ])
             ->orderBy('round')
             ->orderBy('id')

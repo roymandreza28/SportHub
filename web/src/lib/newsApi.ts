@@ -23,7 +23,10 @@ export type NewsTournamentItem = {
   sport_format_id: number | null
 }
 
-export type NewsMatchParticipant = { id: number; name: string }
+// image_url is the participant's team logo (team tournament) or personal
+// avatar (individual tournament) — MatchParticipants::shape() on the
+// backend normalizes both to this one field.
+export type NewsMatchParticipant = { id: number; name: string; image_url: string | null }
 
 export type NewsMatchItem = {
   id: number

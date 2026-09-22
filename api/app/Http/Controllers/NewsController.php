@@ -18,8 +18,8 @@ use Illuminate\Support\Facades\Storage;
 class NewsController extends Controller
 {
     private const MATCH_RELATION = [
-        'match.participantA:id,name', 'match.participantB:id,name', 'match.winner:id,name',
-        'match.participantATeam:id,name', 'match.participantBTeam:id,name', 'match.winnerTeam:id,name',
+        'match.participantA:id,name,avatar_path', 'match.participantB:id,name,avatar_path', 'match.winner:id,name,avatar_path',
+        'match.participantATeam:id,name,logo_path', 'match.participantBTeam:id,name,logo_path', 'match.winnerTeam:id,name,logo_path',
     ];
 
     public function index(Request $request)

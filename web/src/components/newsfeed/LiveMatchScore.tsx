@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { echo } from '../../lib/echo'
 import type { NewsMatchItem } from '../../lib/newsApi'
+import { Avatar } from '../layout/Avatar'
 
 // match.{id} is a fully PUBLIC channel (see MatchController's broadcasts) —
 // the exact same one ScoreboardLive.tsx subscribes to while actually
@@ -127,6 +128,7 @@ export function LiveMatchScore({ match }: { match: NewsMatchItem }) {
 
       <div className={`grid items-center gap-2 p-4 ${hasClock ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-2'}`}>
         <div className="flex min-w-0 flex-col items-center gap-1 text-center">
+          <Avatar name={aName} url={live.participant_a?.image_url} size="sm" className={aIsWinner ? 'ring-2 ring-teal-400' : ''} />
           <p className={`w-full truncate text-xs font-semibold uppercase tracking-wide ${aIsWinner ? 'text-teal-400' : 'text-slate-400'}`}>
             {aName}
           </p>
@@ -154,6 +156,7 @@ export function LiveMatchScore({ match }: { match: NewsMatchItem }) {
         )}
 
         <div className="flex min-w-0 flex-col items-center gap-1 text-center">
+          <Avatar name={bName} url={live.participant_b?.image_url} size="sm" className={bIsWinner ? 'ring-2 ring-teal-400' : ''} />
           <p className={`w-full truncate text-xs font-semibold uppercase tracking-wide ${bIsWinner ? 'text-teal-400' : 'text-slate-400'}`}>
             {bName}
           </p>
