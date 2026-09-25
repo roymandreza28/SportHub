@@ -96,11 +96,16 @@ export function DashboardShell({
   }, [isMobile, headerHeight])
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    // No bg here anymore (was bg-slate-50) — transparent so index.css's
+    // slow ambient body gradient shows through everywhere except where a
+    // .grad-surface/.grad-panel card deliberately paints over it.
+    <div className="flex min-h-screen">
       {/* Desktop/laptop sidebar — hidden below md, where the always-visible
-          icon nav bar below the header takes over instead. */}
+          icon nav bar below the header takes over instead. grad-panel (not
+          the interactive .grad-surface) since a static rail shouldn't lift
+          or flow-shift just because the cursor passes over it. */}
       <aside
-        className={`sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r border-slate-200 bg-white py-6 shadow-[1px_0_0_0_rgba(0,0,0,0.02),4px_0_16px_-8px_rgba(36,30,23,0.08)] transition-all md:flex ${
+        className={`grad-panel sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto py-6 transition-all md:flex ${
           collapsed ? 'w-20 px-2' : 'w-64 px-4'
         }`}
       >
@@ -108,7 +113,7 @@ export function DashboardShell({
           <img src="/logo.png" alt="" className="h-9 w-9 shrink-0" />
           {!collapsed && (
             <span className="font-display text-2xl font-bold leading-none tracking-tight text-slate-900">
-              Sports<span className="text-teal-600">Hub</span>
+              Sports<span className="grad-text font-bold">Hub</span>
             </span>
           )}
         </Link>
@@ -119,12 +124,10 @@ export function DashboardShell({
               key={item.id}
               onClick={() => onNavigate(item.id)}
               title={collapsed ? item.label : undefined}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-all duration-150 ${
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-all duration-200 ease-[var(--ease-spring)] ${
                 collapsed ? 'justify-center' : ''
               } ${
-                activeId === item.id
-                  ? 'bg-teal-600 text-pure-white shadow-sm shadow-teal-600/25'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                activeId === item.id ? 'grad-brand text-pure-white' : 'text-slate-600 hover:-translate-y-0.5 hover:text-slate-900'
               }`}
             >
               <item.icon className="h-5 w-5 shrink-0" />
@@ -142,7 +145,7 @@ export function DashboardShell({
         <header
           ref={headerRef}
           style={isMobile ? { transform: headerHidden ? `translateY(-${headerHeight}px)` : 'translateY(0)' } : undefined}
-          className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-4 py-4 shadow-sm backdrop-blur transition-transform duration-300 sm:gap-4 sm:px-8"
+          className="grad-panel sticky top-0 z-20 flex items-center gap-3 px-4 py-4 transition-transform duration-300 sm:gap-4 sm:px-8"
         >
           {/* Desktop-only sidebar collapse toggle — hidden while search is
               expanded is unnecessary since expansion only ever happens
@@ -150,7 +153,7 @@ export function DashboardShell({
           <button
             onClick={() => setCollapsed((c) => !c)}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 md:flex"
+            className="grad-surface hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-500 md:flex"
           >
             <IconChevronLeft className={`h-4 w-4 transition-transform ${collapsed ? 'rotate-180' : ''}`} />
           </button>
@@ -161,7 +164,7 @@ export function DashboardShell({
             <Link to="/dashboard" className="flex shrink-0 items-center gap-2 rounded-lg p-1 hover:bg-slate-50 md:hidden">
               <img src="/logo.png" alt="" className="h-8 w-8 shrink-0" />
               <span className="font-display text-xl font-bold leading-none tracking-tight text-slate-900">
-                Sports<span className="text-teal-600">Hub</span>
+                Sports<span className="grad-text font-bold">Hub</span>
               </span>
             </Link>
           )}
@@ -193,17 +196,15 @@ export function DashboardShell({
             occupying the header's old spot instead of leaving a gap there. */}
         <nav
           style={isMobile ? { top: headerHidden ? 0 : headerHeight } : undefined}
-          className="sticky z-10 flex items-center justify-center gap-1 overflow-x-auto border-b border-slate-200 bg-white px-2 py-2 transition-[top] duration-300 md:hidden"
+          className="grad-panel sticky z-10 flex items-center justify-center gap-1 overflow-x-auto px-2 py-2 transition-[top] duration-300 md:hidden"
         >
           {navItems.map((item) => (
             <div key={item.id} className="group relative">
               <button
                 onClick={() => onNavigate(item.id)}
                 aria-label={item.label}
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all duration-150 ${
-                  activeId === item.id
-                    ? 'bg-teal-600 text-pure-white shadow-sm shadow-teal-600/25'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all duration-200 ease-[var(--ease-spring)] ${
+                  activeId === item.id ? 'grad-brand text-pure-white' : 'text-slate-600 hover:-translate-y-0.5 hover:text-slate-900'
                 }`}
               >
                 <item.icon className="h-5 w-5" />
@@ -257,7 +258,7 @@ export function StatCardGrid({ children }: { children: ReactNode }) {
 
 export function StatCard({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+    <div className="grad-surface group relative overflow-hidden rounded-2xl p-5">
       {/* A quiet accent, not a loud one — a thin top bar in the brand color,
           only fully visible on hover, so a grid of these reads as calm at
           rest and responsive to the touch rather than every tile shouting
@@ -335,7 +336,7 @@ export function ListPreview({
   action?: ReactNode
 }) {
   return (
-    <div className="mb-8 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+    <div className="grad-panel mb-8 rounded-2xl p-6">
       <div className="mb-1 flex items-end justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900">{title}</h2>
@@ -379,7 +380,7 @@ export function Section({
         </div>
         {action}
       </div>
-      <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">{children}</div>
+      <div className="grad-panel rounded-2xl p-6">{children}</div>
     </section>
   )
 }

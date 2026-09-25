@@ -217,6 +217,153 @@ html {
   --color-white: #ffffff;
 }
 
+/* ── Smooth gradients + micro-interaction experiment ─────────────────────
+   Local-only style pass: soft diagonal gradient fills that visibly FLOW on
+   hover/focus, built entirely from Championship Spirit/Night Game Lights'
+   EXISTING teal/slate tokens (no new hues) — two-stop linear-gradients of
+   the same ramp a flat bg-teal-600/bg-white utility already used, so the
+   brand palette is untouched. Re-declared under [data-theme="dark"] the
+   same way every real token above is; left alone under .scoreboard-palette
+   so the 7 scoreboards keep their own flat look.
+
+   The "smooth" part: a gradient's angle/stops can't be transitioned
+   directly (pre-@property, browsers don't interpolate gradient functions),
+   so every gradient here is painted at 200% background-size and shifted
+   via background-position instead — a genuinely animatable property — for
+   a real flowing-color motion on hover rather than a hard swap. */
+:root {
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.grad-surface {
+  background-image: linear-gradient(135deg, var(--color-slate-50), var(--color-slate-200));
+  background-size: 220% 220%;
+  background-position: 0% 0%;
+  border: 1px solid color-mix(in srgb, var(--color-slate-300) 55%, transparent);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--color-slate-900) 6%, transparent);
+  transition:
+    background-position 0.6s var(--ease-spring),
+    box-shadow 0.3s ease,
+    border-color 0.3s ease,
+    transform 0.3s var(--ease-spring);
+}
+.grad-surface:hover {
+  background-position: 100% 100%;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--color-slate-900) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-teal-400) 45%, transparent);
+  transform: translateY(-2px);
+}
+.grad-surface:active {
+  transform: translateY(0) scale(0.985);
+}
+
+/* Non-interactive sibling for large static panels (sidebar, header) —
+   same resting gradient, no hover flow/lift, so the whole rail doesn't
+   shift color every time the cursor grazes it. */
+.grad-panel {
+  background-image: linear-gradient(160deg, var(--color-slate-50), var(--color-slate-100));
+  border: 1px solid color-mix(in srgb, var(--color-slate-300) 45%, transparent);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--color-slate-900) 5%, transparent);
+}
+
+/* A recessed well for form controls — a much flatter, subtler gradient
+   than .grad-surface (a text input shouldn't visually compete with the
+   card it sits inside), that only really "flows" once focused, so
+   focusing an input feels like it draws a little extra color into itself. */
+.grad-input {
+  background-image: linear-gradient(135deg, var(--color-slate-50), var(--color-slate-100));
+  background-size: 220% 220%;
+  background-position: 0% 0%;
+  border: 1px solid var(--color-slate-200);
+  transition:
+    background-position 0.5s var(--ease-spring),
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.grad-input:focus-within {
+  background-position: 100% 100%;
+  border-color: color-mix(in srgb, var(--color-teal-500) 55%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-teal-400) 25%, transparent);
+}
+
+/* The colored flowing-gradient treatment for solid-brand elements (primary
+   button, active chip/nav item) — teal-500 -> teal-700, the same two
+   shades a flat bg-teal-600 already sits between, so it reads as the SAME
+   brand fill just given motion rather than a different color. */
+.grad-brand {
+  background-image: linear-gradient(135deg, var(--color-teal-500), var(--color-teal-700));
+  background-size: 220% 220%;
+  background-position: 0% 50%;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-teal-600) 35%, transparent);
+  transition:
+    background-position 0.6s var(--ease-spring),
+    box-shadow 0.3s ease,
+    transform 0.3s var(--ease-spring);
+}
+.grad-brand:hover {
+  background-position: 100% 50%;
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--color-teal-600) 48%, transparent);
+  transform: translateY(-2px);
+}
+.grad-brand:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* Gradient text — opt-in, for the wordmark only (never body copy: a
+   gradient fill measurably hurts text legibility at small sizes, so this
+   stays a deliberate one-off brand flourish rather than a reusable
+   default). */
+.grad-text {
+  background-image: linear-gradient(90deg, var(--color-teal-500), var(--color-teal-700));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+/* A slow, ambient gradient wash behind the whole app — subtle enough to
+   read as "the page has a soft glow" rather than an obvious animation.
+   Values pulled from the existing teal-50/slate-50/slate-100 tints (the
+   same tones .grad-surface/.grad-panel already use), just spread across a
+   much larger, slower-drifting canvas. */
+@keyframes grad-drift {
+  0% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 100% 100%;
+  }
+  100% {
+    background-position: 0% 0%;
+  }
+}
+body {
+  background-image: linear-gradient(
+    120deg,
+    var(--color-teal-50),
+    var(--color-slate-50) 35%,
+    var(--color-slate-100) 65%,
+    var(--color-teal-50)
+  );
+  background-size: 300% 300%;
+  animation: grad-drift 30s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    animation: none;
+  }
+  .grad-surface,
+  .grad-panel,
+  .grad-input,
+  .grad-brand {
+    transition: none;
+  }
+  .grad-surface:hover,
+  .grad-brand:hover {
+    transform: none;
+  }
+}
+
 @keyframes spin-reverse {
   from {
     transform: rotate(360deg);
