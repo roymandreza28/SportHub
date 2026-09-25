@@ -77,6 +77,21 @@ if [ "$1" = "supervisord" ]; then
         php artisan db:seed --class=TeamAndPlayerImagerySeeder --force || echo "TeamAndPlayerImagerySeeder failed — continuing boot anyway"
     fi
 
+    # Another narrow sibling of SEED_ON_BOOT — backfills randomized skill-
+    # level evaluations across every seeded player (a player with zero
+    # existing skill_levels rows gets a random 0-4 sports evaluated by a
+    # random coach; a player who already has at least one is left alone
+    # entirely). Same rationale as SEED_TEAM_AND_PLAYER_IMAGERY_ON_BOOT for
+    # needing its own narrow flag rather than SEED_ON_BOOT: this only adds
+    # to what's already there, it never wipes tournaments/newsfeed data.
+    # Safe to leave set across multiple boots (PlayerSkillEvaluationSeeder
+    # only ever fills in via updateOrCreate(), respecting skill_levels'
+    # own unique(player_profile_id, sport_id) constraint) — still unset
+    # once it's done so ordinary restarts don't pay the extra query cost.
+    if [ "$SEED_SKILL_EVALUATIONS_ON_BOOT" = "true" ]; then
+        php artisan db:seed --class=PlayerSkillEvaluationSeeder --force || echo "PlayerSkillEvaluationSeeder failed — continuing boot anyway"
+    fi
+
     # Same one-shot-hook pattern as SEED_ON_BOOT above, for the opposite
     # operation — wiping every table except accounts/roles/sports back to a
     # fresh state. --force skips the interactive confirmation prompt, which

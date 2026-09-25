@@ -58,6 +58,7 @@ class DatabaseSeeder extends Seeder
         $this->call(SampleDataSeeder::class);
         $this->call(ExtendedTournamentsSeeder::class);
         $this->call(MalePlayerTopUpSeeder::class);
+        $this->call(PlayerSkillEvaluationSeeder::class);
         $this->call(TeamAndPlayerImagerySeeder::class);
         $this->call(NewsfeedSeeder::class);
     }
