@@ -92,6 +92,23 @@ if [ "$1" = "supervisord" ]; then
         php artisan db:seed --class=PlayerSkillEvaluationSeeder --force || echo "PlayerSkillEvaluationSeeder failed — continuing boot anyway"
     fi
 
+    # Narrow sibling of SEED_ON_BOOT for JUST the newsfeed — unlike the two
+    # flags above, NewsfeedSeeder is NOT purely additive: it unconditionally
+    # deletes every existing News row (News::query()->delete(), see its own
+    # doc comment) and regenerates one status-appropriate post per CURRENT
+    # tournament, plus 2 standalone posts. That includes any real post an
+    # organizer has actually published since (e.g. via ShareMatchModal) —
+    # this flag trades that away for a populated feed, deliberately, same
+    # as running the full SEED_ON_BOOT would have. Safe to leave set across
+    # multiple boots in the sense that it never errors or duplicates rows
+    # (each run's delete-then-recreate is self-consistent) — but unlike
+    # SEED_TEAM_AND_PLAYER_IMAGERY_ON_BOOT/SEED_SKILL_EVALUATIONS_ON_BOOT,
+    # leaving it on WILL discard real posts on every future restart, so
+    # unset it promptly once the feed looks right.
+    if [ "$SEED_NEWSFEED_ON_BOOT" = "true" ]; then
+        php artisan db:seed --class=NewsfeedSeeder --force || echo "NewsfeedSeeder failed — continuing boot anyway"
+    fi
+
     # Same one-shot-hook pattern as SEED_ON_BOOT above, for the opposite
     # operation — wiping every table except accounts/roles/sports back to a
     # fresh state. --force skips the interactive confirmation prompt, which
