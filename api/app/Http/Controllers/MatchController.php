@@ -13,6 +13,7 @@ use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\Tournament;
 use App\Services\BracketService;
+use App\Services\NotificationService;
 use App\Support\Broadcasting;
 use App\Support\MatchParticipants;
 use App\Support\PlayerStatFieldSets;
@@ -233,11 +234,32 @@ class MatchController extends Controller
             'court_id' => ['nullable', 'exists:courts,id'],
         ]);
 
+        $previousCourtId = $match->court_id;
+
         $match->update($data);
 
         Broadcasting::safely(fn () => MatchStatusChanged::dispatch($match->fresh()));
 
-        return $match->fresh(['court.venue', ...self::PARTICIPANT_RELATIONS]);
+        $fresh = $match->fresh(['court.venue', ...self::PARTICIPANT_RELATIONS]);
+
+        // Only this policy's own organizer can ever call schedule() (see
+        // MatchPolicy::schedule()), so the facilitator being notified here
+        // is never the same person who just took the action — no self-
+        // notify guard needed, unlike TournamentController's equivalents.
+        // Silent on a re-save that doesn't actually change which court this
+        // game is on (including clearing it), same as those.
+        if (array_key_exists('court_id', $data) && $data['court_id'] !== $previousCourtId && $fresh->court?->venue) {
+            NotificationService::send($fresh->court->venue->facilitator_id, 'venue_match_scheduled', [
+                'match_id' => $fresh->id,
+                'tournament_id' => $fresh->bracket->tournament_id,
+                'venue_id' => $fresh->court->venue->id,
+                'venue_name' => $fresh->court->venue->name,
+                'court_name' => $fresh->court->name,
+                'scheduled_at' => $fresh->scheduled_at,
+            ]);
+        }
+
+        return $fresh;
     }
 
     // Powers the scoreboard's player-attribution UI (jersey numbers, "who

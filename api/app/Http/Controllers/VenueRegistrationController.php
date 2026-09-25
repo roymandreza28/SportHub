@@ -114,6 +114,13 @@ class VenueRegistrationController extends Controller
 
         $venue->loadMissing('facilitator:id,name,phone');
 
+        NotificationService::send($venue->facilitator_id, 'venue_booking_requested', [
+            'venue_registration_id' => $registration->id,
+            'venue_id' => $venue->id,
+            'venue_name' => $venue->name,
+            'starts_at' => $registration->starts_at,
+        ]);
+
         $totalAmount = VenueBookingService::calculateTotalAmount($venue, $court, $hours);
 
         $registration->load('venue:id,name', 'court:id,name');

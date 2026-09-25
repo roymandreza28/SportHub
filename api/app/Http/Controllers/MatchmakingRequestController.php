@@ -259,6 +259,18 @@ class MatchmakingRequestController extends Controller
                             'starts_at' => $registration->starts_at,
                         ]);
                     }
+
+                    // Unlike the two notifications above, the facilitator
+                    // never took any action to trigger this — matchmaking
+                    // silently blocked off a slot on their court, so this is
+                    // the only way they'd know about it before checking the
+                    // schedule by hand.
+                    NotificationService::send($venue->facilitator_id, 'venue_reserved_by_matchmaking', [
+                        'venue_registration_id' => $registration->id,
+                        'venue_id' => $venue->id,
+                        'venue_name' => $venueName,
+                        'starts_at' => $registration->starts_at,
+                    ]);
                 }
             }
 

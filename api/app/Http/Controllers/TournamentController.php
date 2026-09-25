@@ -156,6 +156,7 @@ class TournamentController extends Controller
 
         $this->notifyAssignment($tournament, 'venue_organizer_id', $tournament->venue_organizer_id);
         $this->notifyAssignment($tournament, 'livestream_organizer_id', $tournament->livestream_organizer_id);
+        $this->notifyVenueFacilitator($tournament, $tournament->venue_id);
 
         return response()->json(
             $tournament->load(
@@ -184,6 +185,36 @@ class TournamentController extends Controller
             'tournament_id' => $tournament->id,
             'tournament_name' => $tournament->name,
             'role' => $field === 'venue_organizer_id' ? 'venue_organizer' : 'livestream_organizer',
+        ]);
+    }
+
+    // The venue's owning facilitator (Venue::facilitator_id) is a distinct
+    // concept from venue_organizer_id (a per-tournament scorekeeper role —
+    // see notifyAssignment() above and Tournament's own field comments) and
+    // isn't covered by it at all: a main organizer picking someone else's
+    // venue never otherwise tells that facilitator their venue just got
+    // booked out for a tournament. Silent when the facilitator IS the
+    // organizer (their own tournament, at their own venue — nothing to
+    // tell them) or when no venue is set, same self-notify guard as
+    // notifyAssignment().
+    private function notifyVenueFacilitator(Tournament $tournament, ?int $venueId): void
+    {
+        if (! $venueId) {
+            return;
+        }
+
+        $venue = Venue::find($venueId);
+
+        if (! $venue || $venue->facilitator_id === $tournament->organizer_id) {
+            return;
+        }
+
+        NotificationService::send($venue->facilitator_id, 'venue_tournament_scheduled', [
+            'tournament_id' => $tournament->id,
+            'tournament_name' => $tournament->name,
+            'venue_id' => $venue->id,
+            'venue_name' => $venue->name,
+            'starts_at' => $tournament->starts_at,
         ]);
     }
 
@@ -247,6 +278,7 @@ class TournamentController extends Controller
 
         $previousVenueOrganizerId = $tournament->venue_organizer_id;
         $previousLivestreamOrganizerId = $tournament->livestream_organizer_id;
+        $previousVenueId = $tournament->venue_id;
 
         $tournament->update($data);
 
@@ -255,6 +287,9 @@ class TournamentController extends Controller
         }
         if (array_key_exists('livestream_organizer_id', $data) && $data['livestream_organizer_id'] !== $previousLivestreamOrganizerId) {
             $this->notifyAssignment($tournament, 'livestream_organizer_id', $data['livestream_organizer_id']);
+        }
+        if (array_key_exists('venue_id', $data) && $data['venue_id'] !== $previousVenueId) {
+            $this->notifyVenueFacilitator($tournament, $data['venue_id']);
         }
 
         if (($data['status'] ?? null) === 'registration') {

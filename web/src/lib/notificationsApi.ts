@@ -15,6 +15,13 @@ export type NotificationType =
   | 'account_pending_verification'
   | 'account_verified'
   | 'account_rejected'
+  // The four below all target a venue_facilitator about activity at their
+  // own venue — see MatchmakingPanel/DownPaymentPrompt and the facilitator
+  // dashboard's Bookings/Tournaments/Schedule tabs.
+  | 'venue_booking_requested'
+  | 'venue_reserved_by_matchmaking'
+  | 'venue_tournament_scheduled'
+  | 'venue_match_scheduled'
 
 export type NotificationItem = {
   id: number

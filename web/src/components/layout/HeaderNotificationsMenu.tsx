@@ -64,6 +64,26 @@ function notificationText(n: NotificationItem): { title: string; subtitle?: stri
     case 'account_verified':
     case 'account_rejected':
       return { title: n.data.message as string }
+    case 'venue_booking_requested':
+      return {
+        title: `New booking request at ${n.data.venue_name}`,
+        subtitle: n.data.starts_at ? new Date(n.data.starts_at as string).toLocaleString() : undefined,
+      }
+    case 'venue_reserved_by_matchmaking':
+      return {
+        title: `Matchmaking auto-reserved a slot at ${n.data.venue_name}`,
+        subtitle: n.data.starts_at ? new Date(n.data.starts_at as string).toLocaleString() : undefined,
+      }
+    case 'venue_tournament_scheduled':
+      return {
+        title: `${n.data.tournament_name} was scheduled at ${n.data.venue_name}`,
+        subtitle: n.data.starts_at ? new Date(n.data.starts_at as string).toLocaleString() : undefined,
+      }
+    case 'venue_match_scheduled':
+      return {
+        title: `A game was scheduled on ${n.data.court_name} at ${n.data.venue_name}`,
+        subtitle: n.data.scheduled_at ? new Date(n.data.scheduled_at as string).toLocaleString() : undefined,
+      }
     default:
       return { title: 'New notification' }
   }
@@ -119,6 +139,18 @@ function notificationLink(n: NotificationItem, hasRole: (...roles: Role[]) => bo
     // both land on OrganizerPage, same as the main organizer.
     case 'tournament_assigned':
       return '/organizer?tab=tournaments'
+    // All four sent only to a venue_facilitator (see VenueRegistrationController,
+    // MatchmakingRequestController, and TournamentController/MatchController's
+    // notifyVenueFacilitator()) — no isCoach/isPlayer branching needed here,
+    // unlike the shared types above.
+    case 'venue_booking_requested':
+      return '/facilitator?tab=bookings'
+    case 'venue_reserved_by_matchmaking':
+      return '/facilitator?tab=schedule'
+    case 'venue_tournament_scheduled':
+      return '/facilitator?tab=tournaments'
+    case 'venue_match_scheduled':
+      return '/facilitator?tab=schedule'
     default:
       return null
   }
