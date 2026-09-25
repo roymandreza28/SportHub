@@ -179,10 +179,19 @@ export function MatchmakingPanel() {
   const resolvedRequests = (requests ?? []).filter((r) => r.status !== 'open')
   // Surfaced above everything else, not buried in "Match history" — this is
   // the down-payment prompt itself, and a player shouldn't have to go
-  // looking for it. Once a facilitator resolves the reservation
-  // (approved/rejected) it stays visible for one more glance, then the
-  // normal history list below is the record of it going forward.
-  const matchedWithReservation = (requests ?? []).filter((r) => r.status === 'matched' && r.venue_registration)
+  // looking for it. Scoped to a still-pending reservation only: the backend
+  // never flips MatchmakingRequest.status away from 'matched' just because
+  // a facilitator approves/rejects the booking (that only happens hours
+  // later, once the whole match record ages out — see
+  // MatchmakingCleanupService::removeCompletedMatches()), so without this
+  // status check the card would keep showing at the top indefinitely even
+  // after the booking was already resolved. The request still shows in the
+  // "Match history" list below regardless (that filter is on
+  // MatchmakingRequest.status, unaffected by this one) — the approval/
+  // rejection outcome remains visible there.
+  const matchedWithReservation = (requests ?? []).filter(
+    (r) => r.status === 'matched' && r.venue_registration && r.venue_registration.status === 'pending'
+  )
 
   return (
     <div className="flex flex-col gap-4">
