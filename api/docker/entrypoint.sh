@@ -149,6 +149,17 @@ if [ "$1" = "supervisord" ]; then
         php artisan db:seed --class=GroupStageBadmintonTournamentSeeder --force || echo "GroupStageBadmintonTournamentSeeder failed — continuing boot anyway"
         php artisan db:seed --class=SwissBadmintonTournamentSeeder --force || echo "SwissBadmintonTournamentSeeder failed — continuing boot anyway"
 
+        # Three more venue-facilitator-hosted Badminton Singles showcases,
+        # one per remaining lifecycle stage the four seeders above don't
+        # cover: fully completed (swiss), down to just the grand final
+        # (double elimination), and still open for registration with no
+        # bracket at all (single elimination) — see each seeder's own doc
+        # comment. Same non-idempotent Tournament::create() caveat as
+        # every seeder in this block.
+        php artisan db:seed --class=CompletedSwissBadmintonTournamentSeeder --force || echo "CompletedSwissBadmintonTournamentSeeder failed — continuing boot anyway"
+        php artisan db:seed --class=DoubleEliminationBadmintonFinalSeeder --force || echo "DoubleEliminationBadmintonFinalSeeder failed — continuing boot anyway"
+        php artisan db:seed --class=SingleEliminationBadmintonRegistrationSeeder --force || echo "SingleEliminationBadmintonRegistrationSeeder failed — continuing boot anyway"
+
         # Unlike the tournament seeders below, these two ARE safe to leave
         # set across multiple boots (update/firstOrCreate-only, no
         # Tournament::create()) — they're here because

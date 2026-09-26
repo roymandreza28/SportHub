@@ -31,6 +31,9 @@ class DedupeShowcaseTournamentsSeeder extends Seeder
         'Binangonan Round Robin Badminton Cup',
         'Binangonan Group Stage Badminton Cup',
         'Binangonan Swiss Badminton Cup',
+        'Binangonan Facilitator Swiss Badminton Open',
+        'Binangonan Facilitator Double-Elimination Badminton Cup',
+        'Binangonan Facilitator Single-Elimination Badminton Cup',
     ];
 
     public function run(): void
