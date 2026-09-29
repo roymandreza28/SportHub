@@ -15,6 +15,7 @@ import {
   type BracketMatch,
 } from '../lib/organizerApi'
 import { useAuth } from '../lib/AuthContext'
+import { formatPeso } from '../lib/venueApi'
 import { extractDownloadErrorMessage } from '../lib/api'
 import { fetchNotifications, markNotificationRead } from '../lib/notificationsApi'
 import {
@@ -341,7 +342,7 @@ export function OrganizerPage() {
                 <ListRow
                   key={t.id}
                   primary={t.name}
-                  secondary={`${t.sport.name} — ${new Date(t.starts_at).toLocaleDateString()}${t.venue ? ` at ${t.venue.name}` : ''}`}
+                  secondary={`${t.sport.name} — ${new Date(t.starts_at).toLocaleDateString()}${t.venue ? ` at ${t.venue.name}` : ''}${t.registration_fee ? ` · ${formatPeso(Number(t.registration_fee))} entry` : ' · Free entry'}`}
                   badge={<StatusBadge status={t.status} />}
                 />
               ))}

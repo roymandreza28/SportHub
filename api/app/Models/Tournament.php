@@ -11,7 +11,7 @@ class Tournament extends Model
 {
     protected $fillable = [
         'organizer_id', 'sport_id', 'sport_format_id', 'required_gender', 'name', 'format', 'starts_at', 'ends_at', 'venue_id', 'status',
-        'venue_organizer_id', 'livestream_organizer_id', 'scoring_type', 'sets_to_win',
+        'venue_organizer_id', 'livestream_organizer_id', 'scoring_type', 'sets_to_win', 'registration_fee',
         'champion_id', 'champion_team_id',
     ];
 
@@ -20,6 +20,7 @@ class Tournament extends Model
         return [
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
+            'registration_fee' => 'decimal:2',
         ];
     }
 

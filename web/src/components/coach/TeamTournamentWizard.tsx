@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchSports } from '../../lib/venueApi'
+import { fetchSports, formatPeso } from '../../lib/venueApi'
 import { fetchTournaments, registerTeamForTournament, type Tournament } from '../../lib/coachApi'
 import { createTeam, addTeamMemberDirect, removeTeamMember, type Team } from '../../lib/teamsApi'
 import { fetchFriends, type Friend } from '../../lib/friendsApi'
@@ -88,6 +88,13 @@ export function TeamTournamentWizard({
                 >
                   <span>{t.name}</span>
                   <span className="flex shrink-0 items-center gap-1.5">
+                    {t.registration_fee ? (
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        {formatPeso(Number(t.registration_fee))}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">Free</span>
+                    )}
                     {t.required_gender && (
                       <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 capitalize">
                         {t.required_gender} only
@@ -110,6 +117,11 @@ export function TeamTournamentWizard({
         <div className={fieldGroup}>
           <label className={label}>3. {tournament.sport_format_id ? 'Build your team' : 'Register a player'}</label>
           <p className="text-sm text-slate-600">{tournament.name}</p>
+          <p className="text-xs text-slate-500">
+            {tournament.registration_fee
+              ? `Registration fee: ${formatPeso(Number(tournament.registration_fee))} — arrange payment with the organizer directly.`
+              : 'Free to register — no entry fee.'}
+          </p>
           {tournament.required_gender && (
             <p className="text-xs text-slate-500">
               Every player on your roster must be <strong>{tournament.required_gender}</strong> for this tournament.

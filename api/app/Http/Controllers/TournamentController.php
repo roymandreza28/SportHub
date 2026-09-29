@@ -106,6 +106,12 @@ class TournamentController extends Controller
             ],
             'scoring_type' => ['sometimes', 'in:single_score,best_of_sets'],
             'sets_to_win' => ['required_if:scoring_type,best_of_sets', 'nullable', 'integer', 'min:2', 'max:4'],
+            // Null/omitted = free to join. Set once here only — never
+            // editable afterward (see update() below, which doesn't accept
+            // this field at all) so a team/player who already registered
+            // (and possibly already paid) never gets the terms changed
+            // under them, same rationale as required_gender above.
+            'registration_fee' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
             // Optional linked newsfeed announcement — mirrors NewsController::store()'s
             // own post-shape validation so the tournament wizard can double as a post
             // composer. Stays unpublished (published_at null) until the tournament

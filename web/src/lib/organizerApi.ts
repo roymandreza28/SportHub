@@ -22,6 +22,10 @@ export type Tournament = {
   livestream_organizer?: { id: number; name: string } | null
   scoring_type: ScoringType
   sets_to_win: number | null
+  // Null = free to join. Set once at creation only — see
+  // TournamentWizard.tsx's own field and TournamentController::store()'s
+  // doc comment for why this is never editable afterward.
+  registration_fee: string | null
   // Set only for a team tournament — every registration/match participant is
   // a Team instead of an individual player. Null preserves today's
   // individual-registration behavior unchanged.
@@ -186,6 +190,7 @@ export async function createTournament(input: {
   livestream_organizer_id?: number
   scoring_type?: ScoringType
   sets_to_win?: number
+  registration_fee?: number
   // Optional linked newsfeed announcement, published once registration opens.
   post_title?: string
   post_body?: string

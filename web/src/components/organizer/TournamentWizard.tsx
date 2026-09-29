@@ -129,6 +129,7 @@ export function TournamentWizard() {
   const [requiredGender, setRequiredGender] = useState<'' | 'male' | 'female'>('')
   const [scoringChoice, setScoringChoice] = useState(SCORING_OPTIONS[0].value)
   const [startsAt, setStartsAt] = useState('')
+  const [registrationFee, setRegistrationFee] = useState('')
   const [venueId, setVenueId] = useState<number | ''>('')
   const [venueOrganizerId, setVenueOrganizerId] = useState<number | ''>('')
   const [livestreamOrganizerId, setLivestreamOrganizerId] = useState<number | ''>('')
@@ -178,6 +179,7 @@ export function TournamentWizard() {
       livestream_organizer_id: isVenueFacilitator ? undefined : livestreamOrganizerId ? Number(livestreamOrganizerId) : undefined,
       scoring_type: scoring.scoringType,
       sets_to_win: scoring.setsToWin,
+      registration_fee: registrationFee ? Number(registrationFee) : undefined,
       post_title: postTitle || undefined,
       post_body: postBody || undefined,
       post_media: postMedia.length ? postMedia : undefined,
@@ -334,6 +336,21 @@ export function TournamentWizard() {
               </option>
             ))}
           </select>
+        </div>
+        <div className={fieldGroup}>
+          <label className={label}>Registration fee (₱)</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0.00 (free)"
+            value={registrationFee}
+            onChange={(e) => setRegistrationFee(e.target.value)}
+            className={input}
+          />
+          <p className="text-xs text-slate-500">
+            {registrationFee ? 'Shown to coaches/players when they register — collect it yourself, same as a venue booking.' : 'Leave blank for a free tournament.'}
+          </p>
         </div>
         {isVenueFacilitator ? (
           <div className={`${fieldGroup} sm:col-span-2`}>
