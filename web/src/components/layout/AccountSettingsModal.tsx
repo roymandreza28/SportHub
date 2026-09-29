@@ -203,13 +203,14 @@ export function AccountSettingsModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {hasRole('venue_facilitator') && (
+        {hasRole('venue_facilitator', 'organizer') && (
           <div className="mt-4 flex flex-col gap-3 border-b border-slate-100 pb-4">
             <div className={fieldGroup}>
               <label className={label}>Payment QR code</label>
               <p className="text-xs text-slate-500">
-                Shown to a player/coach once they're matched and your venue is reserved, so they can scan to pay a
-                down payment (e.g. via GCash) directly.
+                {hasRole('venue_facilitator')
+                  ? "Shown to a player/coach once they're matched and your venue is reserved, so they can scan to pay a down payment (e.g. via GCash) directly."
+                  : 'Shown to coaches/players registering for one of your tournaments with a fee set, so they can scan to pay you directly (e.g. via GCash).'}
               </p>
             </div>
             <div className="flex items-center gap-3">
