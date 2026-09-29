@@ -15,7 +15,7 @@ use Illuminate\Database\Seeder;
 // tournaments — which re-ran those four non-idempotent seeders a second
 // time too, producing an exact duplicate of each by name.
 //
-// This finds any of those four showcase tournament NAMES that now have
+// This finds any of the showcase tournament NAMES below that now have
 // more than one row, keeps the OLDEST (lowest id — the original, more
 // likely to have accumulated real interaction), and deletes every newer
 // duplicate. Tournament's own cascadeOnDelete foreign keys (brackets,
@@ -34,6 +34,14 @@ class DedupeShowcaseTournamentsSeeder extends Seeder
         'Binangonan Facilitator Swiss Badminton Open',
         'Binangonan Facilitator Double-Elimination Badminton Cup',
         'Binangonan Facilitator Single-Elimination Badminton Cup',
+        // The two CompletedMensBasketball*Seeder tournaments — same
+        // SEED_BASKETBALL_FORMATS_ON_BOOT block, same Tournament::create()
+        // non-idempotency, just missed when this list was first written.
+        // Render's free-tier spin-down/spin-up cycle re-running the boot
+        // script hundreds of times while the flag sat on produced 18
+        // duplicates of each of these before this was caught.
+        'Binangonan Rizal Basketball Finals',
+        'Binangonan Barangay Basketball Showdown',
     ];
 
     public function run(): void
