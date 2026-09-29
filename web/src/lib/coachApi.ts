@@ -25,6 +25,18 @@ export type Tournament = {
   registration_fee: string | null
 }
 
+// Only present when the tournament actually has a registration_fee set —
+// mirrors MatchmakingRequestItem's own venue_registration field: present
+// only when there's something real to pay for. Powers the "receipt" card
+// (TournamentPaymentReceipt.tsx) shown the instant a coach registers a
+// player/team for a paid tournament.
+export type PaymentReceipt = {
+  tournament_name: string
+  registration_fee: string
+  conversation_id: number
+  organizer: { id: number; name: string; phone: string | null; qr_code_url: string | null }
+}
+
 export type CoachTournamentRegistration = {
   id: number
   status: 'pending' | 'confirmed' | 'withdrawn'
@@ -68,12 +80,16 @@ export async function fetchTournament(id: number) {
 }
 
 export async function registerPlayerForTournament(tournamentId: number, userId: number) {
-  const { data } = await api.post(`/api/tournaments/${tournamentId}/registrations`, { user_id: userId })
+  const { data } = await api.post<{ payment_receipt: PaymentReceipt | null }>(`/api/tournaments/${tournamentId}/registrations`, {
+    user_id: userId,
+  })
   return data
 }
 
 export async function registerTeamForTournament(tournamentId: number, teamId: number) {
-  const { data } = await api.post(`/api/tournaments/${tournamentId}/team-registrations`, { team_id: teamId })
+  const { data } = await api.post<{ payment_receipt: PaymentReceipt | null }>(`/api/tournaments/${tournamentId}/team-registrations`, {
+    team_id: teamId,
+  })
   return data
 }
 

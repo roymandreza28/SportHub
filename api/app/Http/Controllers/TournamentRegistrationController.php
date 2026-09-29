@@ -106,6 +106,8 @@ class TournamentRegistrationController extends Controller
             ]);
         }
 
+        $registration->setAttribute('payment_receipt', $this->paymentReceipt($tournament, $registration, $request->user()->id));
+
         return response()->json($registration->load('user:id,name,email', 'tournament:id,name'), 201);
     }
 
@@ -220,7 +222,72 @@ class TournamentRegistrationController extends Controller
 
         $this->ensureTeamConversation($team);
 
+        $registration->setAttribute('payment_receipt', $this->paymentReceipt($tournament, $registration, $request->user()->id));
+
         return response()->json($registration->load('team.members.user:id,name,email', 'tournament:id,name'), 201);
+    }
+
+    // Only set when the tournament actually has a registration fee — a free
+    // tournament has nothing for the coach to pay, so there's nothing to
+    // show a receipt for. Mirrors VenueBookingService's "the down-payment
+    // prompt keys off this — present only when the pair's chosen venue+time
+    // actually got auto-reserved" rationale: the receipt card only appears
+    // when there's a real payment to arrange, never for a $0 registration.
+    private function paymentReceipt(Tournament $tournament, TournamentRegistration $registration, int $coachId): ?array
+    {
+        if ($tournament->registration_fee === null) {
+            return null;
+        }
+
+        // select()'d to id/name/phone/qr_code_path rather than the full
+        // model — qr_code_path (the raw storage path) has to be selected
+        // alongside qr_code_url's own computed accessor, or the accessor
+        // silently resolves to null on a partial-column model instance.
+        $organizer = $tournament->organizer()->select('id', 'name', 'phone', 'qr_code_path')->first();
+
+        // A coach can never actually BE a tournament's organizer today (the
+        // 'manage tournaments' permission that creating one requires isn't
+        // granted to the coach role) — kept as a defensive guard anyway,
+        // same self-notify precaution used everywhere else in this codebase.
+        if (! $organizer || $organizer->id === $coachId) {
+            return null;
+        }
+
+        $conversation = $this->ensureRegistrationConversation($registration, $coachId, $organizer->id);
+
+        return [
+            'tournament_name' => $tournament->name,
+            'registration_fee' => $tournament->registration_fee,
+            'conversation_id' => $conversation->id,
+            'organizer' => [
+                'id' => $organizer->id,
+                'name' => $organizer->name,
+                'phone' => $organizer->phone,
+                'qr_code_url' => $organizer->qr_code_url,
+            ],
+        ];
+    }
+
+    // Created directly (not through Social\ConversationController::store())
+    // for the same reason as VenueBookingService::ensureBookingConversation()/
+    // ensureTeamConversation() above — a coach and the tournament's
+    // organizer aren't necessarily already friends. The unique
+    // tournament_registration_id column on conversations makes this
+    // idempotent, mirroring both of those.
+    private function ensureRegistrationConversation(TournamentRegistration $registration, int $coachId, int $organizerId): Conversation
+    {
+        return DB::transaction(function () use ($registration, $coachId, $organizerId) {
+            $conversation = Conversation::firstOrCreate(
+                ['tournament_registration_id' => $registration->id],
+                ['type' => 'direct', 'created_by' => $organizerId]
+            );
+
+            if ($conversation->wasRecentlyCreated) {
+                $conversation->participants()->attach(collect([$coachId, $organizerId])->unique());
+            }
+
+            return $conversation;
+        });
     }
 
     // Created directly (not through Social\ConversationController::store())

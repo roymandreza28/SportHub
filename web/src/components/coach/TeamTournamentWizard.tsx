@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchSports, formatPeso } from '../../lib/venueApi'
-import { fetchTournaments, registerTeamForTournament, type Tournament } from '../../lib/coachApi'
+import { fetchTournaments, registerTeamForTournament, type PaymentReceipt, type Tournament } from '../../lib/coachApi'
 import { createTeam, addTeamMemberDirect, removeTeamMember, type Team } from '../../lib/teamsApi'
 import { fetchFriends, type Friend } from '../../lib/friendsApi'
 import { TournamentRegistrationForm } from './TournamentRegistrationForm'
+import { TournamentPaymentReceipt } from './TournamentPaymentReceipt'
 import { useAuth } from '../../lib/AuthContext'
 import { buttonPrimary, buttonSecondary, fieldGroup, input, label, select } from '../../lib/formStyles'
 
@@ -151,6 +152,7 @@ function TeamBuilder({ tournament, onRegistered }: { tournament: Tournament; onR
   const [teamName, setTeamName] = useState('')
   const [friendId, setFriendId] = useState<number | ''>('')
   const [message, setMessage] = useState<string | null>(null)
+  const [receipt, setReceipt] = useState<PaymentReceipt | null>(null)
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -181,9 +183,16 @@ function TeamBuilder({ tournament, onRegistered }: { tournament: Tournament; onR
 
   const registerMutation = useMutation({
     mutationFn: () => registerTeamForTournament(tournament.id, team!.id),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['coach', 'tournament-registrations', 'mine'] })
-      onRegistered()
+      // A free tournament closes immediately, same as before this existed;
+      // a paid one holds the modal open on the receipt instead, until the
+      // coach explicitly taps "Done".
+      if (data.payment_receipt) {
+        setReceipt(data.payment_receipt)
+      } else {
+        onRegistered()
+      }
     },
     onError: (err: unknown) => {
       const text =
@@ -194,6 +203,10 @@ function TeamBuilder({ tournament, onRegistered }: { tournament: Tournament; onR
 
   const acceptedCount = team?.members.filter((m) => m.status === 'accepted').length ?? 0
   const isReady = acceptedCount >= playersPerSide
+
+  if (receipt) {
+    return <TournamentPaymentReceipt receipt={receipt} onDone={onRegistered} />
+  }
 
   if (!team) {
     return (

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchTournaments, registerPlayerForTournament, type PlayerSearchResult } from '../../lib/coachApi'
+import { fetchTournaments, registerPlayerForTournament, type PaymentReceipt, type PlayerSearchResult } from '../../lib/coachApi'
 import { PlayerSearchPicker } from './PlayerSearchPicker'
+import { TournamentPaymentReceipt } from './TournamentPaymentReceipt'
 import { useAuth } from '../../lib/AuthContext'
 import { buttonPrimary, fieldGroup, label, select } from '../../lib/formStyles'
 
@@ -20,15 +21,23 @@ export function TournamentRegistrationForm({
   const selectedTournament = tournaments?.find((t) => t.id === tournamentId)
   const [player, setPlayer] = useState<PlayerSearchResult | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [receipt, setReceipt] = useState<PaymentReceipt | null>(null)
   const queryClient = useQueryClient()
 
   const mutation = useMutation({
     mutationFn: () => registerPlayerForTournament(Number(tournamentId), player!.id),
-    onSuccess: () => {
-      setMessage({ type: 'success', text: `Registered ${player?.name}.` })
-      setPlayer(null)
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['coach', 'tournament-registrations', 'mine'] })
-      onRegistered?.()
+      // A free tournament closes immediately, same as before this existed;
+      // a paid one holds the modal open on the receipt instead, until the
+      // coach explicitly taps "Done".
+      if (data.payment_receipt) {
+        setReceipt(data.payment_receipt)
+      } else {
+        setMessage({ type: 'success', text: `Registered ${player?.name}.` })
+        setPlayer(null)
+        onRegistered?.()
+      }
     },
     onError: (err: unknown) => {
       const text =
@@ -37,6 +46,10 @@ export function TournamentRegistrationForm({
       setMessage({ type: 'error', text })
     },
   })
+
+  if (receipt) {
+    return <TournamentPaymentReceipt receipt={receipt} onDone={() => onRegistered?.()} />
+  }
 
   return (
     <div className="flex max-w-md flex-col gap-4">
