@@ -303,6 +303,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/tournaments/{tournament}/cancel', [TournamentController::class, 'cancel']);
         Route::get('/tournaments/{tournament}/registrations', [TournamentController::class, 'registrations']);
         Route::patch('/tournaments/{tournament}/registrations/{registration}/payment', [TournamentRegistrationController::class, 'updatePayment']);
+        Route::patch('/tournaments/{tournament}/registrations/{registration}/status', [TournamentRegistrationController::class, 'updateStatus']);
         Route::get('/tournaments/{tournament}/registrations/export', [TournamentController::class, 'exportRegistrations']);
         Route::get('/tournaments/{tournament}/results/export', [TournamentController::class, 'exportResults']);
         Route::get('/tournaments/{tournament}/rankings/export', [TournamentController::class, 'exportPlayerRankings']);

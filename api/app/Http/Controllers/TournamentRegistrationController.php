@@ -227,6 +227,43 @@ class TournamentRegistrationController extends Controller
         return response()->json($registration->load('team.members.user:id,name,email', 'tournament:id,name'), 201);
     }
 
+    // The organizer/facilitator's actual accept/reject call on a
+    // registration — approve once they've seen valid proof of payment,
+    // reject otherwise. Mirrors VenueRegistrationController::update()'s
+    // approved/rejected pattern; 'confirmed' is reused as the "approved"
+    // outcome rather than adding yet another status value. Either outcome
+    // notifies whoever's actually on the roster (the player themselves for
+    // an individual registration, every accepted member for a team one).
+    public function updateStatus(Request $request, Tournament $tournament, TournamentRegistration $registration)
+    {
+        abort_if($registration->tournament_id !== $tournament->id, 404);
+
+        $this->authorize('update', $tournament);
+
+        $data = $request->validate(['status' => ['required', 'in:confirmed,rejected']]);
+
+        $registration->update(['status' => $data['status']]);
+
+        $verb = $data['status'] === 'confirmed' ? 'approved' : 'rejected';
+        $message = "Your registration for {$tournament->name} has been {$verb}.";
+        $recipientIds = $registration->team_id
+            ? $registration->load('team.members')->team->members->where('status', 'accepted')->pluck('user_id')
+            : collect([$registration->user_id]);
+
+        foreach ($recipientIds as $userId) {
+            NotificationService::send($userId, 'tournament_update', [
+                'tournament_id' => $tournament->id,
+                'tournament_name' => $tournament->name,
+                'message' => $message,
+            ]);
+        }
+
+        return [
+            'id' => $registration->id,
+            'status' => $registration->status,
+        ];
+    }
+
     // The organizer/facilitator's manual bookkeeping action once a coach
     // has actually paid them (arranged off-platform, via the chat
     // ensureRegistrationConversation() opens below) — there's no payment

@@ -274,7 +274,7 @@ export type TournamentRegistrationRow = {
   name: string | null
   email: string | null
   team_roster: { id: number | null; name: string | null; email: string | null }[] | null
-  status: 'pending' | 'confirmed' | 'withdrawn'
+  status: 'pending' | 'confirmed' | 'rejected' | 'withdrawn'
   // Whether the organizer/facilitator has manually confirmed payment —
   // there's no payment gateway, so this just reflects what they've
   // recorded after coordinating with the coach via chat (see
@@ -294,6 +294,21 @@ export async function updateRegistrationPayment(tournamentId: number, registrati
   const { data } = await api.patch<{ id: number; paid: boolean; paid_at: string | null }>(
     `/api/tournaments/${tournamentId}/registrations/${registrationId}/payment`,
     { paid }
+  )
+  return data
+}
+
+// Approve once the organizer/facilitator has seen valid proof of payment,
+// reject otherwise — 'confirmed' is reused as the "approved" outcome rather
+// than the backend adding yet another status value.
+export async function updateRegistrationStatus(
+  tournamentId: number,
+  registrationId: number,
+  status: 'confirmed' | 'rejected'
+) {
+  const { data } = await api.patch<{ id: number; status: TournamentRegistrationRow['status'] }>(
+    `/api/tournaments/${tournamentId}/registrations/${registrationId}/status`,
+    { status }
   )
   return data
 }
