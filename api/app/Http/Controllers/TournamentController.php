@@ -387,6 +387,43 @@ class TournamentController extends Controller
         return $tournament;
     }
 
+    // On-page participant roster for the organizer/facilitator, shown while
+    // a tournament is open for registration — sourced from the same
+    // registrations() relation the CSV export below reads from, just
+    // returned as JSON instead of downloaded.
+    public function registrations(Tournament $tournament)
+    {
+        $this->authorize('export', $tournament);
+
+        $registrations = $tournament->registrations()
+            ->with(['user:id,name,email', 'team:id,name', 'team.members.user:id,name,email', 'registeredBy:id,name'])
+            ->orderBy('created_at')
+            ->get();
+
+        return $registrations->map(function ($registration) {
+            $isTeam = $registration->team_id !== null;
+
+            return [
+                'id' => $registration->id,
+                'type' => $isTeam ? 'team' : 'individual',
+                'name' => $isTeam ? $registration->team?->name : $registration->user?->name,
+                'email' => $isTeam ? null : $registration->user?->email,
+                'team_roster' => $isTeam
+                    ? $registration->team?->members->map(fn ($member) => [
+                        'id' => $member->user?->id,
+                        'name' => $member->user?->name,
+                        'email' => $member->user?->email,
+                    ])->values()
+                    : null,
+                'status' => $registration->status,
+                'paid' => $registration->paid_at !== null,
+                'paid_at' => $registration->paid_at?->toIso8601String(),
+                'registered_by' => $registration->registeredBy?->name,
+                'created_at' => $registration->created_at?->toIso8601String(),
+            ];
+        });
+    }
+
     // Covers the "Generated/exported reports contain correct totals, dates,
     // labels, and filters" defense-checklist criterion for the event-
     // management module — a CSV of exactly who's registered, sourced live

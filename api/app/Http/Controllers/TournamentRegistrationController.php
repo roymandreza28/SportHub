@@ -227,6 +227,28 @@ class TournamentRegistrationController extends Controller
         return response()->json($registration->load('team.members.user:id,name,email', 'tournament:id,name'), 201);
     }
 
+    // The organizer/facilitator's manual bookkeeping action once a coach
+    // has actually paid them (arranged off-platform, via the chat
+    // ensureRegistrationConversation() opens below) — there's no payment
+    // gateway here, so this is a human confirming what already happened,
+    // same as approving a venue booking implies the down payment cleared.
+    public function updatePayment(Request $request, Tournament $tournament, TournamentRegistration $registration)
+    {
+        abort_if($registration->tournament_id !== $tournament->id, 404);
+
+        $this->authorize('update', $tournament);
+
+        $data = $request->validate(['paid' => ['required', 'boolean']]);
+
+        $registration->update(['paid_at' => $data['paid'] ? now() : null]);
+
+        return [
+            'id' => $registration->id,
+            'paid' => $registration->paid_at !== null,
+            'paid_at' => $registration->paid_at?->toIso8601String(),
+        ];
+    }
+
     // Only set when the tournament actually has a registration fee — a free
     // tournament has nothing for the coach to pay, so there's nothing to
     // show a receipt for. Mirrors VenueBookingService's "the down-payment

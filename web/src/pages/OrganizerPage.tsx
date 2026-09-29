@@ -37,6 +37,7 @@ import { ScoreboardLive } from '../components/organizer/ScoreboardLive'
 import { MatchStartOptionsModal } from '../components/organizer/MatchStartOptionsModal'
 import { MatchScoreboardViewer } from '../components/organizer/MatchScoreboardViewer'
 import { NewsEditor } from '../components/organizer/NewsEditor'
+import { TournamentRegistrationsList } from '../components/organizer/TournamentRegistrationsList'
 import { Newsfeed } from '../components/newsfeed/Newsfeed'
 import { LivestreamCreateForm } from '../components/organizer/LivestreamCreateForm'
 import { LivestreamBroadcast } from '../components/organizer/LivestreamBroadcast'
@@ -464,6 +465,12 @@ export function OrganizerPage() {
 
                   return null
                 })()}
+                {canManageTournaments && myTournaments.find((t) => t.id === selectedTournamentId)?.status === 'registration' && (
+                  <TournamentRegistrationsList
+                    tournamentId={selectedTournamentId}
+                    registrationFee={myTournaments.find((t) => t.id === selectedTournamentId)?.registration_fee ?? null}
+                  />
+                )}
                 {proceedMutation.isError && (
                   <p className="mb-3 text-xs text-red-600">
                     Could not proceed — this tournament has no bracket yet (not enough registrants?). Cancel it

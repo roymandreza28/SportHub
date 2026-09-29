@@ -265,6 +265,39 @@ export async function exportTournamentRegistrations(tournamentId: number): Promi
   await downloadFile(`/api/tournaments/${tournamentId}/registrations/export`, `tournament-${tournamentId}-registrations.csv`)
 }
 
+// On-page roster (as opposed to the CSV export above) — powers
+// TournamentRegistrationsList.tsx, shown while a tournament is open for
+// registration.
+export type TournamentRegistrationRow = {
+  id: number
+  type: 'team' | 'individual'
+  name: string | null
+  email: string | null
+  team_roster: { id: number | null; name: string | null; email: string | null }[] | null
+  status: 'pending' | 'confirmed' | 'withdrawn'
+  // Whether the organizer/facilitator has manually confirmed payment —
+  // there's no payment gateway, so this just reflects what they've
+  // recorded after coordinating with the coach via chat (see
+  // TournamentRegistrationController::updatePayment()).
+  paid: boolean
+  paid_at: string | null
+  registered_by: string | null
+  created_at: string | null
+}
+
+export async function fetchTournamentRegistrations(tournamentId: number): Promise<TournamentRegistrationRow[]> {
+  const { data } = await api.get<TournamentRegistrationRow[]>(`/api/tournaments/${tournamentId}/registrations`)
+  return data
+}
+
+export async function updateRegistrationPayment(tournamentId: number, registrationId: number, paid: boolean) {
+  const { data } = await api.patch<{ id: number; paid: boolean; paid_at: string | null }>(
+    `/api/tournaments/${tournamentId}/registrations/${registrationId}/payment`,
+    { paid }
+  )
+  return data
+}
+
 // The complete tournament report — a PDF covering every match grouped by
 // round (full bracket results), each with both sides' scores, a per-player
 // stats table, and a chronological point-by-point match log, followed by
