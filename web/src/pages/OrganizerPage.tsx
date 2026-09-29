@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   fetchOrganizerTournaments,
@@ -238,13 +238,23 @@ export function OrganizerPage() {
   // here would silently kill the header's listeners too.
   const { data: notifications } = useQuery({ queryKey: ['notifications'], queryFn: fetchNotifications, enabled: canManageTournaments })
   const [championModal, setChampionModal] = useState<{ id: number; name: string; championName: string | null } | null>(null)
+  // markNotificationRead()'s invalidateQueries() refetch is async — the
+  // 'notifications' cache isn't guaranteed to reflect read_at yet by the
+  // time this modal closes (a fast Skip click routinely beats that round
+  // trip). Tracking shown ids locally, instead of trusting the cache, is
+  // what actually stops the same champion popup reopening the instant it's
+  // dismissed.
+  const shownChampionIds = useRef(new Set<number>())
 
   useEffect(() => {
     if (!canManageTournaments || championModal) return
 
-    const unread = (notifications ?? []).find((n) => n.type === 'tournament_champion_crowned' && !n.read_at)
+    const unread = (notifications ?? []).find(
+      (n) => n.type === 'tournament_champion_crowned' && !n.read_at && !shownChampionIds.current.has(n.id)
+    )
     if (!unread) return
 
+    shownChampionIds.current.add(unread.id)
     setChampionModal({
       id: Number(unread.data.tournament_id),
       name: String(unread.data.tournament_name ?? ''),
