@@ -93,7 +93,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user/data-export', [AuthController::class, 'exportData']);
     Route::delete('/user', [AuthController::class, 'destroySelf']);
 
-    Route::middleware('role:venue_facilitator')->post('/user/qr-code', [AuthController::class, 'updateQrCode']);
+    Route::middleware('role:venue_facilitator|organizer')->post('/user/qr-code', [AuthController::class, 'updateQrCode']);
 
     Route::get('/user', function (Request $request) {
         $user = $request->user();
