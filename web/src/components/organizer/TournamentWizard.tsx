@@ -136,7 +136,7 @@ export function TournamentWizard() {
   const [postTitle, setPostTitle] = useState('')
   const [postBody, setPostBody] = useState('')
   const [postMedia, setPostMedia] = useState<File[]>([])
-  const [message, setMessage] = useState<string | null>(null)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const selectedSportName = sports?.find((s) => s.id === sportId)?.name
   const availableFormats = (selectedSportName && SPORT_FORMATS[selectedSportName]) || ALL_FORMATS
@@ -185,8 +185,21 @@ export function TournamentWizard() {
       post_media: postMedia.length ? postMedia : undefined,
     }),
     onSuccess: (tournament) => {
-      setMessage(`Created "${tournament.name}" as a draft. Select it from your tournament list to open registration when you're ready.`)
+      setMessage({
+        type: 'success',
+        text: `Created "${tournament.name}" as a draft. Select it from your tournament list to open registration when you're ready.`,
+      })
       queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] })
+    },
+    // Previously silent on failure — clicking "Create tournament" while
+    // this rejected (a validation mismatch, an expired session, a slow
+    // upload timing out) looked exactly like nothing happened at all: the
+    // button just re-enabled with zero feedback. Now it actually says why.
+    onError: (err: unknown) => {
+      const text =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "Could not create the tournament — check your connection and try again."
+      setMessage({ type: 'error', text })
     },
   })
 
@@ -459,7 +472,9 @@ export function TournamentWizard() {
         </button>
       </div>
 
-      {message && <p className="text-sm text-slate-600">{message}</p>}
+      {message && (
+        <p className={`text-sm ${message.type === 'success' ? 'text-slate-600' : 'text-red-600'}`}>{message.text}</p>
+      )}
     </div>
   )
 }
