@@ -81,7 +81,12 @@ export function TournamentRegistrationsList({
         {registrations?.map((r) => (
           <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-slate-800">{r.name}</p>
+              <p className="truncate text-sm font-medium text-slate-800">
+                {r.name}
+                {r.registered_by && (
+                  <span className="ml-1.5 truncate text-xs font-normal text-slate-400">— coach: {r.registered_by}</span>
+                )}
+              </p>
               {r.type === 'individual' && r.email && <p className="truncate text-xs text-slate-500">{r.email}</p>}
               {r.type === 'team' && r.team_roster && r.team_roster.length > 0 && (
                 <p className="truncate text-xs text-slate-500">{r.team_roster.map((m) => m.name).join(', ')}</p>
