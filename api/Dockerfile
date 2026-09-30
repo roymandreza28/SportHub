@@ -73,6 +73,7 @@ RUN mkdir -p storage/framework/cache/data storage/framework/sessions storage/fra
 
 COPY docker/nginx.conf.template /etc/nginx/nginx.conf.template
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
