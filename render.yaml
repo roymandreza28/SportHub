@@ -24,7 +24,7 @@ services:
     dockerContext: .
     rootDir: api
     plan: free
-    region: singapore
+    region: oregon
     healthCheckPath: /up
     # Silently ignored on the free plan ("Commands can only run on paid
     # instance types" — Render logs this but does not fail the deploy).
