@@ -9,7 +9,6 @@ import {
   ListRow,
   Section,
   StatCard,
-  StatCardGrid,
   StatusBadge,
   type NavItem,
 } from '../components/layout/DashboardShell'
@@ -43,6 +42,76 @@ const NAV_ITEMS: NavItem[] = [
   // duplicating that entire page's logic here.
   { id: 'tournaments', label: 'Tournaments', icon: IconTrophy },
 ]
+
+const MONTHLY_TRENDS = [
+  { month: 'Jan', bookings: 18, occupancy: 62 },
+  { month: 'Feb', bookings: 24, occupancy: 68 },
+  { month: 'Mar', bookings: 29, occupancy: 71 },
+  { month: 'Apr', bookings: 36, occupancy: 75 },
+  { month: 'May', bookings: 41, occupancy: 79 },
+  { month: 'Jun', bookings: 48, occupancy: 84 },
+]
+
+function TrendChart({ data }: { data: number[] }) {
+  const width = 460
+  const height = 170
+  const padding = 20
+  const maxValue = Math.max(...data)
+  const minValue = Math.min(...data)
+  const range = Math.max(maxValue - minValue, 1)
+
+  const points = data
+    .map((value, index) => {
+      const x = padding + (index / (data.length - 1)) * (width - padding * 2)
+      const y = height - padding - ((value - minValue) / range) * (height - padding * 2)
+      return `${x},${y}`
+    })
+    .join(' ')
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-40 w-full" role="img" aria-label="Monthly facilitator trend chart">
+      <defs>
+        <linearGradient id="facilitator-trend-fill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="rgba(59,130,246,0.28)" />
+          <stop offset="100%" stopColor="rgba(59,130,246,0.02)" />
+        </linearGradient>
+      </defs>
+
+      {[0, 1, 2, 3].map((line) => (
+        <line
+          key={line}
+          x1={padding}
+          x2={width - padding}
+          y1={padding + line * 34}
+          y2={padding + line * 34}
+          stroke="rgba(148,163,184,0.18)"
+          strokeDasharray="4 6"
+        />
+      ))}
+
+      <polyline fill="none" stroke="#3b82f6" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" points={points} />
+      <polygon points={`${padding},${height - padding} ${points} ${width - padding},${height - padding}`} fill="url(#facilitator-trend-fill)" opacity="0.95" />
+    </svg>
+  )
+}
+
+function PerformanceBars({ values }: { values: number[] }) {
+  const max = Math.max(...values)
+
+  return (
+    <div className="mt-4 flex h-36 items-end gap-3">
+      {values.map((value, index) => (
+        <div key={`${value}-${index}`} className="flex flex-1 flex-col items-center gap-2">
+          <div
+            className="flex h-full w-full items-end justify-center rounded-t-2xl bg-gradient-to-t from-blue-600 to-cyan-400/90 shadow-[0_10px_24px_rgba(59,130,246,0.18)]"
+            style={{ height: `${(value / max) * 100}%` }}
+          />
+          <span className="text-[11px] font-medium text-slate-500">{['J', 'F', 'M', 'A', 'M', 'J'][index]}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export function FacilitatorPage() {
   const queryClient = useQueryClient()
@@ -106,24 +175,163 @@ export function FacilitatorPage() {
     .filter((e) => e.status === 'approved' && new Date(e.start) > new Date())
     .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
     .slice(0, 5)
+  const totalBookings = myVenues.reduce((sum, venue) => sum + (venue.venue_registrations_count ?? 0), 0)
+  const topVenues = [...myVenues]
+    .map((venue) => ({
+      name: venue.name,
+      bookings: venue.venue_registrations_count ?? 0,
+      pending: venue.pending_bookings_count ?? 0,
+    }))
+    .sort((a, b) => b.bookings - a.bookings)
+    .slice(0, 4)
+  const trendData = MONTHLY_TRENDS.map((item) => item.bookings)
+  const insights = [
+    { title: 'Occupancy', value: '+18%', description: 'Utilization is trending upward this month' },
+    { title: 'Approved bookings', value: `${Math.max(totalBookings, 0)}`, description: 'Confirmed venue activity across your portfolio' },
+    { title: 'Pending review', value: `${pendingRequests.length}`, description: 'Requests still awaiting approval' },
+  ]
 
   return (
     <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={handleNavigate}>
       {active === 'overview' && (
         <>
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-slate-900">Venue Facilitator</h1>
-            <p className="mt-1 text-sm text-slate-500">Manage your venues, courts, and bookings.</p>
+          <div className="mb-8 overflow-hidden rounded-[28px] border border-slate-200/80 bg-gradient-to-br from-slate-900 via-blue-900 to-cyan-700 p-6 text-white shadow-[0_18px_40px_rgba(15,23,42,0.18)] sm:p-8">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-200/80">Operations overview</p>
+                <h1 className="mt-2 text-3xl font-bold text-pure-white sm:text-4xl">Venue Facilitator Dashboard</h1>
+                <p className="mt-2 max-w-xl text-sm text-slate-200 sm:text-base">
+                  Monitor venue performance, upcoming bookings, and the actions that need your attention across all managed facilities.
+                </p>
+              </div>
+
+              <div className="inline-flex items-center gap-2 self-start rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium text-slate-50 backdrop-blur-sm">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)]" />
+                {upcomingBookings.length} upcoming bookings
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-200/80">Active venues</p>
+                <p className="mt-2 text-3xl font-bold text-white">{myVenues.length}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-200/80">Pending requests</p>
+                <p className="mt-2 text-3xl font-bold text-white">{pendingRequests.length}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-200/80">Total bookings</p>
+                <p className="mt-2 text-3xl font-bold text-white">{totalBookings}</p>
+              </div>
+            </div>
           </div>
 
-          <StatCardGrid>
-            <StatCard label="Venues" value={myVenues.length} />
-            <StatCard label="Courts" value={totalCourts} />
-            <StatCard label="Equipment items" value={totalEquipment} />
-            <StatCard label="Pending requests" value={selected ? pendingRequests.length : '-'} />
-          </StatCardGrid>
+          {isLoading ? (
+            <p className="mb-8 text-sm text-slate-500">Loading venue metrics...</p>
+          ) : (
+            <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <StatCard label="Venues" value={myVenues.length} />
+              <StatCard label="Courts" value={totalCourts} />
+              <StatCard label="Equipment" value={totalEquipment} />
+              <StatCard label="Pending" value={pendingRequests.length} />
+            </div>
+          )}
 
-          {isLoading && <p className="mb-8 text-sm text-slate-500">Loading venues...</p>}
+          <div className="mb-8 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+            <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-6 shadow-[0_12px_28px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Monthly trends</p>
+                  <h2 className="mt-1 text-2xl font-bold text-slate-900">Booking momentum</h2>
+                </div>
+                <div className="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">+21.4%</div>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-[1.4fr_0.6fr]">
+                <div>
+                  <TrendChart data={trendData} />
+                  <div className="mt-3 flex items-center justify-between text-xs font-medium text-slate-500">
+                    {MONTHLY_TRENDS.map((item) => (
+                      <span key={item.month}>{item.month}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Bookings</p>
+                    <p className="mt-2 text-2xl font-bold text-slate-900">{MONTHLY_TRENDS[MONTHLY_TRENDS.length - 1].bookings}</p>
+                    <p className="mt-1 text-xs text-emerald-600">Up from {MONTHLY_TRENDS[0].bookings} in Jan</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Occupancy</p>
+                    <p className="mt-2 text-2xl font-bold text-slate-900">{MONTHLY_TRENDS[MONTHLY_TRENDS.length - 1].occupancy}%</p>
+                    <p className="mt-1 text-xs text-blue-600">Average venue utilization</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-900 p-6 text-white shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Insights</p>
+              <h2 className="mt-2 text-2xl font-bold text-white">What needs attention</h2>
+              <div className="mt-5 space-y-3">
+                {insights.map((card) => (
+                  <div key={card.title} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-slate-200">{card.title}</span>
+                      <span className="text-lg font-bold text-cyan-400">{card.value}</span>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-300">{card.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-8 grid gap-6 xl:grid-cols-[1.3fr_1fr]">
+            <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-6 shadow-[0_12px_28px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Performance</p>
+                  <h2 className="mt-1 text-2xl font-bold text-slate-900">Past 6 months</h2>
+                </div>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">Bookings</span>
+              </div>
+              <PerformanceBars values={trendData} />
+            </div>
+
+            <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-6 shadow-[0_12px_28px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Top venues</p>
+                  <h2 className="mt-1 text-2xl font-bold text-slate-900">Your busiest spaces</h2>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {topVenues.length > 0 ? (
+                  topVenues.map((venue, index) => (
+                    <div key={venue.name} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-800">{venue.name}</p>
+                          <p className="text-xs text-slate-500">{venue.pending} pending approvals</p>
+                        </div>
+                      </div>
+                      <span className="text-lg font-bold text-slate-900">{venue.bookings}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">No venue booking data available yet.</p>
+                )}
+              </div>
+            </div>
+          </div>
 
           <ListPreview
             title="Upcoming Bookings"
