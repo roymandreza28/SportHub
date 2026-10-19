@@ -109,6 +109,8 @@ export function RegisterForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [generalError, setGeneralError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [showTermsModal, setShowTermsModal] = useState(false)
 
   const hasMinLength = password.length >= 8
   const hasUppercase = /[A-Z]/.test(password)
@@ -124,6 +126,11 @@ export function RegisterForm({
 
     if (!passwordValid || !passwordsMatch) {
       setGeneralError('Please satisfy every password requirement before continuing.')
+      return
+    }
+
+    if (!acceptedTerms) {
+      setGeneralError('Please accept the Terms & Conditions before creating your account.')
       return
     }
 
@@ -327,11 +334,131 @@ export function RegisterForm({
         )}
       </section>
 
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={acceptedTerms}
+            onChange={(e) => setAcceptedTerms(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+            required
+          />
+          <span>
+            I agree to the{' '}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setShowTermsModal(true)
+              }}
+              className="font-medium text-teal-600 underline-offset-2 hover:underline"
+            >
+              Terms & Conditions
+            </button>
+          </span>
+        </label>
+      </div>
+
       {generalError && <p className="text-sm text-red-600">{generalError}</p>}
 
-      <button type="submit" disabled={isSubmitting} className={`${buttonPrimary} justify-center py-2.5`}>
+      <button type="submit" disabled={isSubmitting || !acceptedTerms} className={`${buttonPrimary} justify-center py-2.5`}>
         {isSubmitting ? 'Creating account...' : 'Create account'}
       </button>
+
+      {showTermsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+          <div className="max-h-[80vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <h3 className="text-lg font-bold text-slate-900">Terms & Conditions</h3>
+              <button
+                type="button"
+                onClick={() => setShowTermsModal(false)}
+                className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+            <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4 text-sm text-slate-700">
+              <p>
+                Welcome to SportsHub, a platform for finding, booking, and organizing sports venues, tournaments,
+                coaching services, and livestream activity.
+              </p>
+              <p>
+                By creating an account, you agree to use SportsHub responsibly, provide accurate personal information,
+                and follow all rules set by the platform, individual venue operators, organizers, coaches, and event
+                administrators.
+              </p>
+
+              <ol className="list-decimal space-y-3 pl-5">
+                <li>
+                  <p className="font-semibold text-slate-900">Account and verification</p>
+                  <p>
+                    You must provide truthful personal details, a valid email address, and any required proof of identity,
+                    address, or coaching eligibility when requested. SportsHub may verify accounts before allowing full
+                    access to bookings, tournaments, or coaching features.
+                  </p>
+                </li>
+                <li>
+                  <p className="font-semibold text-slate-900">Venue bookings and payments</p>
+                  <p>
+                    Venue reservations, booking approvals, and any associated fees are managed through SportsHub but are
+                    subject to the venue&apos;s own policies, schedule, cancellation rules, and local laws. You are responsible
+                    for confirming the time, date, and terms before booking or attending a session.
+                  </p>
+                </li>
+                <li>
+                  <p className="font-semibold text-slate-900">Tournament and coaching conduct</p>
+                  <p>
+                    Players, coaches, organizers, and facilitators must behave respectfully and follow each tournament&apos;s
+                    rules, competition format, fair-play standards, and safety requirements. SportsHub may restrict,
+                    suspend, or remove access to accounts that misuse the platform, engage in abusive conduct, or violate
+                    tournament rules.
+                  </p>
+                </li>
+                <li>
+                  <p className="font-semibold text-slate-900">Content and platform use</p>
+                  <p>
+                    You may not upload unlawful, offensive, misleading, or harmful content. You are responsible for all
+                    information you post, including profile details, tournament entries, livestream communication, venue
+                    reviews, and messages sent through the platform.
+                  </p>
+                </li>
+                <li>
+                  <p className="font-semibold text-slate-900">Privacy and data</p>
+                  <p>
+                    SportsHub may collect and process personal information to provide account access, verification,
+                    bookings, tournament administration, and platform safety features. Information may be shared with
+                    relevant venue operators, organizers, and authorized staff only as needed to deliver the service.
+                  </p>
+                </li>
+                <li>
+                  <p className="font-semibold text-slate-900">Platform availability and liability</p>
+                  <p>
+                    SportsHub provides the service on an &ldquo;as is&rdquo; basis and does not guarantee uninterrupted access,
+                    flawless operation, or the outcome of any booking, event, or match. We do not guarantee venue
+                    availability or tournament outcomes beyond the rules and controls enabled by the platform.
+                  </p>
+                </li>
+                <li>
+                  <p className="font-semibold text-slate-900">Termination and compliance</p>
+                  <p>
+                    SportsHub may suspend or terminate accounts that violate platform rules, participate in fraud,
+                    disrupt events, or misuse user data. Continued use of SportsHub after account suspension is not
+                    permitted.
+                  </p>
+                </li>
+              </ol>
+
+              <p>
+                By accepting these terms, you confirm that you understand the responsibilities of using SportsHub and that
+                you agree to comply with the applicable rules for venue booking, tournament participation, coaching,
+                livestreaming, and account verification.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {onSwitchToLogin && (
         <p className="text-center text-sm text-slate-600">
