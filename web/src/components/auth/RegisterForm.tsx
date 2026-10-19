@@ -344,8 +344,8 @@ export function RegisterForm({
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
             required
           />
-          <label htmlFor="accept-terms" className="cursor-pointer">
-            I agree to the{' '}
+          <div className="flex flex-wrap items-center gap-1">
+            <span>I agree to the</span>
             <button
               type="button"
               onClick={(e) => {
@@ -357,7 +357,7 @@ export function RegisterForm({
             >
               Terms & Conditions
             </button>
-          </label>
+          </div>
         </div>
       </div>
 
