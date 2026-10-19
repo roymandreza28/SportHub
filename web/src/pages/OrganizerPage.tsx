@@ -23,7 +23,6 @@ import {
   ListPreview,
   ListRow,
   Section,
-  StatCard,
   StatusBadge,
   type NavItem,
 } from '../components/layout/DashboardShell'
@@ -362,13 +361,6 @@ export function OrganizerPage() {
                 <p className="mt-2 text-3xl font-bold text-white">{liveStreamCount}</p>
               </div>
             </div>
-          </div>
-
-          <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {canScoreMatches && <StatCard label="Tournaments" value={myTournaments.length} />}
-            {canScoreMatches && <StatCard label="In progress" value={inProgressCount} />}
-            {canManageLivestreams && <StatCard label="Livestreams" value={myLivestreams.length} />}
-            {canManageLivestreams && <StatCard label="Live now" value={liveStreamCount} />}
           </div>
 
           <div className="mb-8 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
