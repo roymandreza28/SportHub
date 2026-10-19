@@ -335,15 +335,16 @@ export function RegisterForm({
       </section>
 
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-        <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-700">
+        <div className="flex items-start gap-3 text-sm text-slate-700">
           <input
+            id="accept-terms"
             type="checkbox"
             checked={acceptedTerms}
             onChange={(e) => setAcceptedTerms(e.target.checked)}
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
             required
           />
-          <span>
+          <label htmlFor="accept-terms" className="cursor-pointer">
             I agree to the{' '}
             <button
               type="button"
@@ -356,8 +357,8 @@ export function RegisterForm({
             >
               Terms & Conditions
             </button>
-          </span>
-        </label>
+          </label>
+        </div>
       </div>
 
       {generalError && <p className="text-sm text-red-600">{generalError}</p>}
