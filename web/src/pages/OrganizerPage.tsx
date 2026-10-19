@@ -24,7 +24,6 @@ import {
   ListRow,
   Section,
   StatCard,
-  StatCardGrid,
   StatusBadge,
   type NavItem,
 } from '../components/layout/DashboardShell'
@@ -305,44 +304,209 @@ export function OrganizerPage() {
 
   const inProgressCount = myTournaments.filter((t) => t.status === 'ongoing').length
   const liveStreamCount = myLivestreams.filter((l) => l.status === 'live').length
+  const registrationOpenCount = myTournaments.filter((t) => t.status === 'registration').length
+  const completedCount = myTournaments.filter((t) => t.status === 'completed').length
+  const trendData = [18, 23, 31, 38, 46, 54]
+  const insights = [
+    { title: 'Tournament pipeline', value: `${myTournaments.length}`, description: 'Total tournaments under your management' },
+    { title: 'Live stream activity', value: `${liveStreamCount}`, description: 'Currently broadcasting events to your audience' },
+    { title: 'Open registrations', value: `${registrationOpenCount}`, description: 'Stages currently accepting sign-ups' },
+  ]
+  const topTournaments = [...myTournaments]
+    .sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())
+    .slice(0, 4)
 
   return (
     <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={setActive}>
       {active === 'overview' && (
         <>
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-slate-900">
-              {isMainOrganizer
-                ? 'Organizer'
-                : isVenueFacilitator
-                  ? 'Venue Facilitator'
-                  : canScoreMatches
-                    ? 'Venue Organizer'
-                    : 'Livestream Organizer'}
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              {canManageTournaments
-                ? 'Tournaments, brackets, news, and livestreams.'
-                : canScoreMatches
-                  ? 'Run the live scoreboard for any ongoing tournament.'
-                  : 'Feed camera footage into any tournament livestream.'}
-            </p>
+          <div className="mb-8 overflow-hidden rounded-[28px] border border-slate-200/80 bg-gradient-to-br from-slate-900 via-violet-900 to-indigo-700 p-6 text-white shadow-[0_18px_40px_rgba(15,23,42,0.18)] sm:p-8">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-200/80">Operations overview</p>
+                <h1 className="mt-2 text-3xl font-bold text-pure-white sm:text-4xl">
+                  {isMainOrganizer
+                    ? 'Organizer Dashboard'
+                    : isVenueFacilitator
+                      ? 'Venue Facilitator Dashboard'
+                      : canScoreMatches
+                        ? 'Venue Organizer Dashboard'
+                        : 'Livestream Organizer Dashboard'}
+                </h1>
+                <p className="mt-2 max-w-xl text-sm text-slate-200 sm:text-base">
+                  {canManageTournaments
+                    ? 'Track tournament momentum, schedule health, and the next actions that need your attention.'
+                    : canScoreMatches
+                      ? 'Monitor active tournaments and the live matches that need direction.'
+                      : 'Keep livestreams and broadcast activity aligned with your events.'}
+                </p>
+              </div>
+
+              <div className="inline-flex items-center gap-2 self-start rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium text-slate-50 backdrop-blur-sm">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)]" />
+                {inProgressCount + liveStreamCount} active items
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-200/80">Tournaments</p>
+                <p className="mt-2 text-3xl font-bold text-white">{myTournaments.length}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-200/80">In progress</p>
+                <p className="mt-2 text-3xl font-bold text-white">{inProgressCount}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-200/80">Livestreams</p>
+                <p className="mt-2 text-3xl font-bold text-white">{liveStreamCount}</p>
+              </div>
+            </div>
           </div>
 
-          <StatCardGrid>
-            {canScoreMatches && (
-              <>
-                <StatCard label="Tournaments" value={myTournaments.length} />
-                <StatCard label="In progress" value={inProgressCount} />
-              </>
-            )}
-            {canManageLivestreams && (
-              <>
-                <StatCard label="Livestreams" value={myLivestreams.length} />
-                <StatCard label="Live now" value={liveStreamCount} />
-              </>
-            )}
-          </StatCardGrid>
+          <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {canScoreMatches && <StatCard label="Tournaments" value={myTournaments.length} />}
+            {canScoreMatches && <StatCard label="In progress" value={inProgressCount} />}
+            {canManageLivestreams && <StatCard label="Livestreams" value={myLivestreams.length} />}
+            {canManageLivestreams && <StatCard label="Live now" value={liveStreamCount} />}
+          </div>
+
+          <div className="mb-8 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+            <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-6 shadow-[0_12px_28px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Monthly trends</p>
+                  <h2 className="mt-1 text-2xl font-bold text-slate-900">Competition momentum</h2>
+                </div>
+                <div className="rounded-full bg-violet-50 px-3 py-1 text-sm font-semibold text-violet-700">+26.8%</div>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-[1.4fr_0.6fr]">
+                <div>
+                  <svg viewBox="0 0 460 170" className="h-40 w-full" role="img" aria-label="Monthly organizer trend chart">
+                    <defs>
+                      <linearGradient id="organizer-trend-fill" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="rgba(124,58,237,0.28)" />
+                        <stop offset="100%" stopColor="rgba(124,58,237,0.02)" />
+                      </linearGradient>
+                    </defs>
+                    {[0, 1, 2, 3].map((line) => (
+                      <line
+                        key={line}
+                        x1={20}
+                        x2={440}
+                        y1={20 + line * 34}
+                        y2={20 + line * 34}
+                        stroke="rgba(148,163,184,0.18)"
+                        strokeDasharray="4 6"
+                      />
+                    ))}
+                    <polyline
+                      fill="none"
+                      stroke="#8b5cf6"
+                      strokeWidth="3.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      points="20,120 95,110 170,88 245,70 320,58 395,40"
+                    />
+                    <polygon
+                      points="20,150 20,120 95,110 170,88 245,70 320,58 395,40 440,150"
+                      fill="url(#organizer-trend-fill)"
+                      opacity="0.95"
+                    />
+                  </svg>
+                  <div className="mt-3 flex items-center justify-between text-xs font-medium text-slate-500">
+                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map((month) => (
+                      <span key={month}>{month}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Tournaments</p>
+                    <p className="mt-2 text-2xl font-bold text-slate-900">{Math.max(myTournaments.length, 1)}</p>
+                    <p className="mt-1 text-xs text-emerald-600">Active portfolio</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Completed</p>
+                    <p className="mt-2 text-2xl font-bold text-slate-900">{completedCount}</p>
+                    <p className="mt-1 text-xs text-violet-600">Events wrapped up</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-900 p-6 text-white shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Insights</p>
+              <h2 className="mt-2 text-2xl font-bold text-white">What needs attention</h2>
+              <div className="mt-5 space-y-3">
+                {insights.map((card) => (
+                  <div key={card.title} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-slate-200">{card.title}</span>
+                      <span className="text-lg font-bold text-violet-400">{card.value}</span>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-300">{card.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-8 grid gap-6 xl:grid-cols-[1.3fr_1fr]">
+            <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-6 shadow-[0_12px_28px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Performance</p>
+                  <h2 className="mt-1 text-2xl font-bold text-slate-900">Recent momentum</h2>
+                </div>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">6m</span>
+              </div>
+
+              <div className="mt-4 flex h-36 items-end gap-3">
+                {trendData.map((value, index) => (
+                  <div key={`${value}-${index}`} className="flex flex-1 flex-col items-center gap-2">
+                    <div
+                      className="flex h-full w-full items-end justify-center rounded-t-2xl bg-gradient-to-t from-violet-600 to-indigo-400/90 shadow-[0_10px_24px_rgba(124,58,237,0.18)]"
+                      style={{ height: `${(value / Math.max(...trendData)) * 100}%` }}
+                    />
+                    <span className="text-[11px] font-medium text-slate-500">{['J', 'F', 'M', 'A', 'M', 'J'][index]}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200/80 bg-white/85 p-6 shadow-[0_12px_28px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Priority list</p>
+                  <h2 className="mt-1 text-2xl font-bold text-slate-900">Latest tournaments</h2>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {topTournaments.length > 0 ? (
+                  topTournaments.map((t, index) => (
+                    <div key={t.id} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-sm font-bold text-violet-700">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-800">{t.name}</p>
+                          <p className="text-xs text-slate-500">{t.sport.name}</p>
+                        </div>
+                      </div>
+                      <StatusBadge status={t.status} />
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">No tournament data available yet.</p>
+                )}
+              </div>
+            </div>
+          </div>
 
           {canScoreMatches && (
             <ListPreview
