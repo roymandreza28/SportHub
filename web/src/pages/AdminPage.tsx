@@ -1,6 +1,8 @@
+import { useQuery } from '@tanstack/react-query'
 import { DashboardShell, Section, StatCard, type NavItem } from '../components/layout/DashboardShell'
 import { IconFileText, IconHelpCircle, IconHome, IconShieldCheck, IconUserCog, IconUsers } from '../components/layout/icons'
 import { useAdminMetrics } from '../components/admin/useAdminMetrics'
+import { fetchVenues } from '../lib/venueApi'
 import { useTabParam } from '../lib/useTabParam'
 import { FacilitatorCreateForm } from '../components/admin/FacilitatorCreateForm'
 import { OrganizerCreateForm } from '../components/admin/OrganizerCreateForm'
@@ -37,13 +39,6 @@ const MONTHLY_TRENDS = [
   { month: 'Apr', venues: 63, tournaments: 31, players: 438 },
   { month: 'May', venues: 71, tournaments: 36, players: 502 },
   { month: 'Jun', venues: 79, tournaments: 43, players: 584 },
-]
-
-const TOP_PERFORMING_VENUES = [
-  { name: 'Harbor Sports Arena', bookings: 184, occupancy: '91%', rating: 4.9, trend: '+12%' },
-  { name: 'Summit Courts Club', bookings: 162, occupancy: '87%', rating: 4.8, trend: '+9%' },
-  { name: 'Northside Community Hub', bookings: 149, occupancy: '82%', rating: 4.7, trend: '+14%' },
-  { name: 'Crescent Indoor Complex', bookings: 138, occupancy: '79%', rating: 4.6, trend: '+8%' },
 ]
 
 function TrendChart({ data }: { data: number[] }) {
@@ -127,6 +122,20 @@ function PerformanceBars({ values }: { values: number[] }) {
 export function AdminPage() {
   const { data: metrics, isLoading } = useAdminMetrics()
   const [active, setActive] = useTabParam(NAV_ITEMS[0].id)
+  const { data: topVenues = [] } = useQuery({
+    queryKey: ['admin', 'top-venues'],
+    queryFn: async () => {
+      const venues = await fetchVenues()
+      return venues
+        .filter((venue) => venue.status === 'active')
+        .map((venue) => ({
+          ...venue,
+          bookings: venue.venue_registrations_count ?? venue.pending_bookings_count ?? 0,
+        }))
+        .sort((a, b) => b.bookings - a.bookings)
+        .slice(0, 4)
+    },
+  })
 
   const playerCount = metrics?.users_by_role?.player ?? 0
   const coachCount = metrics?.users_by_role?.coach ?? 0
@@ -272,24 +281,27 @@ export function AdminPage() {
                 </div>
 
                 <div className="space-y-3">
-                  {TOP_PERFORMING_VENUES.map((venue, index) => (
-                    <div key={venue.name} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-sm font-bold text-pure-white">
-                        {index + 1}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-sm font-semibold text-slate-800">{venue.name}</p>
-                          <span className="text-xs font-semibold text-emerald-600">{venue.trend}</span>
+                  {topVenues.length === 0 ? (
+                    <p className="text-sm text-slate-400">No venue booking data available yet.</p>
+                  ) : (
+                    topVenues.map((venue, index) => (
+                      <div key={venue.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-sm font-bold text-pure-white">
+                          {index + 1}
                         </div>
-                        <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-slate-500">
-                          <span>{venue.bookings} bookings</span>
-                          <span>{venue.occupancy} occupancy</span>
-                          <span>★ {venue.rating}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="truncate text-sm font-semibold text-slate-800">{venue.name}</p>
+                            <span className="text-xs font-semibold text-emerald-600">#{index + 1}</span>
+                          </div>
+                          <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-slate-500">
+                            <span>{venue.bookings} bookings</span>
+                            <span>{venue.status}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             </div>
