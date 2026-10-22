@@ -3,17 +3,21 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Mail\PublicInquiryMail;
 use App\Models\AuditLog;
+use App\Models\PublicInquiry;
 use App\Models\SkillLevel;
 use App\Models\TournamentRegistration;
 use App\Models\User;
 use App\Models\VenueRegistration;
 use App\Services\NotificationService;
+use App\Support\Broadcasting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -160,18 +164,53 @@ class AuthController extends Controller
     public function forgotPassword(Request $request)
     {
         $data = $request->validate([
-            'email' => ['required', 'email', 'exists:users,email'],
+            'email' => ['required', 'email'],
         ]);
 
-        $status = Password::sendResetLink(['email' => $data['email']]);
+        $user = User::whereRaw('LOWER(email) = ?', [strtolower(trim($data['email']))])->first();
 
-        if ($status !== Password::RESET_LINK_SENT) {
+        if (! $user) {
             throw ValidationException::withMessages([
-                'email' => [__($status)],
+                'email' => ['No account is found.'],
             ]);
         }
 
-        return response()->json(['message' => 'Password reset instructions have been sent to your email.']);
+        return response()->json([
+            'found' => true,
+            'message' => 'We found your account. Please enter the last password you remember so the admin can review your reset request.',
+        ]);
+    }
+
+    public function requestPasswordReset(Request $request)
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email', 'exists:users,email'],
+            'last_password' => ['required', 'string', 'max:255'],
+        ]);
+
+        $inquiry = PublicInquiry::create([
+            'name' => null,
+            'email' => $data['email'],
+            'topic' => 'Account & Registration',
+            'message' => "Password reset request for {$data['email']}. Last remembered password: {$data['last_password']}",
+        ]);
+
+        $admin = User::role('admin')->orderBy('id')->first();
+
+        if ($admin) {
+            NotificationService::send($admin, 'public_inquiry_received', [
+                'inquiry_id' => $inquiry->id,
+                'topic' => $inquiry->topic,
+                'inquirer_name' => $inquiry->name,
+                'inquirer_email' => $inquiry->email,
+            ]);
+
+            Broadcasting::safely(fn () => Mail::to($admin->email)->send(new PublicInquiryMail($inquiry)));
+        }
+
+        return response()->json([
+            'message' => 'Your password reset request has been sent to the admin support team.',
+        ]);
     }
 
     public function resetPassword(Request $request)

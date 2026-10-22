@@ -17,9 +17,12 @@ export function LoginForm({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [resetEmail, setResetEmail] = useState('')
+  const [lastPassword, setLastPassword] = useState('')
   const [resetStatus, setResetStatus] = useState<string | null>(null)
   const [resetError, setResetError] = useState<string | null>(null)
-  const [isSendingReset, setIsSendingReset] = useState(false)
+  const [isCheckingAccount, setIsCheckingAccount] = useState(false)
+  const [isSendingResetRequest, setIsSendingResetRequest] = useState(false)
+  const [accountFound, setAccountFound] = useState(false)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -35,29 +38,73 @@ export function LoginForm({
     }
   }
 
-  async function handleForgotPassword() {
-    const trimmed = resetEmail.trim()
+  async function handleCheckAccount() {
+    const trimmedEmail = resetEmail.trim()
     setResetError(null)
     setResetStatus(null)
 
-    if (!trimmed) {
-      setResetError('Please enter the email address associated with your account.')
+    if (!trimmedEmail) {
+      setResetError('Please enter your registered email.')
       return
     }
 
-    setIsSendingReset(true)
+    setIsCheckingAccount(true)
     try {
-      await api.post('/api/password/forgot', { email: trimmed })
-      setResetStatus('Password reset instructions have been sent to your email.')
-      setResetEmail('')
+      const { data } = await api.post<{ found: boolean; message: string }>('/api/password/forgot', { email: trimmedEmail })
+      setAccountFound(Boolean(data.found))
+      setResetStatus(data.message)
+      setResetError(null)
+      if (!data.found) {
+        setResetStatus('No account is found.')
+      }
     } catch (requestError: unknown) {
       const message = requestError && typeof requestError === 'object' && 'response' in requestError
-        ? (requestError as { response?: { data?: { message?: string; errors?: { email?: string[] } } } }).response?.data?.message
-          ?? (requestError as { response?: { data?: { errors?: { email?: string[] } } } }).response?.data?.errors?.email?.[0]
+        ? (requestError as { response?: { data?: { message?: string; errors?: { email?: string[] } } } }).response?.data?.errors?.email?.[0]
+          ?? (requestError as { response?: { data?: { message?: string } } }).response?.data?.message
         : null
-      setResetError(message ?? 'We could not send a reset link for that email. Please try again.')
+      setAccountFound(false)
+      setResetStatus(null)
+      setResetError(message ?? 'No account is found.')
     } finally {
-      setIsSendingReset(false)
+      setIsCheckingAccount(false)
+    }
+  }
+
+  async function handleResetRequest() {
+    const trimmedEmail = resetEmail.trim()
+    const trimmedLastPassword = lastPassword.trim()
+
+    setResetError(null)
+    setResetStatus(null)
+
+    if (!trimmedEmail) {
+      setResetError('Please enter your registered email.')
+      return
+    }
+
+    if (!trimmedLastPassword) {
+      setResetError('Please enter the last password you remember.')
+      return
+    }
+
+    setIsSendingResetRequest(true)
+    try {
+      const { data } = await api.post<{ message: string }>('/api/password/request-reset', {
+        email: trimmedEmail,
+        last_password: trimmedLastPassword,
+      })
+      setResetStatus(data.message)
+      setLastPassword('')
+      setAccountFound(false)
+    } catch (requestError: unknown) {
+      const message = requestError && typeof requestError === 'object' && 'response' in requestError
+        ? (requestError as { response?: { data?: { message?: string; errors?: { email?: string[]; last_password?: string[] } } } }).response?.data?.message
+          ?? (requestError as { response?: { data?: { errors?: { email?: string[]; last_password?: string[] } } } }).response?.data?.errors?.email?.[0]
+          ?? (requestError as { response?: { data?: { errors?: { last_password?: string[] } } } }).response?.data?.errors?.last_password?.[0]
+        : null
+      setResetError(message ?? 'We could not submit your reset request. Please try again.')
+    } finally {
+      setIsSendingResetRequest(false)
     }
   }
 
@@ -99,6 +146,8 @@ export function LoginForm({
             setShowForgotPassword(true)
             setResetError(null)
             setResetStatus(null)
+            setAccountFound(false)
+            setLastPassword('')
           }}
           className="text-left text-sm font-medium text-teal-600 hover:underline"
         >
@@ -107,29 +156,53 @@ export function LoginForm({
       ) : (
         <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
           <div className={fieldGroup}>
-            <label className={label} htmlFor="forgot-email">Reset email</label>
+            <label className={label} htmlFor="forgot-email">Registered email</label>
             <input
               id="forgot-email"
               type="email"
-              placeholder="Enter your email"
+              placeholder="Enter your registered email"
               value={resetEmail}
               onChange={(e) => setResetEmail(e.target.value)}
               className={input}
             />
           </div>
+
           {resetError && <p className="text-sm text-red-600">{resetError}</p>}
           {resetStatus && <p className="text-sm text-green-600">{resetStatus}</p>}
+
+          {accountFound && (
+            <div className={fieldGroup}>
+              <label className={label} htmlFor="last-password">Last password you remember</label>
+              <input
+                id="last-password"
+                type="password"
+                placeholder="Enter the last password you remember"
+                value={lastPassword}
+                onChange={(e) => setLastPassword(e.target.value)}
+                className={input}
+              />
+            </div>
+          )}
+
           <div className="flex gap-2">
-            <button type="button" onClick={handleForgotPassword} disabled={isSendingReset} className={`${buttonSecondary} flex-1 justify-center`}>
-              {isSendingReset ? 'Sending...' : 'Send reset link'}
-            </button>
+            {!accountFound ? (
+              <button type="button" onClick={handleCheckAccount} disabled={isCheckingAccount} className={`${buttonSecondary} flex-1 justify-center`}>
+                {isCheckingAccount ? 'Checking...' : 'Check account'}
+              </button>
+            ) : (
+              <button type="button" onClick={handleResetRequest} disabled={isSendingResetRequest} className={`${buttonSecondary} flex-1 justify-center`}>
+                {isSendingResetRequest ? 'Sending...' : 'Send reset request'}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
                 setShowForgotPassword(false)
                 setResetEmail('')
+                setLastPassword('')
                 setResetError(null)
                 setResetStatus(null)
+                setAccountFound(false)
               }}
               className="text-sm font-medium text-slate-600 hover:underline"
             >

@@ -141,24 +141,28 @@ it('logs in an existing user and rejects bad credentials', function () {
     expect($response->json('token'))->toBeString()->not->toBeEmpty();
 });
 
-it('sends a password reset link and resets a password with a valid token', function () {
+it('checks an email account and submits a password reset request to admin support when it exists', function () {
     $user = User::factory()->create(['password' => bcrypt('old-password')]);
+
+    $this->postJson('/api/password/forgot', ['email' => 'missing@example.com'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('email');
 
     $this->postJson('/api/password/forgot', ['email' => $user->email])
         ->assertOk()
-        ->assertJsonPath('message', 'Password reset instructions have been sent to your email.');
+        ->assertJsonPath('found', true)
+        ->assertJsonPath('message', 'We found your account. Please enter the last password you remember so the admin can review your reset request.');
 
-    $token = \Illuminate\Support\Facades\Password::broker()->createToken($user);
-
-    $this->postJson('/api/password/reset', [
-        'token' => $token,
+    $this->postJson('/api/password/request-reset', [
         'email' => $user->email,
-        'password' => 'NewPassword123',
-        'password_confirmation' => 'NewPassword123',
+        'last_password' => 'old-password',
     ])->assertOk()
-        ->assertJsonPath('message', 'Your password has been reset successfully.');
+        ->assertJsonPath('message', 'Your password reset request has been sent to the admin support team.');
 
-    expect(Hash::check('NewPassword123', $user->fresh()->password))->toBeTrue();
+    $this->assertDatabaseHas('public_inquiries', [
+        'email' => $user->email,
+        'topic' => 'Account & Registration',
+    ]);
 });
 
 it('returns the authenticated user with roles on /api/user', function () {
