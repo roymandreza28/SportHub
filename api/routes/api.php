@@ -40,6 +40,14 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/password/forgot', [AuthController::class, 'forgotPassword']);
+Route::post('/password/reset', [AuthController::class, 'resetPassword']);
+Route::get('/password/reset/{token}', function (string $token, Request $request) {
+    $email = urlencode((string) $request->query('email', ''));
+    $redirectUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5173'), '/') . '/reset-password?token=' . urlencode($token) . '&email=' . $email;
+
+    return redirect()->to($redirectUrl);
+})->name('password.reset');
 
 Route::get('/sports', fn () => Sport::orderBy('name')->get());
 // The VAPID public key isn't sensitive (it's handed to every browser as

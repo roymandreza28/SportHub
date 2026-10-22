@@ -23,6 +23,7 @@ import { LandingPage } from './pages/LandingPage'
 // almost everyone hits first.
 const LoginPage = lazy(() => import('./pages/LoginPage').then((m) => ({ default: m.LoginPage })))
 const RegisterPage = lazy(() => import('./pages/RegisterPage').then((m) => ({ default: m.RegisterPage })))
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })))
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })))
 const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })))
 const FacilitatorPage = lazy(() => import('./pages/FacilitatorPage').then((m) => ({ default: m.FacilitatorPage })))
@@ -60,6 +61,14 @@ function App() {
                   element={
                     <GuestRoute>
                       <RegisterPage />
+                    </GuestRoute>
+                  }
+                />
+                <Route
+                  path="/reset-password"
+                  element={
+                    <GuestRoute>
+                      <ResetPasswordPage />
                     </GuestRoute>
                   }
                 />

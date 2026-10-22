@@ -141,6 +141,26 @@ it('logs in an existing user and rejects bad credentials', function () {
     expect($response->json('token'))->toBeString()->not->toBeEmpty();
 });
 
+it('sends a password reset link and resets a password with a valid token', function () {
+    $user = User::factory()->create(['password' => bcrypt('old-password')]);
+
+    $this->postJson('/api/password/forgot', ['email' => $user->email])
+        ->assertOk()
+        ->assertJsonPath('message', 'Password reset instructions have been sent to your email.');
+
+    $token = \Illuminate\Support\Facades\Password::broker()->createToken($user);
+
+    $this->postJson('/api/password/reset', [
+        'token' => $token,
+        'email' => $user->email,
+        'password' => 'NewPassword123',
+        'password_confirmation' => 'NewPassword123',
+    ])->assertOk()
+        ->assertJsonPath('message', 'Your password has been reset successfully.');
+
+    expect(Hash::check('NewPassword123', $user->fresh()->password))->toBeTrue();
+});
+
 it('returns the authenticated user with roles on /api/user', function () {
     $user = userWithRole('coach');
 
