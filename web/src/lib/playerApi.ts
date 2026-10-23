@@ -12,11 +12,19 @@ export type SkillLevel = {
   coach: { id: number; name: string } | null
   // The evaluation currently reflected in level/score above (an older one
   // is locked history — see api/app/Http/Controllers/EvaluationController.
-  // php's update() doc comment) — its criteria.attributes, when the coach
-  // filled those in rather than just an overall level/score, is what
-  // SkillEvaluationChart renders as a radar chart. Null once there's no
-  // evaluation on record at all yet.
-  latest_evaluation: { criteria: { attributes?: Record<string, number> } | null; notes: string | null } | null
+  // php's update() doc comment). The full detail on the profile modal comes
+  // from its attributes + sport_stats + notes fields, not just the badge. Null
+  // once there's no evaluation on record at all yet.
+  latest_evaluation: {
+    criteria: {
+      attributes?: Record<string, number>
+      sport_stats?: {
+        raw?: Record<string, number>
+        computed?: Record<string, number>
+      }
+    } | null
+    notes: string | null
+  } | null
 }
 
 export type PlayerProfile = {
