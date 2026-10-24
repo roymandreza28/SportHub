@@ -1,0 +1,181 @@
+flowchart LR
+    U["User / Browser"] --> A["Landing Page"]
+    A --> L["Login Form"]
+    A --> R["Register Form"]
+    L --> AU["AuthContext login()"]
+    R --> AR["AuthController register()"]
+    AU --> API["Axios /api/login"]
+    AR --> API2["Axios /api/register"]
+
+    subgraph AUTH["Authentication & Role Resolution"]
+        API --> V1{"Credentials valid?"}
+        API2 --> V2{"Registration inputs valid?"}
+        V1 -- No --> E1["ValidationException: invalid credentials"]
+        V2 -- No --> E2["ValidationException: missing or invalid fields"]
+        V1 -- Yes --> U1["AuthController login()"]
+        V2 -- Yes --> U2["AuthController register()"]
+        U1 --> C1["Check account active"]
+        U2 --> C1A["Validate proof uploads"]
+        C1A --> ROL["Assign role: player or coach + player"]
+        C1 --> LOAD["Load user with roles"]
+        ROL --> LOAD
+        LOAD --> TOK["Create Sanctum token"]
+        TOK --> SESS["Store token + set user in AuthContext"]
+        SESS --> ROLEMAP["roles.ts primaryDashboardPath()"]
+    end
+
+    ROLEMAP --> RD{"Role detected?"}
+    RD --> P["Player"]
+    RD --> C["Coach"]
+    RD --> VF["Venue Facilitator"]
+    RD --> O["Organizer"]
+    RD --> VO["Venue Organizer"]
+    RD --> LO["Livestream Organizer"]
+    RD --> AD["Admin"]
+
+    subgraph WEB["Frontend Routing & Guards"]
+        P --> RP1["ProtectedRoute roles=['player']"]
+        C --> RP2["ProtectedRoute roles=['coach']"]
+        VF --> RP3["ProtectedRoute roles=['venue_facilitator','admin']"]
+        O --> RP4["ProtectedRoute roles=['organizer']"]
+        VO --> RP5["ProtectedRoute roles=['venue_organizer']"]
+        LO --> RP6["ProtectedRoute roles=['livestream_organizer']"]
+        AD --> RP7["ProtectedRoute roles=['admin']"]
+        RP1 --> DP1["PlayerPage"]
+        RP2 --> DP2["CoachPage"]
+        RP3 --> DP3["FacilitatorPage"]
+        RP4 --> DP4["OrganizerPage"]
+        RP5 --> DP4
+        RP6 --> DP4
+        RP7 --> DP5["AdminPage"]
+    end
+
+    subgraph MOD["Role Module Business Actions"]
+        DP1 --> M1{"Player action"}
+        DP2 --> M2{"Coach action"}
+        DP3 --> M3{"Venue Facilitator action"}
+        DP4 --> M4{"Organizer action"}
+        DP5 --> M5{"Admin action"}
+
+        M1 --> PACT1["Matchmaking request"]
+        M1 --> PACT2["Venue registration"]
+        M1 --> PACT3["Tournament registration"]
+        M1 --> PACT4["Profile / social / chat"]
+        M1 --> PACT5["News interaction"]
+
+        M2 --> CACT1["Evaluate players"]
+        M2 --> CACT2["Create matchmaking request"]
+        M2 --> CACT3["Create team & tournament registration"]
+        M2 --> CACT4["Book venue"]
+        M2 --> CACT5["Profile / social"]
+
+        M3 --> FECT1["Manage venues"]
+        M3 --> FECT2["Approve venue bookings"]
+        M3 --> FECT3["View schedule"]
+        M3 --> FECT4["Manage news"]
+        M3 --> FECT5["Create/manage tournaments"]
+
+        M4 --> OACT1["Create tournament"]
+        M4 --> OACT2["Assign venue organizer"]
+        M4 --> OACT3["Assign livestream organizer"]
+        M4 --> OACT4["Generate bracket"]
+        M4 --> OACT5["Update match score"]
+        M4 --> OACT6["Manage livestream"]
+
+        M5 --> AACT1["Manage users"]
+        M5 --> AACT2["Verify accounts"]
+        M5 --> AACT3["Create facilitator/organizer"]
+        M5 --> AACT4["Review inquiries"]
+        M5 --> AACT5["View audit log"]
+    end
+
+    subgraph API_LAYER["Backend API Layer"]
+        PACT1 --> AX1["POST /matchmaking-requests"]
+        PACT2 --> AX2["POST /venue-registrations"]
+        PACT3 --> AX3["GET /tournament-registrations/mine-as-player"]
+        PACT4 --> AX4["GET/PATCH /player-profile + social routes"]
+        PACT5 --> AX5["POST /news/{id}/react or comment"]
+
+        CACT1 --> AX6["GET /skill-levels + evaluate API"]
+        CACT2 --> AX7["POST /matchmaking-requests"]
+        CACT3 --> AX8["POST /teams + tournament registration"]
+        CACT4 --> AX9["POST /venue-registrations"]
+        CACT5 --> AX10["Profile/social endpoints"]
+
+        FECT1 --> AX11["POST /venues + /venues/{id}"]
+        FECT2 --> AX12["PATCH /venue-registrations/{id}"]
+        FECT3 --> AX13["GET /venues/{id}/schedule"]
+        FECT4 --> AX14["POST/DELETE /news"]
+        FECT5 --> AX15["POST/PATCH /tournaments"]
+
+        OACT1 --> AX16["POST /tournaments"]
+        OACT2 --> AX17["PATCH /tournaments/{id}"]
+        OACT3 --> AX18["PATCH /tournaments/{id}"]
+        OACT4 --> AX19["POST /tournaments/{id}/generate-bracket"]
+        OACT5 --> AX20["PATCH /matches/{id}/score"]
+        OACT6 --> AX21["POST /livestreams + /news"]
+
+        AACT1 --> AX22["GET /admin/users + PATCH /users/{id}/roles"]
+        AACT2 --> AX23["GET /admin/users/pending-verifications + PATCH /verification"]
+        AACT3 --> AX24["POST /admin/facilitators or /organizers"]
+        AACT4 --> AX25["GET /admin/public-inquiries"]
+        AACT5 --> AX26["GET /admin/audit-log"]
+
+        AX1 --> MWA["Route middleware / role checks"]
+        AX2 --> MWA
+        AX3 --> MWA
+        AX4 --> MWA
+        AX5 --> MWA
+        AX6 --> MWA
+        AX7 --> MWA
+        AX8 --> MWA
+        AX9 --> MWA
+        AX10 --> MWA
+        AX11 --> MWA
+        AX12 --> MWA
+        AX13 --> MWA
+        AX14 --> MWA
+        AX15 --> MWA
+        AX16 --> MWA
+        AX17 --> MWA
+        AX18 --> MWA
+        AX19 --> MWA
+        AX20 --> MWA
+        AX21 --> MWA
+        AX22 --> MWA
+        AX23 --> MWA
+        AX24 --> MWA
+        AX25 --> MWA
+        AX26 --> MWA
+    end
+
+    subgraph SEC["Security Layer"]
+        MWA --> PERM{"Role/permission authorized?"}
+        PERM -- Yes --> CTRL["Controller method"]
+        PERM -- No --> DENY["403 Forbidden or redirect"]
+        CTRL --> GATE["Gate::before() admin override"]
+        GATE --> SPATIE["Spatie roles + permissions"]
+        SPATIE --> VALID["Validation rules"]
+        VALID --> SERVICE["Service layer / model logic"]
+    end
+
+    subgraph DATA["Data & Storage Layer"]
+        SERVICE --> DB[("Database tables")]
+        DB --> QUERY["Reads/Writes: Users, Roles, Matches, Tournaments, Venues, News, Social, Logs"]
+        SERVICE --> FILES[("Public files: avatars, proofs, QR, media")]
+        SERVICE --> NOTIF[("Notifications / audit records")]
+    end
+
+    QUERY --> RESP["JSON response"]
+    RESP --> UIUPD["React Query + state update"]
+    UIUPD --> PAGE["Dashboard / page refresh"]
+    NOTIF --> PAGE
+    FILES --> PAGE
+
+    PAGE --> UPD["User continues workflow"]
+    UPD --> A
+
+    subgraph OUT["Outcome"]
+        RESULT["System delivers authenticated role-based features"]
+    end
+    PAGE --> RESULT

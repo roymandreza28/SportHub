@@ -1,0 +1,77 @@
+flowchart LR
+    subgraph CLIENT[Frontend Layer]
+        Browser[Web Browser]
+        App[React + Vite App]
+        Login[Login / Register Pages]
+        Dashboard[Role Dashboards]
+        Protected[ProtectedRoute + Auth Context]
+    end
+
+    subgraph ROLES[Role-Based Modules]
+        Player[Player Module]
+        Coach[Coach Module]
+        Facilitator[Venue Facilitator Module]
+        Organizer[Organizer Module]
+        VenueOrg[Venue Organizer Module]
+        LivestreamOrg[Livestream Organizer Module]
+        Admin[Admin Module]
+    end
+
+    subgraph API[Backend Layer]
+        APIserver[Laravel API Server]
+        Auth[AuthController]
+        Middleware[Sanctum + Role Middleware]
+        Controllers[Controllers]
+        Policies[Policies + Gates]
+        Services[Business Services / Model Logic]
+    end
+
+    subgraph DATA[Data & Storage]
+        DB[(MySQL / SQLite)]
+        Storage[(Public Storage for files)]
+        Cache[(Cache / Sessions)]
+    end
+
+    subgraph EXT[External Services]
+        Reverb[Laravel Reverb / Echo]
+        Push[Push Notifications]
+        Email[Email / Audit Logs]
+    end
+
+    Browser --> App
+    App --> Login
+    App --> Dashboard
+    Login --> Protected
+    Dashboard --> Protected
+
+    Protected --> Player
+    Protected --> Coach
+    Protected --> Facilitator
+    Protected --> Organizer
+    Protected --> VenueOrg
+    Protected --> LivestreamOrg
+    Protected --> Admin
+
+    Player --> APIserver
+    Coach --> APIserver
+    Facilitator --> APIserver
+    Organizer --> APIserver
+    VenueOrg --> APIserver
+    LivestreamOrg --> APIserver
+    Admin --> APIserver
+
+    APIserver --> Auth
+    APIserver --> Middleware
+    Middleware --> Controllers
+    Controllers --> Policies
+    Controllers --> Services
+    Policies --> Services
+    Services --> DB
+    Services --> Storage
+    Services --> Cache
+    Services --> Push
+    Services --> Reverb
+    Services --> Email
+
+    Reverb --> Browser
+    Push --> Browser

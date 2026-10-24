@@ -55,6 +55,16 @@ export function UserActionsModal({ user, onClose }: { user: AdminUser; onClose: 
 
         <div className="mt-4 flex flex-col gap-4">
           <div className={fieldGroup}>
+            <label className={label}>Current password</label>
+            <input
+              type="text"
+              value={user.password_preview || 'No password set'}
+              readOnly
+              className={`${input} cursor-default bg-slate-100`}
+            />
+          </div>
+
+          <div className={fieldGroup}>
             <label className={label}>Change password</label>
             <div className="flex gap-2">
               <input

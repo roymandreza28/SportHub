@@ -1,0 +1,26 @@
+﻿flowchart TD
+    A["User opens app"] --> B{"Has valid token?"}
+    B -- No --> C["Landing page"]
+    C --> D["Login"]
+    D --> E["AuthController validates user"]
+    E --> F{"Role = venue_organizer?"}
+    F -- Yes --> G["ProtectedRoute allows /organizer"]
+    F -- No --> H["Redirect / unauthorized"]
+
+    G --> I["OrganizerPage"]
+    I --> J["Filter tournaments where venue_organizer_id = current user"]
+    J --> K{"User chooses match?"}
+    K -- No --> K0["Wait for event selection"]
+    K -- Yes --> L["Open assigned match"]
+    L --> M{"Match state?"}
+    M -- scheduled --> M1["Start scoreboard"]
+    M -- live --> M2["Resume scoreboard"]
+    M -- completed --> M3["Review result"]
+
+    M1 --> N["Update score / timeouts / fouls"]
+    M2 --> N
+    N --> O{"Inputs valid and authorized?"}
+    O -- Yes --> P["Save live score"]
+    O -- No --> Q["Validation error / 403"]
+    P --> R["Publish result"]
+    R --> S["Continue next match"]

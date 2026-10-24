@@ -1,0 +1,458 @@
+erDiagram
+    USERS {
+        bigint id PK
+        string name
+        string email
+        string password
+        timestamp email_verified_at
+        string first_name
+        string middle_name
+        string last_name
+        string phone
+        string address
+        date birthday
+        string gender
+        string avatar_path
+        string proof_of_address_path
+        string coach_eligibility_proof_path
+        string qr_code_path
+        enum verification_status
+        boolean is_active
+        timestamp last_seen_at
+    }
+
+    ROLES {
+        bigint id PK
+        string name
+        string guard_name
+    }
+
+    PERMISSIONS {
+        bigint id PK
+        string name
+        string guard_name
+    }
+
+    MODEL_HAS_ROLES {
+        bigint role_id FK
+        bigint model_id
+        string model_type
+    }
+
+    MODEL_HAS_PERMISSIONS {
+        bigint permission_id FK
+        bigint model_id
+        string model_type
+    }
+
+    ROLE_HAS_PERMISSIONS {
+        bigint role_id FK
+        bigint permission_id FK
+    }
+
+    SPORTS {
+        bigint id PK
+        string name
+        string category
+    }
+
+    SPORT_FORMATS {
+        bigint id PK
+        bigint sport_id FK
+        string name
+        tinyint players_per_side
+    }
+
+    PLAYER_PROFILES {
+        bigint id PK
+        bigint user_id FK
+        text bio
+        date date_of_birth
+        bigint primary_sport_id FK
+    }
+
+    SKILL_LEVELS {
+        bigint id PK
+        bigint player_profile_id FK
+        bigint sport_id FK
+        bigint coach_id FK
+        enum level
+        decimal score
+        timestamp evaluated_at
+    }
+
+    EVALUATIONS {
+        bigint id PK
+        bigint skill_level_id FK
+        bigint coach_id FK
+        jsonb criteria
+        text notes
+    }
+
+    VENUES {
+        bigint id PK
+        bigint facilitator_id FK
+        string name
+        string address
+        decimal latitude
+        decimal longitude
+        text description
+        jsonb amenities
+        enum status
+        decimal price_per_hour
+    }
+
+    COURTS {
+        bigint id PK
+        bigint venue_id FK
+        string name
+        integer capacity
+        decimal block_price
+    }
+
+    EQUIPMENT {
+        bigint id PK
+        bigint venue_id FK
+        string name
+        text description
+    }
+
+    VENUE_MEDIA {
+        bigint id PK
+        bigint venue_id FK
+        string path
+        string type
+    }
+
+    VENUE_REGISTRATIONS {
+        bigint id PK
+        bigint venue_id FK
+        bigint user_id FK
+        bigint court_id FK
+        timestamp starts_at
+        timestamp ends_at
+        enum status
+        string purpose
+        boolean walk_in
+    }
+
+    TOURNAMENTS {
+        bigint id PK
+        bigint organizer_id FK
+        bigint sport_id FK
+        bigint venue_id FK
+        bigint sport_format_id FK
+        string name
+        enum format
+        enum status
+        timestamp starts_at
+        timestamp ends_at
+        string required_gender
+        decimal registration_fee
+        bigint champion_id FK
+        bigint venue_organizer_id FK
+        bigint livestream_organizer_id FK
+    }
+
+    TOURNAMENT_REGISTRATIONS {
+        bigint id PK
+        bigint tournament_id FK
+        bigint user_id FK
+        bigint registered_by FK
+        enum status
+        timestamp paid_at
+    }
+
+    BRACKETS {
+        bigint id PK
+        bigint tournament_id FK
+        string type
+    }
+
+    MATCHES {
+        bigint id PK
+        bigint bracket_id FK
+        integer round
+        bigint participant_a_id FK
+        bigint participant_b_id FK
+        integer score_a
+        integer score_b
+        enum status
+        bigint court_id FK
+        timestamp scheduled_at
+        bigint winner_id FK
+        boolean won_by_default
+        integer shot_clock
+        integer game_clock
+    }
+
+    MATCH_EVENTS {
+        bigint id PK
+        bigint match_id FK
+        bigint user_id FK
+        string type
+        text details
+    }
+
+    MATCH_PLAYER_STATS {
+        bigint id PK
+        bigint match_id FK
+        bigint user_id FK
+        jsonb stats
+    }
+
+    MATCH_STAT_SHEETS {
+        bigint id PK
+        bigint match_id FK
+        bigint user_id FK
+        jsonb stats
+    }
+
+    MATCHMAKING_REQUESTS {
+        bigint id PK
+        bigint user_id FK
+        bigint sport_id FK
+        bigint skill_level_id FK
+        bigint venue_id FK
+        enum status
+        timestamp preferred_start_at
+        timestamp preferred_end_at
+    }
+
+    MATCHMAKING_MATCHES {
+        bigint id PK
+        bigint request_a_id FK
+        bigint request_b_id FK
+        bigint venue_registration_id FK
+        enum status
+    }
+
+    TEAMS {
+        bigint id PK
+        bigint sport_id FK
+        bigint sport_format_id FK
+        bigint captain_id FK
+        string name
+        enum status
+        string logo_path
+    }
+
+    TEAM_MEMBERS {
+        bigint id PK
+        bigint team_id FK
+        bigint user_id FK
+        enum status
+        timestamp responded_at
+    }
+
+    FRIENDSHIPS {
+        bigint id PK
+        bigint user_id FK
+        bigint friend_id FK
+        enum status
+        timestamp accepted_at
+    }
+
+    POSTS {
+        bigint id PK
+        bigint user_id FK
+        string image_path
+        text caption
+    }
+
+    POST_MEDIA {
+        bigint id PK
+        bigint post_id FK
+        string path
+        string type
+    }
+
+    NEWS {
+        bigint id PK
+        bigint author_id FK
+        bigint tournament_id FK
+        bigint match_id FK
+        string title
+        text body
+        string cover_image_url
+        timestamp published_at
+    }
+
+    NEWS_COMMENTS {
+        bigint id PK
+        bigint news_id FK
+        bigint user_id FK
+        text body
+    }
+
+    NEWS_REACTIONS {
+        bigint id PK
+        bigint news_id FK
+        bigint user_id FK
+    }
+
+    NEWS_MEDIA {
+        bigint id PK
+        bigint news_id FK
+        string path
+        string type
+    }
+
+    LIVESTREAMS {
+        bigint id PK
+        bigint news_id FK
+        bigint tournament_id FK
+        bigint match_id FK
+        string title
+        enum platform
+        string embed_url
+        string chat_channel_name
+        string recording_path
+        enum status
+    }
+
+    CHAT_MESSAGES {
+        bigint id PK
+        bigint livestream_id FK
+        bigint user_id FK
+        string body
+    }
+
+    CONVERSATIONS {
+        bigint id PK
+        enum type
+        string name
+        bigint created_by FK
+        string direct_key
+        bigint tournament_registration_id FK
+        bigint venue_registration_id FK
+        bigint team_id FK
+    }
+
+    CONVERSATION_PARTICIPANTS {
+        bigint id PK
+        bigint conversation_id FK
+        bigint user_id FK
+        boolean is_muted
+        boolean is_archived
+        boolean is_hidden
+        boolean is_blocked
+    }
+
+    CONVERSATION_MESSAGES {
+        bigint id PK
+        bigint conversation_id FK
+        bigint user_id FK
+        text body
+        string attachment_path
+        jsonb actions
+    }
+
+    NOTIFICATIONS {
+        bigint id PK
+        bigint user_id FK
+        string type
+        text data
+        boolean read_at
+    }
+
+    PUBLIC_INQUIRIES {
+        bigint id PK
+        bigint user_id FK
+        string name
+        string email
+        string subject
+        text message
+    }
+
+    AUDIT_LOGS {
+        bigint id PK
+        bigint user_id FK
+        string action
+        text details
+    }
+
+    PUSH_SUBSCRIPTIONS {
+        bigint id PK
+        bigint user_id FK
+        string endpoint
+        text keys
+    }
+
+    USERS ||--o{ ROLES : "via model_has_roles"
+    ROLES ||--o{ MODEL_HAS_ROLES : maps
+    USERS ||--o{ MODEL_HAS_ROLES : owns
+
+    ROLES ||--o{ PERMISSIONS : "via role_has_permissions"
+    PERMISSIONS ||--o{ MODEL_HAS_PERMISSIONS : "via model_has_permissions"
+    USERS ||--o{ MODEL_HAS_PERMISSIONS : owns
+
+    USERS ||--o| PLAYER_PROFILES : has
+    PLAYER_PROFILES ||--o{ SKILL_LEVELS : records
+    SPORTS ||--o{ SPORT_FORMATS : defines
+    SPORTS ||--o{ SKILL_LEVELS : supports
+    USERS ||--o{ SKILL_LEVELS : evaluated_by
+    USERS ||--o{ EVALUATIONS : writes
+    SKILL_LEVELS ||--o{ EVALUATIONS : graded_by
+
+    USERS ||--o{ VENUES : facilitates
+    VENUES ||--o{ COURTS : contains
+    VENUES ||--o{ EQUIPMENT : manages
+    VENUES ||--o{ VENUE_MEDIA : has
+    VENUES ||--o{ VENUE_REGISTRATIONS : receives
+    USERS ||--o{ VENUE_REGISTRATIONS : books
+
+    USERS ||--o{ TOURNAMENTS : organizes
+    SPORTS ||--o{ TOURNAMENTS : hosts
+    VENUES ||--o{ TOURNAMENTS : holds
+    SPORT_FORMATS ||--o{ TEAMS : uses
+    SPORTS ||--o{ TEAMS : plays
+    USERS ||--o{ TEAMS : captains
+    TEAMS ||--o{ TEAM_MEMBERS : contains
+    USERS ||--o{ TEAM_MEMBERS : joins
+
+    TOURNAMENTS ||--o{ TOURNAMENT_REGISTRATIONS : includes
+    USERS ||--o{ TOURNAMENT_REGISTRATIONS : registers
+    TOURNAMENTS ||--o{ BRACKETS : contains
+    BRACKETS ||--o{ MATCHES : contains
+    USERS ||--o{ MATCHES : plays_as_a
+    USERS ||--o{ MATCHES : plays_as_b
+    USERS ||--o{ MATCHES : wins
+    MATCHES ||--o{ MATCH_EVENTS : logs
+    MATCHES ||--o{ MATCH_PLAYER_STATS : records
+    MATCHES ||--o{ MATCH_STAT_SHEETS : tracks
+
+    USERS ||--o{ MATCHMAKING_REQUESTS : creates
+    SPORTS ||--o{ MATCHMAKING_REQUESTS : targets
+    SKILL_LEVELS ||--o{ MATCHMAKING_REQUESTS : references
+    VENUES ||--o{ MATCHMAKING_REQUESTS : prefers
+    MATCHMAKING_REQUESTS ||--o{ MATCHMAKING_MATCHES : paired_as_a
+    MATCHMAKING_REQUESTS ||--o{ MATCHMAKING_MATCHES : paired_as_b
+    VENUE_REGISTRATIONS ||--o{ MATCHMAKING_MATCHES : references
+
+    USERS ||--o{ POSTS : creates
+    POSTS ||--o{ POST_MEDIA : contains
+    USERS ||--o{ NEWS : writes
+    TOURNAMENTS ||--o{ NEWS : relates
+    MATCHES ||--o{ NEWS : relates
+    NEWS ||--o{ NEWS_COMMENTS : comments_on
+    USERS ||--o{ NEWS_COMMENTS : leaves
+    NEWS ||--o{ NEWS_REACTIONS : reacts_to
+    USERS ||--o{ NEWS_REACTIONS : reacts
+    NEWS ||--o{ NEWS_MEDIA : has
+    NEWS ||--o{ LIVESTREAMS : broadcasts
+    TOURNAMENTS ||--o{ LIVESTREAMS : streams
+    MATCHES ||--o{ LIVESTREAMS : streams
+    LIVESTREAMS ||--o{ CHAT_MESSAGES : receives
+    USERS ||--o{ CHAT_MESSAGES : sends
+
+    USERS ||--o{ CONVERSATIONS : creates
+    CONVERSATIONS ||--o{ CONVERSATION_PARTICIPANTS : includes
+    USERS ||--o{ CONVERSATION_PARTICIPANTS : joins
+    CONVERSATIONS ||--o{ CONVERSATION_MESSAGES : contains
+    USERS ||--o{ CONVERSATION_MESSAGES : sends
+
+    USERS ||--o{ NOTIFICATIONS : receives
+    USERS ||--o{ PUBLIC_INQUIRIES : submits
+    USERS ||--o{ AUDIT_LOGS : creates
+    USERS ||--o{ PUSH_SUBSCRIPTIONS : registers

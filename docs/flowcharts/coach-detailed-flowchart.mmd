@@ -1,0 +1,40 @@
+﻿flowchart TD
+    A["User opens app"] --> B{"Has valid token?"}
+    B -- No --> C["Landing page"]
+    C --> D["Login / Register"]
+    D --> E["AuthController validates registration"]
+    E --> F{"Coach proof uploaded?"}
+    F -- No --> X["Reject registration"]
+    F -- Yes --> G["Assign roles: coach + player"]
+    G --> H{"Role = coach?"}
+    H -- Yes --> I["ProtectedRoute allows /coach"]
+    H -- No --> J["Redirect or deny"]
+
+    I --> K["CoachPage"]
+    K --> L["Load Evaluations / Matchmaking / Tournament / Venues / Profile"]
+    L --> M{"User action selected?"}
+    M -- Evaluations --> M1["GET /skill-levels + evaluate players"]
+    M -- Matchmaking --> M2["POST /matchmaking-requests"]
+    M -- Tournament --> M3["Register players / teams / tournaments"]
+    M -- Venues --> M4["GET /venues + POST /venue-registrations"]
+    M -- Profile --> M5["Profile + friends + posts"]
+
+    M1 --> M1A{"Coach has evaluate_player permission?"}
+    M1A -- Yes --> M1B["Create evaluation"]
+    M1A -- No --> M1C["403"]
+
+    M2 --> M2A{"Create matchmaking request allowed?"}
+    M2A -- Yes --> M2B["Store request"]
+    M2A -- No --> M2C["403"]
+
+    M3 --> M3A{"Tournament open for registration?"}
+    M3A -- Yes --> M3B["Register player/team"]
+    M3A -- No --> M3C["Not available"]
+
+    M4 --> M4A{"Venue available and eligible?"}
+    M4A -- Yes --> M4B["Book venue"]
+    M4A -- No --> M4C["Validation error"]
+
+    M5 --> M5A{"User owns profile or role valid?"}
+    M5A -- Yes --> M5B["Update profile / friends / chat"]
+    M5A -- No --> M5C["403"]

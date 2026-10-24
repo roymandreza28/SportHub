@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Mail\PublicInquiryMail;
 use App\Models\AuditLog;
+use App\Models\PlayerProfile;
 use App\Models\PublicInquiry;
 use App\Models\SkillLevel;
+use App\Models\Sport;
 use App\Models\TournamentRegistration;
 use App\Models\User;
 use App\Models\VenueRegistration;
@@ -100,8 +102,27 @@ class AuthController extends Controller
                 $user->assignRole('player');
             }
 
+            if ($user->hasRole('player')) {
+                $profile = $user->playerProfile()->firstOrCreate([]);
+                foreach (Sport::query()->get() as $sport) {
+                    $profile->skillLevels()->firstOrCreate(
+                        ['sport_id' => $sport->id],
+                        [
+                            'level' => 'beginner',
+                            'score' => null,
+                            'evaluated_at' => null,
+                        ]
+                    );
+                }
+            }
+
             return $user;
         });
+
+        AuditLog::record($user, 'user.registered', null, [
+            'role' => $data['role'],
+            'verification_status' => 'pending',
+        ]);
 
         NotificationService::send($user, 'account_pending_verification', [
             'message' => "Your account is under verification. You can't access other services at the moment.",
@@ -111,6 +132,11 @@ class AuthController extends Controller
         // unrelated domains (Vercel + Render), and browsers won't share a
         // cookie between them regardless of CORS config.
         $token = $user->createToken('spa')->plainTextToken;
+
+        AuditLog::record($user, 'user.logged_in', null, [
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
 
         return response()->json([...$this->withRoles($user->fresh()), 'token' => $token]);
     }
@@ -158,6 +184,11 @@ class AuthController extends Controller
 
         $token = $user->createToken('spa')->plainTextToken;
 
+        AuditLog::record($user, 'user.logged_in', null, [
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
         return response()->json([...$this->withRoles($user), 'token' => $token]);
     }
 
@@ -174,6 +205,10 @@ class AuthController extends Controller
                 'email' => ['No account is found.'],
             ]);
         }
+
+        AuditLog::record($user, 'user.password_reset_initiated', null, [
+            'email' => $user->email,
+        ]);
 
         return response()->json([
             'found' => true,
@@ -208,6 +243,13 @@ class AuthController extends Controller
             Broadcasting::safely(fn () => Mail::to($admin->email)->send(new PublicInquiryMail($inquiry)));
         }
 
+        $user = User::whereRaw('LOWER(email) = ?', [strtolower(trim($data['email']))])->first();
+        if ($user) {
+            AuditLog::record($user, 'user.password_reset_request_submitted', null, [
+                'email' => $user->email,
+            ]);
+        }
+
         return response()->json([
             'message' => 'Your password reset request has been sent to the admin support team.',
         ]);
@@ -233,6 +275,13 @@ class AuthController extends Controller
         if ($status !== Password::PASSWORD_RESET) {
             throw ValidationException::withMessages([
                 'email' => [__($status)],
+            ]);
+        }
+
+        $user = User::where('email', $request->input('email'))->first();
+        if ($user) {
+            AuditLog::record($user, 'user.password_reset', null, [
+                'email' => $user->email,
             ]);
         }
 
@@ -399,6 +448,11 @@ class AuthController extends Controller
         if ($token instanceof \Laravel\Sanctum\PersonalAccessToken) {
             $token->delete();
         }
+
+        AuditLog::record($request->user(), 'user.logged_out', null, [
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
 
         return response()->noContent();
     }

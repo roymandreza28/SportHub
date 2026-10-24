@@ -1,0 +1,42 @@
+﻿flowchart TD
+    A["User opens app"] --> B{"Has valid token?"}
+    B -- No --> C["Landing page"]
+    C --> D["Login"]
+    D --> E["AuthController validates user"]
+    E --> F{"Role = admin?"}
+    F -- Yes --> G["ProtectedRoute allows /admin"]
+    F -- No --> H["Redirect / unauthorized"]
+
+    G --> I["AdminPage"]
+    I --> J["Load metrics / users / verification / support logs"]
+    J --> K{"User action selected?"}
+    K -- Users --> K1["GET /admin/users + PATCH /users/{id}/roles"]
+    K -- Verification --> K2["GET /admin/users/pending-verifications + PATCH /verification"]
+    K -- Facilitators --> K3["POST /admin/facilitators"]
+    K -- Organizers --> K4["POST /admin/organizers"]
+    K -- Inquiries --> K5["GET /admin/public-inquiries"]
+    K -- Audit Log --> K6["GET /admin/audit-log"]
+
+    K1 --> K1A{"User exists and admin override allowed?"}
+    K1A -- Yes --> K1B["Update role or status"]
+    K1A -- No --> K1C["403 / validation"]
+
+    K2 --> K2A{"Proof valid and account pending?"}
+    K2A -- Yes --> K2B["Approve or reject verification"]
+    K2A -- No --> K2C["Reject / no change"]
+
+    K3 --> K3A{"Required fields present?"}
+    K3A -- Yes --> K3B["Create facilitator"]
+    K3A -- No --> K3C["Validation error"]
+
+    K4 --> K4A{"Required fields present?"}
+    K4A -- Yes --> K4B["Create organizer"]
+    K4A -- No --> K4C["Validation error"]
+
+    K5 --> K5A{"Support thread exists?"}
+    K5A -- Yes --> K5B["Review support inquiry"]
+    K5A -- No --> K5C["No results"]
+
+    K6 --> K6A{"Audit permissions valid?"}
+    K6A -- Yes --> K6B["Read audit trail"]
+    K6A -- No --> K6C["403"]

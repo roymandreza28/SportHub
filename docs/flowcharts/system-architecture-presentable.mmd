@@ -1,0 +1,69 @@
+flowchart LR
+    subgraph FRONTEND[Frontend Layer]
+        B[Browser]
+        R[React App]
+        L[Login / Register]
+        D[Role Dashboards]
+    end
+
+    subgraph AUTH[Authentication & Access Control]
+        A[AuthContext]
+        P[Protected Routes]
+        RP[Role & Permission Checks]
+    end
+
+    subgraph APP[Core Application Modules]
+        PL[Player]
+        CO[Coach]
+        VF[Venue Facilitator]
+        OR[Organizer]
+        VO[Venue Organizer]
+        LO[Livestream Organizer]
+        AD[Admin]
+    end
+
+    subgraph BACKEND[Backend Services]
+        API[Laravel API]
+        CTRL[Controllers]
+        GATE[Policies / Gates]
+        SRV[Business Logic]
+    end
+
+    subgraph DATA[Data Layer]
+        DB[(Database)]
+        FS[(Storage / Media)]
+    end
+
+    B --> R
+    R --> L
+    R --> D
+
+    L --> A
+    D --> A
+    A --> P
+    P --> RP
+
+    RP --> PL
+    RP --> CO
+    RP --> VF
+    RP --> OR
+    RP --> VO
+    RP --> LO
+    RP --> AD
+
+    PL --> API
+    CO --> API
+    VF --> API
+    OR --> API
+    VO --> API
+    LO --> API
+    AD --> API
+
+    API --> CTRL
+    CTRL --> GATE
+    GATE --> SRV
+    SRV --> DB
+    SRV --> FS
+
+    DB --> R
+    FS --> R

@@ -1,0 +1,42 @@
+﻿flowchart TD
+    A["User opens app"] --> B{"Has valid token?"}
+    B -- No --> C["Landing page"]
+    C --> D["Login"]
+    D --> E["AuthController validates user"]
+    E --> F{"Role = organizer?"}
+    F -- Yes --> G["ProtectedRoute allows /organizer"]
+    F -- No --> H["Redirect / unauthorized"]
+
+    G --> I["OrganizerPage"]
+    I --> J["Load tournaments, livestreams, notifications"]
+    J --> K{"User action selected?"}
+    K -- Create Tournament --> K1["POST /tournaments"]
+    K -- Assign Venue Org --> K2["PATCH /tournaments/{id} venue_organizer_id"]
+    K -- Assign Livestream Org --> K3["PATCH /tournaments/{id} livestream_organizer_id"]
+    K -- Generate Bracket --> K4["POST /tournaments/{id}/generate-bracket"]
+    K -- Score Match --> K5["PATCH /matches/{id}/score"]
+    K -- Manage Livestream --> K6["POST /livestreams /news"]
+
+    K1 --> K1A{"Inputs valid? sport, venue, format, dates?"}
+    K1A -- Yes --> K1B["Create draft tournament"]
+    K1A -- No --> K1C["Validation error"]
+
+    K2 --> K2A{"Selected user has venue_organizer role?"}
+    K2A -- Yes --> K2B["Assign staff"]
+    K2A -- No --> K2C["403 / invalid assignment"]
+
+    K3 --> K3A{"Selected user has livestream_organizer role?"}
+    K3A -- Yes --> K3B["Assign staff"]
+    K3A -- No --> K3C["403 / invalid assignment"]
+
+    K4 --> K4A{"Registration phase open / eligible?"}
+    K4A -- Yes --> K4B["Generate bracket"]
+    K4A -- No --> K4C["Skip / no-op"]
+
+    K5 --> K5A{"User is organizer or assigned scorekeeper?"}
+    K5A -- Yes --> K5B["Update score"]
+    K5A -- No --> K5C["403"]
+
+    K6 --> K6A{"Manage livestream permission granted?"}
+    K6A -- Yes --> K6B["Create stream / post news"]
+    K6A -- No --> K6C["403"]

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1550" height="900" viewBox="0 0 1550 900">
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#6b7280"/></marker></defs>
+<rect width="1550" height="900" fill="#f2f2f2"/>
+<text x="775" y="36" text-anchor="middle" font-size="26" font-weight="700" font-family="Arial, sans-serif" fill="#1f2937">Livestream Organizer Module Flow</text>
+<rect x="0" y="55" width="1550" height="106" fill="#f3f4f6" stroke="#7a7a7a" stroke-width="1"/>
+<rect x="0" y="55" width="145" height="106" fill="#f2f2f2" stroke="#7a7a7a" stroke-width="1"/>
+<text x="70" y="97" text-anchor="middle" font-size="15" font-weight="700" font-family="Arial, sans-serif" fill="#4b5563">Assignment</text>
+<rect x="250" y="83" width="162" height="64" rx="6" fill="#1e9ad6" stroke="#7a7a7a" stroke-width="1.5"/>
+<text x="331" y="110" text-anchor="middle" font-size="13" font-weight="700" font-family="Arial, sans-serif" fill="#ffffff">Tournament Assigned</text>
+<text x="331" y="130" text-anchor="middle" font-size="10.5" font-weight="500" font-family="Arial, sans-serif" fill="#ffffff">By Organizer</text>
+<path d="M 412 117 L 424 117" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="424" y="83" width="162" height="64" rx="6" fill="#2cb7b3" stroke="#7a7a7a" stroke-width="1.5"/>
+<text x="505" y="110" text-anchor="middle" font-size="13" font-weight="700" font-family="Arial, sans-serif" fill="#ffffff">Open /organizer</text>
+<text x="505" y="130" text-anchor="middle" font-size="10.5" font-weight="500" font-family="Arial, sans-serif" fill="#ffffff">Dashboard</text>
+<path d="M 586 117 L 598 117" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="598" y="83" width="162" height="64" rx="6" fill="#2dbf7d" stroke="#7a7a7a" stroke-width="1.5"/>
+<text x="679" y="110" text-anchor="middle" font-size="13" font-weight="700" font-family="Arial, sans-serif" fill="#ffffff">Open Livestreams</text>
+<text x="679" y="130" text-anchor="middle" font-size="10.5" font-weight="500" font-family="Arial, sans-serif" fill="#ffffff">Module</text>
+<rect x="0" y="169" width="1550" height="106" fill="#f3f4f6" stroke="#7a7a7a" stroke-width="1"/>
+<rect x="0" y="169" width="145" height="106" fill="#f2f2f2" stroke="#7a7a7a" stroke-width="1"/>
+<text x="70" y="211" text-anchor="middle" font-size="15" font-weight="700" font-family="Arial, sans-serif" fill="#4b5563">Broadcast</text>
+<rect x="250" y="197" width="162" height="64" rx="6" fill="#1e9ad6" stroke="#7a7a7a" stroke-width="1.5"/>
+<text x="331" y="224" text-anchor="middle" font-size="13" font-weight="700" font-family="Arial, sans-serif" fill="#ffffff">Configure Stream</text>
+<text x="331" y="244" text-anchor="middle" font-size="10.5" font-weight="500" font-family="Arial, sans-serif" fill="#ffffff">Camera Settings</text>
+<path d="M 412 231 L 424 231" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="424" y="197" width="162" height="64" rx="6" fill="#2cb7b3" stroke="#7a7a7a" stroke-width="1.5"/>
+<text x="505" y="224" text-anchor="middle" font-size="13" font-weight="700" font-family="Arial, sans-serif" fill="#ffffff">Go Live</text>
+<text x="505" y="244" text-anchor="middle" font-size="10.5" font-weight="500" font-family="Arial, sans-serif" fill="#ffffff">Broadcast Event</text>
+<path d="M 586 231 L 598 231" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="598" y="197" width="162" height="64" rx="6" fill="#1e9ad6" stroke="#7a7a7a" stroke-width="1.5"/>
+<text x="679" y="224" text-anchor="middle" font-size="13" font-weight="700" font-family="Arial, sans-serif" fill="#ffffff">Manage Chat</text>
+<text x="679" y="244" text-anchor="middle" font-size="10.5" font-weight="500" font-family="Arial, sans-serif" fill="#ffffff">Feed Control</text>
+<path d="M 760 231 L 772 231" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="772" y="197" width="162" height="64" rx="6" fill="#2dbf7d" stroke="#7a7a7a" stroke-width="1.5"/>
+<text x="853" y="224" text-anchor="middle" font-size="13" font-weight="700" font-family="Arial, sans-serif" fill="#ffffff">Monitor</text>
+<text x="853" y="244" text-anchor="middle" font-size="10.5" font-weight="500" font-family="Arial, sans-serif" fill="#ffffff">Quality</text>
+<rect x="0" y="283" width="1550" height="106" fill="#f3f4f6" stroke="#7a7a7a" stroke-width="1"/>
+<rect x="0" y="283" width="145" height="106" fill="#f2f2f2" stroke="#7a7a7a" stroke-width="1"/>
+<text x="70" y="325" text-anchor="middle" font-size="15" font-weight="700" font-family="Arial, sans-serif" fill="#4b5563">Close</text>
+<rect x="250" y="311" width="162" height="64" rx="6" fill="#9a66d9" stroke="#7a7a7a" stroke-width="1.5"/>
+<text x="331" y="338" text-anchor="middle" font-size="13" font-weight="700" font-family="Arial, sans-serif" fill="#ffffff">Close Broadcast</text>
+<text x="331" y="358" text-anchor="middle" font-size="10.5" font-weight="500" font-family="Arial, sans-serif" fill="#ffffff">End Feed</text>
+<path d="M 412 345 L 424 345" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="424" y="311" width="162" height="64" rx="6" fill="#9a66d9" stroke="#7a7a7a" stroke-width="1.5"/>
+<text x="505" y="338" text-anchor="middle" font-size="13" font-weight="700" font-family="Arial, sans-serif" fill="#ffffff">Review Stream</text>
+<text x="505" y="358" text-anchor="middle" font-size="10.5" font-weight="500" font-family="Arial, sans-serif" fill="#ffffff">Archive</text>
+<path d="M 586 345 L 598 345" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="598" y="311" width="162" height="64" rx="6" fill="#2dbf7d" stroke="#7a7a7a" stroke-width="1.5"/>
+<text x="679" y="338" text-anchor="middle" font-size="13" font-weight="700" font-family="Arial, sans-serif" fill="#ffffff">Finish Event</text>
+<text x="679" y="358" text-anchor="middle" font-size="10.5" font-weight="500" font-family="Arial, sans-serif" fill="#ffffff">Complete</text>
+</svg>

@@ -7,6 +7,7 @@ export type AdminUser = {
   email: string
   is_active: boolean
   verification_status: VerificationStatus
+  password_preview: string
   roles: { id: number; name: Role }[]
 }
 

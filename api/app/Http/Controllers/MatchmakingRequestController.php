@@ -160,17 +160,25 @@ class MatchmakingRequestController extends Controller
                 ->where('sport_format_id', $format->id)
                 ->where('status', 'open')
                 ->where('user_id', '!=', $user->id)
-                // Same skill tier for this sport — including "both unassessed",
-                // so brand-new players aren't blocked from matching each other
-                // just because neither has a coach evaluation yet. Compared by
-                // the tier value itself (not skill_level_id), since every
-                // player has their own SkillLevel row even at the same tier.
-                // For team requests this is the captain's own skill level,
-                // used as a stand-in for the team's overall level.
+                // Team formats are matched by roster/format rather than skill
+                // spread: basketball 3v3/5v5, volleyball 6v6, and doubles
+                // racket formats are intentionally not blocked by different
+                // skill tiers. Solo formats keep the old same-tier check.
                 ->when(
-                    $skillLevel,
-                    fn ($q, $level) => $q->whereHas('skillLevel', fn ($q2) => $q2->where('level', $level->level)),
-                    fn ($q) => $q->whereNull('skill_level_id'),
+                    $format->players_per_side > 1,
+                    fn ($q) => $q,
+                    fn ($q) => $q
+                        // Same skill tier for this sport — including "both
+                        // unassessed", so brand-new players aren't blocked from
+                        // matching each other just because neither has a coach
+                        // evaluation yet. Compared by the tier value itself (not
+                        // skill_level_id), since every player has their own
+                        // SkillLevel row even at the same tier.
+                        ->when(
+                            $skillLevel,
+                            fn ($q2, $level) => $q2->whereHas('skillLevel', fn ($q3) => $q3->where('level', $level->level)),
+                            fn ($q2) => $q2->whereNull('skill_level_id'),
+                        )
                 )
                 ->when($data['venue_id'] ?? null, fn ($q, $venueId) => $q
                     ->where(fn ($q2) => $q2->whereNull('venue_id')->orWhere('venue_id', $venueId)))

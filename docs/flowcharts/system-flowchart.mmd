@@ -1,0 +1,40 @@
+flowchart TD
+    A[Open app] --> B{Logged in?}
+    B -- No --> C[Landing Page]
+    C --> D[Login / Register]
+    D --> E[AuthController]
+    E --> F{Role}
+    F -- Player --> P[Assign player]
+    F -- Coach --> C1[Assign coach + player]
+    F -- Venue Facilitator --> VF[Assign venue_facilitator]
+    F -- Organizer --> O[Assign organizer]
+    F -- Venue Organizer --> VO[Assign venue_organizer]
+    F -- Livestream Organizer --> LO[Assign livestream_organizer]
+    F -- Admin --> AD[Assign admin]
+
+    P --> S[AuthContext loads roles]
+    C1 --> S
+    VF --> S
+    O --> S
+    VO --> S
+    LO --> S
+    AD --> S
+    B -- Yes --> S
+
+    S --> G[ProtectedRoute]
+    G --> H[Dashboard selected]
+    H --> R[Route middleware]
+    R --> K{Allowed?}
+    K -- Yes --> M[Controller]
+    K -- No --> N[403 / redirect]
+    M --> L[Service + Models]
+    L --> DB[(Database)]
+    DB --> RES[JSON response]
+    RES --> UI[UI updates]
+    UI --> U[User action]
+    U --> MOD{Module}
+    MOD -- Player --> MP[Player flow]
+    MOD -- Coach --> MC[Coach flow]
+    MOD -- Venue Facilitator --> MVF[Venue Facilitator flow]
+    MOD -- Organizer --> MO[Organizer flow]
+    MOD -- Admin --> MA[Admin flow]

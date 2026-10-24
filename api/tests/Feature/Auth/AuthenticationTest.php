@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Sport;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
@@ -26,6 +27,8 @@ function baseRegistrationPayload(array $overrides = []): array
 
 it('registers a new player, combines the name parts, logs them in, and stores their proof of address', function () {
     Storage::fake('public');
+    $basketball = Sport::create(['name' => 'Basketball']);
+    $volleyball = Sport::create(['name' => 'Volleyball']);
 
     $response = $this->postJson('/api/register', baseRegistrationPayload());
 
@@ -38,6 +41,10 @@ it('registers a new player, combines the name parts, logs them in, and stores th
     $this->assertDatabaseHas('users', ['id' => $user->id, 'first_name' => 'New', 'last_name' => 'User', 'gender' => 'male']);
     expect($user->proof_of_address_path)->not->toBeNull();
     Storage::disk('public')->assertExists($user->proof_of_address_path);
+    expect($user->playerProfile->skillLevels()->count())->toBeGreaterThanOrEqual(2);
+    expect($user->playerProfile->skillLevels()->where('level', 'beginner')->count())->toBeGreaterThan(0);
+    expect($user->playerProfile->skillLevels()->pluck('sport_id')->values()->contains($basketball->id))->toBeTrue();
+    expect($user->playerProfile->skillLevels()->pluck('sport_id')->values()->contains($volleyball->id))->toBeTrue();
 });
 
 it('requires a valid gender on registration', function () {
@@ -139,6 +146,22 @@ it('logs in an existing user and rejects bad credentials', function () {
     $response->assertOk();
     $response->assertJsonPath('email', $user->email);
     expect($response->json('token'))->toBeString()->not->toBeEmpty();
+
+    $this->assertDatabaseHas('audit_logs', [
+        'actor_id' => $user->id,
+        'action' => 'user.logged_in',
+    ]);
+});
+
+it('records a logout action in the audit log', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)->postJson('/api/logout')->assertNoContent();
+
+    $this->assertDatabaseHas('audit_logs', [
+        'actor_id' => $user->id,
+        'action' => 'user.logged_out',
+    ]);
 });
 
 it('checks an email account and submits a password reset request to admin support when it exists', function () {

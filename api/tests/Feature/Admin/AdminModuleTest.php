@@ -147,15 +147,19 @@ it('lists audit log entries newest first', function () {
     expect($response->json('data.0.action'))->toBe('second.action');
 });
 
-it('lets an admin change another users password and logs it', function () {
+it('shows a masked current password preview to the admin without exposing the actual password', function () {
     $admin = userWithRole('admin');
     $target = userWithRole('player');
 
-    $response = $this->actingAs($admin)->patchJson("/api/admin/users/{$target->id}/password", [
-        'password' => 'newpassword123',
-    ]);
+    $response = $this->actingAs($admin)->getJson('/api/admin/users');
 
-    $response->assertNoContent();
+    $response->assertOk();
+    expect($response->json('data.0.password_preview'))->toBe('********');
+
+    $this->actingAs($admin)->patchJson("/api/admin/users/{$target->id}/password", [
+        'password' => 'newpassword123',
+    ])->assertNoContent();
+
     expect(Hash::check('newpassword123', $target->fresh()->password))->toBeTrue();
 
     $this->assertDatabaseHas('audit_logs', [

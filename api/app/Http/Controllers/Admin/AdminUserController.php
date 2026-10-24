@@ -27,6 +27,12 @@ class AdminUserController extends Controller
             ->orderBy('name')
             ->paginate(20);
 
+        $users->getCollection()->transform(fn (User $user) => [
+            ...$user->toArray(),
+            'password_preview' => $user->password_preview,
+            'roles' => $user->roles,
+        ]);
+
         return $users;
     }
 
@@ -219,6 +225,7 @@ class AdminUserController extends Controller
 
         return [
             ...$user->toArray(),
+            'password_preview' => $user->password_preview,
             'roles' => $user->roles,
         ];
     }

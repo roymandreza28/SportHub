@@ -211,27 +211,6 @@ export function MatchmakingPanel() {
 
       {showTeamsModal && <ManageTeamsModal onClose={() => setShowTeamsModal(false)} />}
 
-      {matchedWithReservation.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {matchedWithReservation.map((req) => (
-            <DownPaymentPrompt key={req.id} req={req} />
-          ))}
-        </div>
-      )}
-
-      {openRequests.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {openRequests.map((req) => (
-            <MatchmakingLoader
-              key={req.id}
-              sportName={req.sport.name}
-              cancelling={cancel.isPending}
-              onCancel={() => cancel.mutate(req.id)}
-            />
-          ))}
-        </div>
-      )}
-
       <div className={mode === 'create' ? 'flex flex-col gap-3 rounded-lg border border-slate-100 bg-slate-50/60 p-4' : 'flex flex-col gap-3'}>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className={fieldGroup}>
@@ -372,6 +351,27 @@ export function MatchmakingPanel() {
           )}
         </div>
       </div>
+
+      {matchedWithReservation.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {matchedWithReservation.map((req) => (
+            <DownPaymentPrompt key={req.id} req={req} />
+          ))}
+        </div>
+      )}
+
+      {openRequests.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {openRequests.map((req) => (
+            <MatchmakingLoader
+              key={req.id}
+              sportName={req.sport.name}
+              cancelling={cancel.isPending}
+              onCancel={() => cancel.mutate(req.id)}
+            />
+          ))}
+        </div>
+      )}
 
       {resolvedRequests.length > 0 && (
         <div className="flex flex-col gap-2">

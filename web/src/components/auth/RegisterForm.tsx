@@ -1,4 +1,5 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../../lib/AuthContext'
 import { extractErrorMessage, extractFieldErrors } from '../../lib/errors'
 import { buttonPrimary, fieldGroup, input, label, textarea } from '../../lib/formStyles'
@@ -112,6 +113,42 @@ export function RegisterForm({
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
 
+  useEffect(() => {
+    if (!showTermsModal) return
+
+    const previousBodyOverflow = document.body.style.overflow
+    const previousHtmlOverflow = document.documentElement.style.overflow
+    const previousBodyPosition = document.body.style.position
+    const previousBodyTop = document.body.style.top
+    const previousBodyLeft = document.body.style.left
+    const previousBodyWidth = document.body.style.width
+    const previousBodyHeight = document.body.style.height
+    const previousBodyMargin = document.body.style.margin
+    const scrollY = window.scrollY
+
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+    document.body.style.position = 'fixed'
+    document.body.style.top = '0'
+    document.body.style.left = '0'
+    document.body.style.width = '100%'
+    document.body.style.height = '100%'
+    document.body.style.margin = '0'
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow
+      document.documentElement.style.overflow = previousHtmlOverflow
+      document.body.style.position = previousBodyPosition
+      document.body.style.top = previousBodyTop
+      document.body.style.left = previousBodyLeft
+      document.body.style.width = previousBodyWidth
+      document.body.style.height = previousBodyHeight
+      document.body.style.margin = previousBodyMargin
+      window.scrollTo({ top: scrollY, left: 0, behavior: 'auto' })
+    }
+  }, [showTermsModal])
+
   const hasMinLength = password.length >= 8
   const hasUppercase = /[A-Z]/.test(password)
   const hasNumber = /[0-9]/.test(password)
@@ -167,308 +204,317 @@ export function RegisterForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">Personal information</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className={fieldGroup}>
-            <label className={label} htmlFor="first-name">First name</label>
-            <input id="first-name" type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className={input} required />
-            <FieldError message={fieldErrors.first_name} />
+    <>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        <section className="flex flex-col gap-3">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">Personal information</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className={fieldGroup}>
+              <label className={label} htmlFor="first-name">First name</label>
+              <input id="first-name" type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className={input} required />
+              <FieldError message={fieldErrors.first_name} />
+            </div>
+            <div className={fieldGroup}>
+              <label className={label} htmlFor="last-name">Last name (surname)</label>
+              <input id="last-name" type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} className={input} required />
+              <FieldError message={fieldErrors.last_name} />
+            </div>
           </div>
           <div className={fieldGroup}>
-            <label className={label} htmlFor="last-name">Last name (surname)</label>
-            <input id="last-name" type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} className={input} required />
-            <FieldError message={fieldErrors.last_name} />
+            <label className={label} htmlFor="middle-name">Middle name (optional)</label>
+            <input id="middle-name" type="text" value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={input} />
+            <FieldError message={fieldErrors.middle_name} />
           </div>
-        </div>
-        <div className={fieldGroup}>
-          <label className={label} htmlFor="middle-name">Middle name (optional)</label>
-          <input id="middle-name" type="text" value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={input} />
-          <FieldError message={fieldErrors.middle_name} />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className={fieldGroup}>
+              <label className={label} htmlFor="birthday">Birthday</label>
+              <input
+                id="birthday"
+                type="date"
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
+                max={new Date().toISOString().slice(0, 10)}
+                className={input}
+                required
+              />
+              <FieldError message={fieldErrors.birthday} />
+            </div>
+            <div className={fieldGroup}>
+              <label className={label} htmlFor="email">Email</label>
+              <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={input} required />
+              <p className="mt-1 text-xs text-slate-400">This is also your username for signing in.</p>
+              <FieldError message={fieldErrors.email} />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className={fieldGroup}>
+              <label className={label} htmlFor="gender">Gender</label>
+              <select
+                id="gender"
+                value={gender}
+                onChange={(e) => setGender(e.target.value as Gender)}
+                className={input}
+                required
+              >
+                <option value="" disabled>Select...</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
+              <p className="mt-1 text-xs text-slate-400">Used to determine eligibility for gender-restricted tournaments.</p>
+              <FieldError message={fieldErrors.gender} />
+            </div>
+            <div className={fieldGroup}>
+              <label className={label} htmlFor="phone">Mobile number</label>
+              <input
+                id="phone"
+                type="tel"
+                placeholder="09XX XXX XXXX"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className={input}
+                required
+              />
+              <FieldError message={fieldErrors.phone} />
+            </div>
+          </div>
           <div className={fieldGroup}>
-            <label className={label} htmlFor="birthday">Birthday</label>
-            <input
-              id="birthday"
-              type="date"
-              value={birthday}
-              onChange={(e) => setBirthday(e.target.value)}
-              max={new Date().toISOString().slice(0, 10)}
-              className={input}
-              required
-            />
-            <FieldError message={fieldErrors.birthday} />
+            <label className={label} htmlFor="address">Address</label>
+            <textarea id="address" value={address} onChange={(e) => setAddress(e.target.value)} className={textarea} rows={2} required />
+            <FieldError message={fieldErrors.address} />
           </div>
-          <div className={fieldGroup}>
-            <label className={label} htmlFor="email">Email</label>
-            <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={input} required />
-            <p className="mt-1 text-xs text-slate-400">This is also your username for signing in.</p>
-            <FieldError message={fieldErrors.email} />
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className={fieldGroup}>
-            <label className={label} htmlFor="gender">Gender</label>
-            <select
-              id="gender"
-              value={gender}
-              onChange={(e) => setGender(e.target.value as Gender)}
-              className={input}
-              required
-            >
-              <option value="" disabled>Select...</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
-            <p className="mt-1 text-xs text-slate-400">Used to determine eligibility for gender-restricted tournaments.</p>
-            <FieldError message={fieldErrors.gender} />
-          </div>
-          <div className={fieldGroup}>
-            <label className={label} htmlFor="phone">Mobile number</label>
-            <input
-              id="phone"
-              type="tel"
-              placeholder="09XX XXX XXXX"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className={input}
-              required
-            />
-            <FieldError message={fieldErrors.phone} />
-          </div>
-        </div>
-        <div className={fieldGroup}>
-          <label className={label} htmlFor="address">Address</label>
-          <textarea id="address" value={address} onChange={(e) => setAddress(e.target.value)} className={textarea} rows={2} required />
-          <FieldError message={fieldErrors.address} />
-        </div>
-      </section>
+        </section>
 
-      <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">Identity verification</h3>
-        <div className={fieldGroup}>
-          <label className={label} htmlFor="proof-of-address">
-            Proof of address
-          </label>
-          <FileUploadField
-            id="proof-of-address"
-            file={proofOfAddress}
-            onChange={setProofOfAddress}
-            helperText="Upload a valid ID or a recent billing statement showing your address (JPG, PNG, or PDF, up to 5MB)."
-          />
-          <FieldError message={fieldErrors.proof_of_address} />
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">Account security</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <section className="flex flex-col gap-3">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">Identity verification</h3>
           <div className={fieldGroup}>
-            <label className={label} htmlFor="password">Password</label>
-            <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className={input} required />
-            <FieldError message={fieldErrors.password} />
-          </div>
-          <div className={fieldGroup}>
-            <label className={label} htmlFor="password-confirmation">Confirm password</label>
-            <input
-              id="password-confirmation"
-              type="password"
-              value={passwordConfirmation}
-              onChange={(e) => setPasswordConfirmation(e.target.value)}
-              className={input}
-              required
-            />
-            {passwordConfirmation.length > 0 && !passwordsMatch && (
-              <p className="mt-1 text-xs text-red-600">Passwords don&apos;t match.</p>
-            )}
-          </div>
-        </div>
-        <ul className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-slate-50 p-3 text-xs">
-          <PasswordChecklistItem met={hasMinLength}>At least 8 characters</PasswordChecklistItem>
-          <PasswordChecklistItem met={hasUppercase}>An uppercase letter</PasswordChecklistItem>
-          <PasswordChecklistItem met={hasNumber}>A number</PasswordChecklistItem>
-          <PasswordChecklistItem met={notBirthday}>Not your birthday</PasswordChecklistItem>
-        </ul>
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">I&apos;m joining as a...</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => setRole('player')}
-            className={`rounded-lg border p-3 text-left transition ${
-              role === 'player' ? 'border-teal-500 bg-teal-50 ring-2 ring-teal-100' : 'border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <p className="text-sm font-semibold text-slate-900">Player</p>
-            <p className="mt-0.5 text-xs text-slate-500">Book venues, join matchmaking, and join tournaments.</p>
-          </button>
-          <button
-            type="button"
-            onClick={() => setRole('coach')}
-            className={`rounded-lg border p-3 text-left transition ${
-              role === 'coach' ? 'border-teal-500 bg-teal-50 ring-2 ring-teal-100' : 'border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <p className="text-sm font-semibold text-slate-900">Coach</p>
-            <p className="mt-0.5 text-xs text-slate-500">Register players for tournaments and evaluate their skill.</p>
-          </button>
-        </div>
-
-        {role === 'coach' && (
-          <div className={fieldGroup}>
-            <label className={label} htmlFor="coach-proof">
-              Proof of coaching eligibility
+            <label className={label} htmlFor="proof-of-address">
+              Proof of address
             </label>
             <FileUploadField
-              id="coach-proof"
-              file={coachProof}
-              onChange={setCoachProof}
-              helperText="Upload a coaching license, certification, or similar credential showing you're qualified to coach players (JPG, PNG, or PDF, up to 5MB)."
+              id="proof-of-address"
+              file={proofOfAddress}
+              onChange={setProofOfAddress}
+              helperText="Upload a valid ID or a recent billing statement showing your address (JPG, PNG, or PDF, up to 5MB)."
             />
-            <FieldError message={fieldErrors.coach_eligibility_proof} />
+            <FieldError message={fieldErrors.proof_of_address} />
           </div>
-        )}
-      </section>
+        </section>
 
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-        <div className="flex items-start gap-3 text-sm text-slate-700">
-          <input
-            id="accept-terms"
-            type="checkbox"
-            checked={acceptedTerms}
-            onChange={(e) => setAcceptedTerms(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-            required
-          />
-          <div className="flex flex-wrap items-center gap-1">
-            <span>I agree to the</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                setShowTermsModal(true)
-              }}
-              className="font-medium text-teal-600 underline-offset-2 hover:underline"
-            >
-              Terms & Conditions
-            </button>
+        <section className="flex flex-col gap-3">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">Account security</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className={fieldGroup}>
+              <label className={label} htmlFor="password">Password</label>
+              <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className={input} required />
+              <FieldError message={fieldErrors.password} />
+            </div>
+            <div className={fieldGroup}>
+              <label className={label} htmlFor="password-confirmation">Confirm password</label>
+              <input
+                id="password-confirmation"
+                type="password"
+                value={passwordConfirmation}
+                onChange={(e) => setPasswordConfirmation(e.target.value)}
+                className={input}
+                required
+              />
+              {passwordConfirmation.length > 0 && !passwordsMatch && (
+                <p className="mt-1 text-xs text-red-600">Passwords don&apos;t match.</p>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+          <ul className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-slate-50 p-3 text-xs">
+            <PasswordChecklistItem met={hasMinLength}>At least 8 characters</PasswordChecklistItem>
+            <PasswordChecklistItem met={hasUppercase}>An uppercase letter</PasswordChecklistItem>
+            <PasswordChecklistItem met={hasNumber}>A number</PasswordChecklistItem>
+            <PasswordChecklistItem met={notBirthday}>Not your birthday</PasswordChecklistItem>
+          </ul>
+        </section>
 
-      {generalError && <p className="text-sm text-red-600">{generalError}</p>}
-
-      <button type="submit" disabled={isSubmitting || !acceptedTerms} className={`${buttonPrimary} justify-center py-2.5`}>
-        {isSubmitting ? 'Creating account...' : 'Create account'}
-      </button>
-
-      {showTermsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-          <div className="max-h-[80vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <h3 className="text-lg font-bold text-slate-900">Terms & Conditions</h3>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-start gap-3 text-sm text-slate-700">
+            <input
+              id="accept-terms"
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+              required
+            />
+            <div className="flex flex-wrap items-center gap-1">
+              <span>I agree to the</span>
               <button
                 type="button"
-                onClick={() => setShowTermsModal(false)}
-                className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setShowTermsModal(true)
+                }}
+                className="font-medium text-teal-600 underline-offset-2 hover:underline"
               >
-                Close
+                Terms & Conditions
               </button>
-            </div>
-            <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4 text-sm text-slate-700">
-              <p>
-                Welcome to SportsHub, a platform for finding, booking, and organizing sports venues, tournaments,
-                coaching services, and livestream activity.
-              </p>
-              <p>
-                By creating an account, you agree to use SportsHub responsibly, provide accurate personal information,
-                and follow all rules set by the platform, individual venue operators, organizers, coaches, and event
-                administrators.
-              </p>
-
-              <ol className="list-decimal space-y-3 pl-5">
-                <li>
-                  <p className="font-semibold text-slate-900">Account and verification</p>
-                  <p>
-                    You must provide truthful personal details, a valid email address, and any required proof of identity,
-                    address, or coaching eligibility when requested. SportsHub may verify accounts before allowing full
-                    access to bookings, tournaments, or coaching features.
-                  </p>
-                </li>
-                <li>
-                  <p className="font-semibold text-slate-900">Venue bookings and payments</p>
-                  <p>
-                    Venue reservations, booking approvals, and any associated fees are managed through SportsHub but are
-                    subject to the venue&apos;s own policies, schedule, cancellation rules, and local laws. You are responsible
-                    for confirming the time, date, and terms before booking or attending a session.
-                  </p>
-                </li>
-                <li>
-                  <p className="font-semibold text-slate-900">Tournament and coaching conduct</p>
-                  <p>
-                    Players, coaches, organizers, and facilitators must behave respectfully and follow each tournament&apos;s
-                    rules, competition format, fair-play standards, and safety requirements. SportsHub may restrict,
-                    suspend, or remove access to accounts that misuse the platform, engage in abusive conduct, or violate
-                    tournament rules.
-                  </p>
-                </li>
-                <li>
-                  <p className="font-semibold text-slate-900">Content and platform use</p>
-                  <p>
-                    You may not upload unlawful, offensive, misleading, or harmful content. You are responsible for all
-                    information you post, including profile details, tournament entries, livestream communication, venue
-                    reviews, and messages sent through the platform.
-                  </p>
-                </li>
-                <li>
-                  <p className="font-semibold text-slate-900">Privacy and data</p>
-                  <p>
-                    SportsHub may collect and process personal information to provide account access, verification,
-                    bookings, tournament administration, and platform safety features. Information may be shared with
-                    relevant venue operators, organizers, and authorized staff only as needed to deliver the service.
-                  </p>
-                </li>
-                <li>
-                  <p className="font-semibold text-slate-900">Platform availability and liability</p>
-                  <p>
-                    SportsHub provides the service on an &ldquo;as is&rdquo; basis and does not guarantee uninterrupted access,
-                    flawless operation, or the outcome of any booking, event, or match. We do not guarantee venue
-                    availability or tournament outcomes beyond the rules and controls enabled by the platform.
-                  </p>
-                </li>
-                <li>
-                  <p className="font-semibold text-slate-900">Termination and compliance</p>
-                  <p>
-                    SportsHub may suspend or terminate accounts that violate platform rules, participate in fraud,
-                    disrupt events, or misuse user data. Continued use of SportsHub after account suspension is not
-                    permitted.
-                  </p>
-                </li>
-              </ol>
-
-              <p>
-                By accepting these terms, you confirm that you understand the responsibilities of using SportsHub and that
-                you agree to comply with the applicable rules for venue booking, tournament participation, coaching,
-                livestreaming, and account verification.
-              </p>
             </div>
           </div>
         </div>
-      )}
 
-      {onSwitchToLogin && (
-        <p className="text-center text-sm text-slate-600">
-          Already have an account?{' '}
-          <button type="button" onClick={onSwitchToLogin} className="font-medium text-teal-600 hover:underline">
-            Log in
-          </button>
-        </p>
-      )}
-    </form>
+        <section className="flex flex-col gap-3">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">I&apos;m joining as a...</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setRole('player')}
+              className={`rounded-lg border p-3 text-left transition ${
+                role === 'player' ? 'border-teal-500 bg-teal-50 ring-2 ring-teal-100' : 'border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <p className="text-sm font-semibold text-slate-900">Player</p>
+              <p className="mt-0.5 text-xs text-slate-500">Book venues, join matchmaking, and join tournaments.</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setRole('coach')}
+              className={`rounded-lg border p-3 text-left transition ${
+                role === 'coach' ? 'border-teal-500 bg-teal-50 ring-2 ring-teal-100' : 'border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <p className="text-sm font-semibold text-slate-900">Coach</p>
+              <p className="mt-0.5 text-xs text-slate-500">Register players for tournaments and evaluate their skill.</p>
+            </button>
+          </div>
+
+          {role === 'coach' && (
+            <div className={fieldGroup}>
+              <label className={label} htmlFor="coach-proof">
+                Proof of coaching eligibility
+              </label>
+              <FileUploadField
+                id="coach-proof"
+                file={coachProof}
+                onChange={setCoachProof}
+                helperText="Upload a coaching license, certification, or similar credential showing you're qualified to coach players (JPG, PNG, or PDF, up to 5MB)."
+              />
+              <FieldError message={fieldErrors.coach_eligibility_proof} />
+            </div>
+          )}
+        </section>
+
+        {generalError && <p className="text-sm text-red-600">{generalError}</p>}
+
+        <button type="submit" disabled={isSubmitting || !acceptedTerms} className={`${buttonPrimary} justify-center py-2.5`}>
+          {isSubmitting ? 'Creating account...' : 'Create account'}
+        </button>
+
+        {onSwitchToLogin && (
+          <p className="text-center text-sm text-slate-600">
+            Already have an account?{' '}
+            <button type="button" onClick={onSwitchToLogin} className="font-medium text-teal-600 hover:underline">
+              Log in
+            </button>
+          </p>
+        )}
+      </form>
+
+      {showTermsModal &&
+        createPortal(
+          <div
+            className="fixed inset-0 flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            style={{ position: 'fixed', inset: 0, zIndex: 2147483647 }}
+          >
+            <div className="relative z-[2147483647] flex max-h-[82vh] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.28)]">
+              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4">
+                <h3 className="text-xl font-bold text-slate-900">Terms & Conditions</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(false)}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5 text-[15px] leading-7 text-slate-700 sm:px-6">
+                <p>
+                  Welcome to SportsHub, a platform for finding, booking, and organizing sports venues, tournaments,
+                  coaching services, and livestream activity.
+                </p>
+                <p>
+                  By creating an account, you agree to use SportsHub responsibly, provide accurate personal information,
+                  and follow all rules set by the platform, individual venue operators, organizers, coaches, and event
+                  administrators.
+                </p>
+
+                <ol className="list-decimal space-y-3 pl-5">
+                  <li>
+                    <p className="font-semibold text-slate-900">Account and verification</p>
+                    <p>
+                      You must provide truthful personal details, a valid email address, and any required proof of identity,
+                      address, or coaching eligibility when requested. SportsHub may verify accounts before allowing full
+                      access to bookings, tournaments, or coaching features.
+                    </p>
+                  </li>
+                  <li>
+                    <p className="font-semibold text-slate-900">Venue bookings and payments</p>
+                    <p>
+                      Venue reservations, booking approvals, and any associated fees are managed through SportsHub but are
+                      subject to the venue&apos;s own policies, schedule, cancellation rules, and local laws. You are responsible
+                      for confirming the time, date, and terms before booking or attending a session.
+                    </p>
+                  </li>
+                  <li>
+                    <p className="font-semibold text-slate-900">Tournament and coaching conduct</p>
+                    <p>
+                      Players, coaches, organizers, and facilitators must behave respectfully and follow each tournament&apos;s
+                      rules, competition format, fair-play standards, and safety requirements. SportsHub may restrict,
+                      suspend, or remove access to accounts that misuse the platform, engage in abusive conduct, or violate
+                      tournament rules.
+                    </p>
+                  </li>
+                  <li>
+                    <p className="font-semibold text-slate-900">Content and platform use</p>
+                    <p>
+                      You may not upload unlawful, offensive, misleading, or harmful content. You are responsible for all
+                      information you post, including profile details, tournament entries, livestream communication, venue
+                      reviews, and messages sent through the platform.
+                    </p>
+                  </li>
+                  <li>
+                    <p className="font-semibold text-slate-900">Privacy and data</p>
+                    <p>
+                      SportsHub may collect and process personal information to provide account access, verification,
+                      bookings, tournament administration, and platform safety features. Information may be shared with
+                      relevant venue operators, organizers, and authorized staff only as needed to deliver the service.
+                    </p>
+                  </li>
+                  <li>
+                    <p className="font-semibold text-slate-900">Platform availability and liability</p>
+                    <p>
+                      SportsHub provides the service on an &ldquo;as is&rdquo; basis and does not guarantee uninterrupted access,
+                      flawless operation, or the outcome of any booking, event, or match. We do not guarantee venue
+                      availability or tournament outcomes beyond the rules and controls enabled by the platform.
+                    </p>
+                  </li>
+                  <li>
+                    <p className="font-semibold text-slate-900">Termination and compliance</p>
+                    <p>
+                      SportsHub may suspend or terminate accounts that violate platform rules, participate in fraud,
+                      disrupt events, or misuse user data. Continued use of SportsHub after account suspension is not
+                      permitted.
+                    </p>
+                  </li>
+                </ol>
+
+                <p>
+                  By accepting these terms, you confirm that you understand the responsibilities of using SportsHub and that
+                  you agree to comply with the applicable rules for venue booking, tournament participation, coaching,
+                  livestreaming, and account verification.
+                </p>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
   )
 }

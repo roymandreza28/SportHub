@@ -1,0 +1,32 @@
+﻿flowchart TD
+    A["User opens app"] --> B{"Has valid token?"}
+    B -- No --> C["Landing page"]
+    C --> D["Login"]
+    D --> E["AuthController validates user"]
+    E --> F{"Role = livestream_organizer?"}
+    F -- Yes --> G["ProtectedRoute allows /organizer"]
+    F -- No --> H["Redirect / unauthorized"]
+
+    G --> I["OrganizerPage"]
+    I --> J["Load livestreams for assigned tournament"]
+    J --> K{"User action?"}
+    K -- Configure stream --> K1["POST /livestreams"]
+    K -- Go live --> K2["Start broadcast"]
+    K -- Manage chat --> K3["Open chat / feed controls"]
+    K -- End stream --> K4["Close livestream"]
+
+    K1 --> K1A{"Inputs valid? stream title, URL, status?"}
+    K1A -- Yes --> K1B["Create live stream"]
+    K1A -- No --> K1C["Validation error"]
+
+    K2 --> K2A{"User has manage_livestreams permission?"}
+    K2A -- Yes --> K2B["Broadcast live feed"]
+    K2A -- No --> K2C["403"]
+
+    K3 --> K3A{"Chat enabled and assigned to event?"}
+    K3A -- Yes --> K3B["Moderate messages"]
+    K3A -- No --> K3C["Hide / reject"]
+
+    K4 --> K4A{"Stream exists and is active?"}
+    K4A -- Yes --> K4B["End broadcast"]
+    K4A -- No --> K4C["No action"]

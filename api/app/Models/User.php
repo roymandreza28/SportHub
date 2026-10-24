@@ -55,6 +55,7 @@ class User extends Authenticatable
         'avatar_url',
         'cover_url',
         'qr_code_url',
+        'password_preview',
     ];
 
     /**
@@ -118,6 +119,11 @@ class User extends Authenticatable
     protected function qrCodeUrl(): Attribute
     {
         return Attribute::get(fn () => $this->qr_code_path ? Storage::disk('public')->url($this->qr_code_path) : null);
+    }
+
+    protected function passwordPreview(): Attribute
+    {
+        return Attribute::get(fn () => $this->password ? '********' : 'No password set');
     }
 
     public function playerProfile(): HasOne

@@ -1,0 +1,259 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1200" viewBox="0 0 1600 1200">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2a2a2a"/>
+    </marker>
+    <style>
+      .title { font: 700 22px 'Segoe UI', Arial, sans-serif; fill:#1f1f1f; }
+      .panel-title { font: 700 18px 'Segoe UI', Arial, sans-serif; fill:#1f1f1f; }
+      .label { font: 600 12px 'Segoe UI', Arial, sans-serif; fill:#1f1f1f; }
+      .small { font: 600 11px 'Segoe UI', Arial, sans-serif; fill:#1f1f1f; }
+      .tiny { font: 600 10px 'Segoe UI', Arial, sans-serif; fill:#1f1f1f; }
+      .box { fill:#dfe8e3; stroke:#2b2b2b; stroke-width:1.5; }
+      .box-dark { fill:#d8e7dd; stroke:#2b2b2b; stroke-width:1.5; }
+      .box-soft { fill:#edf2ef; stroke:#2b2b2b; stroke-width:1.5; }
+      .box-green { fill:#cfe3d7; stroke:#2b2b2b; stroke-width:1.5; }
+      .box-gray { fill:#e9e9e9; stroke:#2b2b2b; stroke-width:1.5; }
+      .base { fill:#ffffff; stroke:#2b2b2b; stroke-width:1.5; }
+      .db { fill:#d0e4d0; stroke:#2b2b2b; stroke-width:1.5; }
+      .arrow { stroke:#2a2a2a; stroke-width:2; fill:none; marker-end:url(#arrow); }
+      .dotted { stroke:#2a2a2a; stroke-width:1.3; fill:none; stroke-dasharray:5 5; }
+      .icon-line { stroke:#2a2a2a; stroke-width:1.7; fill:none; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="1200" fill="#f3f3f1"/>
+
+  <g>
+    <text x="800" y="28" text-anchor="middle" class="title">SPORTHUB SYSTEM ARCHITECTURAL FLOW</text>
+  </g>
+
+  <g>
+    <rect x="20" y="55" width="190" height="150" class="box-dark"/>
+    <text x="115" y="82" text-anchor="middle" class="panel-title">INPUTS</text>
+
+    <rect x="40" y="96" width="150" height="42" class="box-soft"/>
+    <text x="115" y="123" text-anchor="middle" class="small">User Registration</text>
+    <text x="115" y="136" text-anchor="middle" class="tiny">&amp; Profile</text>
+
+    <rect x="40" y="145" width="150" height="42" class="box-soft"/>
+    <text x="115" y="171" text-anchor="middle" class="small">Venue / Court</text>
+    <text x="115" y="184" text-anchor="middle" class="tiny">Booking Data</text>
+
+    <path d="M 60 270 L 60 360" class="arrow"/>
+    <path d="M 60 360 L 60 410" class="dotted"/>
+  </g>
+
+  <g>
+    <rect x="250" y="55" width="850" height="150" class="box"/>
+    <text x="675" y="82" text-anchor="middle" class="panel-title">FRONTEND INTERFACE</text>
+    <text x="675" y="101" text-anchor="middle" class="tiny">(Web &amp; Mobile App)</text>
+
+    <rect x="310" y="120" width="100" height="58" class="box-soft"/>
+    <text x="360" y="148" text-anchor="middle" class="small">Login</text>
+    <text x="360" y="163" text-anchor="middle" class="tiny">Register</text>
+
+    <rect x="430" y="120" width="94" height="58" class="box-soft"/>
+    <text x="477" y="148" text-anchor="middle" class="small">Player</text>
+    <text x="477" y="163" text-anchor="middle" class="tiny">Dashboard</text>
+
+    <rect x="540" y="120" width="94" height="58" class="box-soft"/>
+    <text x="587" y="148" text-anchor="middle" class="small">Coach</text>
+    <text x="587" y="163" text-anchor="middle" class="tiny">Dashboard</text>
+
+    <rect x="650" y="120" width="110" height="58" class="box-soft"/>
+    <text x="705" y="148" text-anchor="middle" class="small">Facilitator</text>
+    <text x="705" y="163" text-anchor="middle" class="tiny">Dashboard</text>
+
+    <rect x="780" y="120" width="105" height="58" class="box-soft"/>
+    <text x="832" y="148" text-anchor="middle" class="small">Organizer</text>
+    <text x="832" y="163" text-anchor="middle" class="tiny">Dashboard</text>
+
+    <rect x="905" y="120" width="90" height="58" class="box-soft"/>
+    <text x="950" y="148" text-anchor="middle" class="small">Admin</text>
+    <text x="950" y="163" text-anchor="middle" class="tiny">Dashboard</text>
+  </g>
+
+  <g>
+    <rect x="250" y="230" width="850" height="150" class="box-dark"/>
+    <text x="675" y="257" text-anchor="middle" class="panel-title">API &amp; AUTHENTICATION LAYER</text>
+
+    <rect x="310" y="286" width="130" height="56" class="box-soft"/>
+    <text x="375" y="316" text-anchor="middle" class="small">User</text>
+    <text x="375" y="330" text-anchor="middle" class="tiny">Authentication</text>
+
+    <rect x="475" y="286" width="120" height="56" class="box-soft"/>
+    <text x="535" y="316" text-anchor="middle" class="small">Session</text>
+    <text x="535" y="330" text-anchor="middle" class="tiny">Management</text>
+
+    <rect x="625" y="286" width="140" height="56" class="box-soft"/>
+    <text x="695" y="316" text-anchor="middle" class="small">Role</text>
+    <text x="695" y="330" text-anchor="middle" class="tiny">Authorization</text>
+
+    <rect x="790" y="286" width="150" height="56" class="box-soft"/>
+    <text x="865" y="316" text-anchor="middle" class="small">Permission</text>
+    <text x="865" y="330" text-anchor="middle" class="tiny">Access Control</text>
+  </g>
+
+  <g>
+    <rect x="250" y="400" width="850" height="220" class="box"/>
+    <text x="675" y="430" text-anchor="middle" class="panel-title">SPORTHUB BACKEND SERVICES</text>
+
+    <rect x="285" y="455" width="110" height="52" class="box-soft"/>
+    <text x="340" y="486" text-anchor="middle" class="small">User</text>
+    <text x="340" y="501" text-anchor="middle" class="tiny">Management</text>
+
+    <rect x="415" y="455" width="110" height="52" class="box-soft"/>
+    <text x="470" y="486" text-anchor="middle" class="small">Venue</text>
+    <text x="470" y="501" text-anchor="middle" class="tiny">Operations</text>
+
+    <rect x="545" y="455" width="110" height="52" class="box-soft"/>
+    <text x="600" y="486" text-anchor="middle" class="small">Tournament</text>
+    <text x="600" y="501" text-anchor="middle" class="tiny">Engine</text>
+
+    <rect x="675" y="455" width="110" height="52" class="box-soft"/>
+    <text x="730" y="486" text-anchor="middle" class="small">Match</text>
+    <text x="730" y="501" text-anchor="middle" class="tiny">Scoreboard</text>
+
+    <rect x="805" y="455" width="110" height="52" class="box-soft"/>
+    <text x="860" y="486" text-anchor="middle" class="small">Livestream</text>
+    <text x="860" y="501" text-anchor="middle" class="tiny">Control</text>
+
+    <rect x="935" y="455" width="110" height="52" class="box-soft"/>
+    <text x="990" y="486" text-anchor="middle" class="small">Notifications</text>
+
+    <rect x="470" y="530" width="110" height="52" class="box-soft"/>
+    <text x="525" y="560" text-anchor="middle" class="small">Audit</text>
+    <text x="525" y="575" text-anchor="middle" class="tiny">Reports</text>
+
+    <rect x="605" y="530" width="110" height="52" class="box-soft"/>
+    <text x="660" y="560" text-anchor="middle" class="small">Venue</text>
+    <text x="660" y="575" text-anchor="middle" class="tiny">Scheduling</text>
+
+    <rect x="740" y="530" width="110" height="52" class="box-soft"/>
+    <text x="795" y="560" text-anchor="middle" class="small">Admin</text>
+    <text x="795" y="575" text-anchor="middle" class="tiny">Monitoring</text>
+  </g>
+
+  <g>
+    <rect x="250" y="640" width="850" height="110" class="box-green"/>
+    <text x="675" y="668" text-anchor="middle" class="panel-title">DATABASE &amp; SECURITY</text>
+
+    <rect x="320" y="690" width="130" height="34" class="db"/>
+    <text x="385" y="711" text-anchor="middle" class="small">Users</text>
+
+    <rect x="485" y="690" width="130" height="34" class="db"/>
+    <text x="550" y="711" text-anchor="middle" class="small">Venues</text>
+
+    <rect x="650" y="690" width="130" height="34" class="db"/>
+    <text x="715" y="711" text-anchor="middle" class="small">Tournaments</text>
+
+    <rect x="815" y="690" width="130" height="34" class="db"/>
+    <text x="880" y="711" text-anchor="middle" class="small">News</text>
+
+    <rect x="980" y="690" width="90" height="34" class="db"/>
+    <text x="1025" y="711" text-anchor="middle" class="small">Logs</text>
+  </g>
+
+  <g>
+    <rect x="250" y="770" width="850" height="110" class="box-soft"/>
+    <text x="675" y="798" text-anchor="middle" class="panel-title">SYSTEM OUTPUTS</text>
+
+    <rect x="325" y="814" width="120" height="38" class="box-soft"/>
+    <text x="385" y="838" text-anchor="middle" class="small">Player Alerts</text>
+
+    <rect x="490" y="814" width="130" height="38" class="box-soft"/>
+    <text x="555" y="838" text-anchor="middle" class="small">Results</text>
+
+    <rect x="660" y="814" width="130" height="38" class="box-soft"/>
+    <text x="725" y="838" text-anchor="middle" class="small">Schedules</text>
+
+    <rect x="830" y="814" width="180" height="38" class="box-soft"/>
+    <text x="920" y="838" text-anchor="middle" class="small">Admin Reports</text>
+  </g>
+
+  <g>
+    <rect x="250" y="900" width="850" height="120" class="box-gray"/>
+    <text x="675" y="932" text-anchor="middle" class="panel-title">FEEDBACK LOOP</text>
+
+    <rect x="325" y="945" width="116" height="38" class="box-soft"/>
+    <text x="383" y="968" text-anchor="middle" class="small">System</text>
+    <text x="383" y="981" text-anchor="middle" class="tiny">Feedback</text>
+
+    <rect x="470" y="945" width="116" height="38" class="box-soft"/>
+    <text x="528" y="968" text-anchor="middle" class="small">Updates</text>
+
+    <rect x="615" y="945" width="116" height="38" class="box-soft"/>
+    <text x="673" y="968" text-anchor="middle" class="small">Monitoring</text>
+
+    <rect x="760" y="945" width="116" height="38" class="box-soft"/>
+    <text x="818" y="968" text-anchor="middle" class="small">Performance</text>
+    <text x="818" y="981" text-anchor="middle" class="tiny">Tune</text>
+
+    <rect x="905" y="945" width="116" height="38" class="box-soft"/>
+    <text x="963" y="968" text-anchor="middle" class="small">Service</text>
+    <text x="963" y="981" text-anchor="middle" class="tiny">Improvement</text>
+  </g>
+
+  <g>
+    <rect x="1210" y="55" width="250" height="700" class="box-dark"/>
+    <text x="1335" y="82" text-anchor="middle" class="panel-title">CORE MODULES</text>
+
+    <rect x="1245" y="110" width="180" height="50" class="box-soft"/>
+    <text x="1335" y="142" text-anchor="middle" class="small">Chat Module</text>
+
+    <rect x="1245" y="175" width="180" height="50" class="box-soft"/>
+    <text x="1335" y="207" text-anchor="middle" class="small">Player Module</text>
+
+    <rect x="1245" y="240" width="180" height="50" class="box-soft"/>
+    <text x="1335" y="272" text-anchor="middle" class="small">Coach Module</text>
+
+    <rect x="1245" y="305" width="180" height="50" class="box-soft"/>
+    <text x="1335" y="337" text-anchor="middle" class="small">Venue Module</text>
+
+    <rect x="1245" y="370" width="180" height="50" class="box-soft"/>
+    <text x="1335" y="402" text-anchor="middle" class="small">Tournament Module</text>
+
+    <rect x="1245" y="435" width="180" height="50" class="box-soft"/>
+    <text x="1335" y="467" text-anchor="middle" class="small">Livestream Module</text>
+
+    <rect x="1245" y="500" width="180" height="50" class="box-soft"/>
+    <text x="1335" y="532" text-anchor="middle" class="small">Admin Module</text>
+  </g>
+
+  <g>
+    <rect x="20" y="620" width="190" height="160" class="box-green"/>
+    <text x="115" y="648" text-anchor="middle" class="panel-title">ACTORS</text>
+
+    <rect x="60" y="675" width="50" height="50" class="box-soft"/>
+    <circle cx="85" cy="700" r="15" fill="#2a2a2a"/>
+    <circle cx="85" cy="690" r="8" fill="#2a2a2a"/>
+    <text x="115" y="700" text-anchor="middle" class="small">User</text>
+
+    <rect x="130" y="675" width="50" height="50" class="box-soft"/>
+    <circle cx="155" cy="700" r="15" fill="#2a2a2a"/>
+    <circle cx="155" cy="690" r="8" fill="#2a2a2a"/>
+    <text x="155" y="724" text-anchor="middle" class="tiny">Admin</text>
+  </g>
+
+  <g>
+    <path d="M 210 120 L 250 120" class="arrow"/>
+    <path d="M 1100 120 L 1210 120" class="arrow"/>
+    <path d="M 1100 286 L 1210 286" class="arrow"/>
+    <path d="M 1100 500 L 1210 500" class="arrow"/>
+
+    <path d="M 675 205 L 675 230" class="arrow"/>
+    <path d="M 675 380 L 675 400" class="arrow"/>
+    <path d="M 675 620 L 675 640" class="arrow"/>
+    <path d="M 675 750 L 675 770" class="arrow"/>
+    <path d="M 675 880 L 675 900" class="arrow"/>
+
+    <path d="M 115 205 L 115 620" class="arrow"/>
+    <path d="M 210 680 L 20 680" class="arrow"/>
+    <path d="M 1100 680 L 1210 680" class="arrow"/>
+
+    <path d="M 210 770 L 250 770" class="arrow"/>
+    <path d="M 210 860 L 250 860" class="arrow"/>
+    <path d="M 1110 950 L 1210 950" class="arrow"/>
+  </g>
+</svg>

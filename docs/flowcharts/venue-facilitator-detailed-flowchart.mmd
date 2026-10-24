@@ -1,0 +1,37 @@
+﻿flowchart TD
+    A["User opens app"] --> B{"Has valid token?"}
+    B -- No --> C["Landing page"]
+    C --> D["Login"]
+    D --> E["AuthController validates user"]
+    E --> F{"Role = venue_facilitator?"}
+    F -- Yes --> G["ProtectedRoute allows /facilitator"]
+    F -- No --> H["Redirect / unauthorized"]
+
+    G --> I["FacilitatorPage"]
+    I --> J["Load own venues, bookings, schedule, news, tournaments"]
+    J --> K{"User action selected?"}
+    K -- Venues --> K1["GET /venues/mine + POST /venues"]
+    K -- Bookings --> K2["GET /venues/{venue}/schedule + PATCH venue-registrations"]
+    K -- Schedule --> K3["GET /venues/{id}/schedule"]
+    K -- News --> K4["POST /news /news comments / manage news"]
+    K -- Tournaments --> K5["POST /tournaments + PATCH /tournaments/{id}"]
+
+    K1 --> K1A{"Is user facilitator and owns venue?"}
+    K1A -- Yes --> K1B["Create/edit venue"]
+    K1A -- No --> K1C["403 / validation error"]
+
+    K2 --> K2A{"Venue registration belongs to this facilitator?"}
+    K2A -- Yes --> K2B["Approve or reject booking"]
+    K2A -- No --> K2C["403"]
+
+    K3 --> K3A{"Venue exists and belongs to user?"}
+    K3A -- Yes --> K3B["Render schedule"]
+    K3A -- No --> K3C["403"]
+
+    K4 --> K4A{"Manage news permission granted?"}
+    K4A -- Yes --> K4B["Create / edit / delete news"]
+    K4A -- No --> K4C["403"]
+
+    K5 --> K5A{"Tournament belongs to own venue?"}
+    K5A -- Yes --> K5B["Create / update tournament"]
+    K5A -- No --> K5C["Validation error"]
