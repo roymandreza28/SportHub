@@ -147,6 +147,28 @@ it('lists audit log entries newest first', function () {
     expect($response->json('data.0.action'))->toBe('second.action');
 });
 
+it('filters audit log entries by a specific created_at date range', function () {
+    $admin = userWithRole('admin');
+
+    $inRange = new AuditLog([
+        'actor_id' => $admin->id,
+        'action' => 'in.range',
+    ]);
+    $inRange->forceFill(['created_at' => '2026-01-15 10:00:00', 'updated_at' => '2026-01-15 10:00:00'])->save();
+
+    $outOfRange = new AuditLog([
+        'actor_id' => $admin->id,
+        'action' => 'out.of.range',
+    ]);
+    $outOfRange->forceFill(['created_at' => '2026-01-16 10:00:00', 'updated_at' => '2026-01-16 10:00:00'])->save();
+
+    $response = $this->actingAs($admin)->getJson('/api/admin/audit-log?from=2026-01-15T09:00&to=2026-01-15T11:00');
+
+    $response->assertOk();
+    expect($response->json('data.*.id'))->toContain($inRange->id);
+    expect($response->json('data.*.id'))->not->toContain($outOfRange->id);
+});
+
 it('shows a masked current password preview to the admin without exposing the actual password', function () {
     $admin = userWithRole('admin');
     $target = userWithRole('player');

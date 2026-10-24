@@ -113,7 +113,12 @@ export async function createOrganizer(input: {
   return data
 }
 
-export async function fetchAuditLog() {
-  const { data } = await api.get<Paginated<AuditLogEntry>>('/api/admin/audit-log')
+export async function fetchAuditLog(filters?: { from?: string; to?: string }) {
+  const { data } = await api.get<Paginated<AuditLogEntry>>('/api/admin/audit-log', {
+    params: {
+      from: filters?.from || undefined,
+      to: filters?.to || undefined,
+    },
+  })
   return data
 }
