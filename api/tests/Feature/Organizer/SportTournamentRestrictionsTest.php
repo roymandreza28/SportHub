@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\PlayerProfile;
 use App\Models\Sport;
 use App\Models\SportFormat;
 use App\Models\Tournament;
@@ -64,6 +65,64 @@ it('lets an organizer set (or omit) a gender restriction when creating a tournam
         'livestream_organizer_id' => $livestreamOrganizer->id,
         'required_gender' => 'nonbinary',
     ])->assertStatus(422)->assertJsonValidationErrors('required_gender');
+});
+
+it('lets an organizer set an age range and rejects an inverted one', function () {
+    $organizer = userWithRole('organizer');
+    $venueOrganizer = userWithRole('venue_organizer');
+    $livestreamOrganizer = userWithRole('livestream_organizer');
+    $sport = Sport::create(['name' => 'Test Age Sport']);
+
+    $valid = $this->actingAs($organizer)->postJson('/api/tournaments', [
+        'sport_id' => $sport->id,
+        'name' => 'Age Range Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek()->toIso8601String(),
+        'venue_organizer_id' => $venueOrganizer->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
+        'min_age' => 18,
+        'max_age' => 35,
+    ]);
+    $valid->assertCreated();
+    $valid->assertJsonPath('min_age', 18);
+    $valid->assertJsonPath('max_age', 35);
+
+    $this->actingAs($organizer)->postJson('/api/tournaments', [
+        'sport_id' => $sport->id,
+        'name' => 'Bad Age Range Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek()->toIso8601String(),
+        'venue_organizer_id' => $venueOrganizer->id,
+        'livestream_organizer_id' => $livestreamOrganizer->id,
+        'min_age' => 40,
+        'max_age' => 18,
+    ])->assertStatus(422)->assertJsonValidationErrors('max_age');
+});
+
+it('rejects a player whose age falls outside the tournament age range', function () {
+    $organizer = userWithRole('organizer');
+    $coach = userWithRole('coach');
+    $player = userWithRole('player');
+    $sport = Sport::create(['name' => 'Test Age Sport']);
+    PlayerProfile::create([
+        'user_id' => $player->id,
+        'date_of_birth' => now()->subYears(16)->toDateString(),
+    ]);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $organizer->id,
+        'sport_id' => $sport->id,
+        'name' => 'Youth Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(),
+        'status' => 'registration',
+        'min_age' => 18,
+        'max_age' => 35,
+    ]);
+
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", [
+        'user_id' => $player->id,
+    ])->assertStatus(422)->assertJsonValidationErrors('user_id');
 });
 
 it('allows a team-category sport tournament when sport_format_id is given', function () {

@@ -127,6 +127,8 @@ export function TournamentWizard() {
   const [name, setName] = useState('')
   const [format, setFormat] = useState<TournamentFormat>('single_elimination')
   const [requiredGender, setRequiredGender] = useState<'' | 'male' | 'female'>('')
+  const [minAge, setMinAge] = useState<number | ''>('')
+  const [maxAge, setMaxAge] = useState<number | ''>('')
   const [scoringChoice, setScoringChoice] = useState(SCORING_OPTIONS[0].value)
   const [startsAt, setStartsAt] = useState('')
   const [registrationFee, setRegistrationFee] = useState('')
@@ -163,12 +165,15 @@ export function TournamentWizard() {
   }, [selectedSportName])
 
   const scoring = SCORING_OPTIONS.find((s) => s.value === scoringChoice) ?? SCORING_OPTIONS[0]
+  const hasValidAgeRange = minAge === '' || maxAge === '' || Number(minAge) <= Number(maxAge)
 
   const createMutation = useMutation({
     mutationFn: () => createTournament({
       sport_id: Number(sportId),
       sport_format_id: sportFormatId ? Number(sportFormatId) : undefined,
       required_gender: requiredGender || undefined,
+      min_age: minAge === '' ? undefined : Number(minAge),
+      max_age: maxAge === '' ? undefined : Number(maxAge),
       name,
       format,
       starts_at: new Date(startsAt).toISOString(),
@@ -294,6 +299,35 @@ export function TournamentWizard() {
               ? `Only ${requiredGender} players may register — this applies to every player on a team too.`
               : 'Any player or team can register, regardless of gender.'}
           </p>
+        </div>
+        <div className={fieldGroup}>
+          <label className={label}>Age restriction</label>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min="1"
+              max="120"
+              placeholder="Min"
+              value={minAge}
+              onChange={(e) => setMinAge(e.target.value === '' ? '' : Number(e.target.value))}
+              className={input}
+            />
+            <input
+              type="number"
+              min="1"
+              max="120"
+              placeholder="Max"
+              value={maxAge}
+              onChange={(e) => setMaxAge(e.target.value === '' ? '' : Number(e.target.value))}
+              className={input}
+            />
+          </div>
+          <p className="text-xs text-slate-500">
+            {minAge === '' && maxAge === ''
+              ? 'Open to all ages.'
+              : `Age range: ${minAge === '' ? 'Any' : minAge} to ${maxAge === '' ? 'Any' : maxAge}.`}
+          </p>
+          {!hasValidAgeRange && <p className="text-xs text-red-600">Minimum age must be less than or equal to maximum age.</p>}
         </div>
         <div className={`${fieldGroup} sm:col-span-2`}>
           <label className={label}>Tournament name</label>
@@ -464,6 +498,7 @@ export function TournamentWizard() {
             !startsAt ||
             (isVenueFacilitator && !venueId) ||
             (sportRequiresTeam && !sportFormatId) ||
+            !hasValidAgeRange ||
             createMutation.isPending
           }
           className={buttonPrimary}

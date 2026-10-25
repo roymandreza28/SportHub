@@ -35,6 +35,10 @@ export type Tournament = {
   // TournamentRegistrationController) — applies to every player on a
   // team too, not just individual registrations.
   required_gender: 'male' | 'female' | null
+  // Null = open to all ages. Enforced at registration time for every player
+  // on a roster as well as solo registrations.
+  min_age: number | null
+  max_age: number | null
   // Only set once status is 'completed' — whichever of champion/champion_team
   // is non-null tells you if this was an individual or team tournament.
   champion?: { id: number; name: string } | null
@@ -182,6 +186,8 @@ export async function createTournament(input: {
   sport_id: number
   sport_format_id?: number
   required_gender?: 'male' | 'female'
+  min_age?: number
+  max_age?: number
   name: string
   format: TournamentFormat
   starts_at: string

@@ -62,19 +62,36 @@ export function TournamentRegistrationForm({
             className={select}
           >
             <option value="">Choose a tournament...</option>
-            {tournaments?.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} ({t.sport.name}
-                {t.required_gender ? `, ${t.required_gender} only` : ''})
-              </option>
-            ))}
+            {tournaments?.map((t) => {
+              const ageLabel = t.min_age !== null || t.max_age !== null
+                ? `, ages ${t.min_age ?? 'Any'}-${t.max_age ?? 'Any'}`
+                : ''
+
+              return (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.sport.name}
+                  {t.required_gender ? `, ${t.required_gender} only` : ''}
+                  {ageLabel})
+                </option>
+              )
+            })}
           </select>
         </div>
       )}
 
-      {selectedTournament?.required_gender && (
+      {selectedTournament && (selectedTournament.required_gender || selectedTournament.min_age !== null || selectedTournament.max_age !== null) && (
         <p className="text-xs text-slate-500">
-          This tournament is restricted to <strong>{selectedTournament.required_gender}</strong> players.
+          {selectedTournament?.required_gender && (
+            <>
+              This tournament is restricted to <strong>{selectedTournament.required_gender}</strong> players.
+            </>
+          )}
+          {(selectedTournament?.min_age !== null || selectedTournament?.max_age !== null) && (
+            <>
+              {selectedTournament?.required_gender ? ' ' : 'This tournament is '}open to ages{' '}
+              <strong>{selectedTournament?.min_age ?? 'Any'}</strong> to <strong>{selectedTournament?.max_age ?? 'Any'}</strong>.
+            </>
+          )}
         </p>
       )}
 

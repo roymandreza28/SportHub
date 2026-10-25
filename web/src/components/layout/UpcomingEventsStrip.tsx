@@ -4,8 +4,8 @@ import { fetchVenue } from '../../lib/venueApi'
 import { VenueMap } from '../venue/VenueMap'
 import { BracketView } from '../organizer/BracketView'
 import { StatusBadge } from './DashboardShell'
-import { IconChevronLeft, IconMapPin, IconTrophy, IconX } from './icons'
-import type { MyVenueRegistration } from '../../lib/playerApi'
+import { IconChevronLeft, IconMapPin, IconTarget, IconTrophy, IconX } from './icons'
+import type { MatchmakingRequestItem, MyVenueRegistration } from '../../lib/playerApi'
 
 // Deliberately structural (not tied to PlayerTournamentRegistration or
 // CoachTournamentRegistration specifically) — both Player's and Coach's own
@@ -26,6 +26,7 @@ export type UpcomingTournamentInfo = {
 export type UpcomingEventData =
   | { kind: 'booking'; booking: MyVenueRegistration }
   | { kind: 'tournament'; tournament: UpcomingTournamentInfo }
+  | { kind: 'matchmaking'; matchmaking: MatchmakingRequestItem }
 
 export type UpcomingEventCardData = {
   key: string
@@ -85,7 +86,7 @@ function EventDetailModal({ event, onClose }: { event: UpcomingEventCardData; on
                 <VenueMap venues={[event.booking.venue]} />
               </div>
             </>
-          ) : (
+          ) : event.kind === 'tournament' ? (
             <>
               <p>
                 <span className="font-semibold text-slate-700">When:</span>{' '}
@@ -111,6 +112,36 @@ function EventDetailModal({ event, onClose }: { event: UpcomingEventCardData; on
                 </>
               ) : (
                 <p className="text-slate-400">Venue not assigned yet.</p>
+              )}
+            </>
+          ) : (
+            <>
+              <p>
+                <span className="font-semibold text-slate-700">When:</span>{' '}
+                {new Date(event.matchmaking.venue_registration?.starts_at ?? event.matchmaking.preferred_start_at ?? 0).toLocaleString()} &ndash;{' '}
+                {new Date(event.matchmaking.venue_registration?.ends_at ?? event.matchmaking.preferred_end_at ?? 0).toLocaleTimeString()}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-700">Sport:</span> {event.matchmaking.sport.name}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-700">Opponent:</span>{' '}
+                {event.matchmaking.opponent?.name ?? event.matchmaking.opponent_team?.name ?? 'TBD'}
+              </p>
+              {event.matchmaking.venue ? (
+                <>
+                  <p>
+                    <span className="font-semibold text-slate-700">Where:</span> {event.matchmaking.venue.name}
+                  </p>
+                  {event.matchmaking.venue_registration?.court && (
+                    <p>
+                      <span className="font-semibold text-slate-700">Court:</span>{' '}
+                      {event.matchmaking.venue_registration.court.name}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-slate-400">No venue assigned yet.</p>
               )}
             </>
           )}
@@ -183,7 +214,13 @@ export function UpcomingEventsStrip({
               className="flex w-36 shrink-0 flex-col items-start gap-2 rounded-xl border border-slate-100 bg-white p-3 text-left shadow-sm transition hover:shadow-md"
             >
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-50 text-teal-700">
-                {e.kind === 'booking' ? <IconMapPin className="h-4 w-4" /> : <IconTrophy className="h-4 w-4" />}
+                {e.kind === 'booking' ? (
+                  <IconMapPin className="h-4 w-4" />
+                ) : e.kind === 'matchmaking' ? (
+                  <IconTarget className="h-4 w-4" />
+                ) : (
+                  <IconTrophy className="h-4 w-4" />
+                )}
               </div>
               <p className="line-clamp-2 text-xs font-semibold text-slate-800">{e.primary}</p>
               <p className="line-clamp-2 text-[11px] text-slate-500">{e.secondary}</p>

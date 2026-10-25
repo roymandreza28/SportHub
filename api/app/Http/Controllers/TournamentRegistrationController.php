@@ -88,6 +88,31 @@ class TournamentRegistrationController extends Controller
             }
         }
 
+        if ($tournament->min_age !== null || $tournament->max_age !== null) {
+            $player = User::find($data['user_id']);
+            $dateOfBirth = $player?->playerProfile?->date_of_birth ?? $player?->birthday;
+
+            if (! $dateOfBirth) {
+                throw ValidationException::withMessages([
+                    'user_id' => ['This tournament requires a date of birth on the player profile.'],
+                ]);
+            }
+
+            $age = $dateOfBirth->diffInYears(now());
+
+            if ($tournament->min_age !== null && $age < $tournament->min_age) {
+                throw ValidationException::withMessages([
+                    'user_id' => ["This tournament is open to players aged {$tournament->min_age}+ only."],
+                ]);
+            }
+
+            if ($tournament->max_age !== null && $age > $tournament->max_age) {
+                throw ValidationException::withMessages([
+                    'user_id' => ["This tournament is only for players up to {$tournament->max_age} years old."],
+                ]);
+            }
+        }
+
         $registration = TournamentRegistration::create([
             'tournament_id' => $tournament->id,
             'user_id' => $data['user_id'],
@@ -156,6 +181,45 @@ class TournamentRegistrationController extends Controller
                 throw ValidationException::withMessages([
                     'team_id' => [
                         "This tournament is restricted to {$tournament->required_gender} players — {$mismatchedMember->user->name} isn't.",
+                    ],
+                ]);
+            }
+        }
+
+        if ($tournament->min_age !== null || $tournament->max_age !== null) {
+            $mismatchedMember = $team->members()
+                ->where('status', 'accepted')
+                ->with('user.playerProfile:id,user_id,date_of_birth')
+                ->get()
+                ->first(function ($member) use ($tournament) {
+                    $user = $member->user;
+                    $dateOfBirth = $user?->playerProfile?->date_of_birth ?? $user?->birthday;
+                    if (! $dateOfBirth) {
+                        return true;
+                    }
+
+                    $age = $dateOfBirth->diffInYears(now());
+
+                    if ($tournament->min_age !== null && $age < $tournament->min_age) {
+                        return true;
+                    }
+
+                    if ($tournament->max_age !== null && $age > $tournament->max_age) {
+                        return true;
+                    }
+
+                    return false;
+                });
+
+            if ($mismatchedMember) {
+                $name = $mismatchedMember->user?->name ?? 'A player';
+                throw ValidationException::withMessages([
+                    'team_id' => [
+                        $tournament->min_age !== null && $tournament->max_age !== null
+                            ? "This tournament is only open to players ages {$tournament->min_age}-{$tournament->max_age} — {$name} is outside that range."
+                            : ($tournament->min_age !== null
+                                ? "This tournament is open to players aged {$tournament->min_age}+ — {$name} is too young."
+                                : "This tournament is only for players up to {$tournament->max_age} years old — {$name} is too old."),
                     ],
                 ]);
             }

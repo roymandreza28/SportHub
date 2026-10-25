@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import type { Venue } from '../lib/venueApi'
 import { fetchMyTournamentRegistrations, fetchMyUpcomingStatSheetMatches } from '../lib/coachApi'
+import { fetchMyMatchmakingRequests } from '../lib/playerApi'
 import { fetchProfile } from '../lib/socialApi'
 import { DashboardShell, Section, type NavItem } from '../components/layout/DashboardShell'
 import { UpcomingEventsStrip, type UpcomingEventCardData } from '../components/layout/UpcomingEventsStrip'
@@ -74,8 +75,13 @@ export function CoachPage() {
     queryKey: ['coach', 'tournament-registrations', 'mine'],
     queryFn: fetchMyTournamentRegistrations,
   })
+  const { data: matchmakingRequests } = useQuery({
+    queryKey: ['player', 'matchmaking'],
+    queryFn: fetchMyMatchmakingRequests,
+    refetchInterval: 30000,
+  })
 
-  const upcomingEvents: UpcomingEventCardData[] = (myRegistrations ?? [])
+  const upcomingTournamentEvents: UpcomingEventCardData[] = (myRegistrations ?? [])
     .filter((r) => r.tournament.status !== 'completed' && r.tournament.status !== 'cancelled')
     .sort((a, b) => new Date(a.tournament.starts_at).getTime() - new Date(b.tournament.starts_at).getTime())
     .slice(0, 5)
@@ -87,6 +93,43 @@ export function CoachPage() {
       kind: 'tournament',
       tournament: r.tournament,
     }))
+
+  const upcomingMatchmakingEvents: UpcomingEventCardData[] = (matchmakingRequests ?? [])
+    .filter(
+      (r) =>
+        r.status === 'matched' &&
+        ((r.venue_registration && new Date(r.venue_registration.ends_at).getTime() > Date.now()) ||
+          (!!r.preferred_start_at && new Date(r.preferred_start_at).getTime() > Date.now()))
+    )
+    .map((r) => {
+      const scheduleStart = r.venue_registration?.starts_at ?? r.preferred_start_at ?? ''
+      const venueName = r.venue_registration?.court ? `${r.venue?.name ?? 'Match venue'} — ${r.venue_registration.court.name}` : r.venue?.name ?? 'Match venue'
+
+      return {
+        key: `matchmaking-${r.id}`,
+        primary: `${r.sport.name} vs ${r.opponent?.name ?? r.opponent_team?.name ?? 'opponent'}`,
+        secondary: `${venueName} — ${scheduleStart ? new Date(scheduleStart).toLocaleString() : 'Time TBD'}`,
+        status: r.status,
+        kind: 'matchmaking',
+        matchmaking: r,
+      }
+    })
+
+  const upcomingEvents: UpcomingEventCardData[] = [...upcomingTournamentEvents, ...upcomingMatchmakingEvents]
+    .sort((a, b) => {
+      const getTime = (event: UpcomingEventCardData) => {
+        if (event.kind === 'matchmaking') {
+          return new Date(event.matchmaking.venue_registration?.starts_at ?? event.matchmaking.preferred_start_at ?? 0).getTime()
+        }
+        if (event.kind === 'tournament') {
+          return new Date(event.tournament.starts_at).getTime()
+        }
+        return 0
+      }
+
+      return getTime(a) - getTime(b)
+    })
+    .slice(0, 5)
 
   return (
     <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={setActive}>

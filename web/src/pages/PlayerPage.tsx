@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import type { Venue } from '../lib/venueApi'
-import { fetchMyVenueRegistrations, fetchMyTournamentRegistrationsAsPlayer } from '../lib/playerApi'
+import { fetchMyMatchmakingRequests, fetchMyVenueRegistrations, fetchMyTournamentRegistrationsAsPlayer } from '../lib/playerApi'
 import { fetchProfile } from '../lib/socialApi'
 import { DashboardShell, Section, type NavItem } from '../components/layout/DashboardShell'
 import { UpcomingEventsStrip, type UpcomingEventData } from '../components/layout/UpcomingEventsStrip'
@@ -48,6 +48,11 @@ export function PlayerPage() {
   const { data: tournamentRegistrations } = useQuery({
     queryKey: ['player', 'tournament-registrations', 'mine'],
     queryFn: fetchMyTournamentRegistrationsAsPlayer,
+  })
+  const { data: matchmakingRequests } = useQuery({
+    queryKey: ['player', 'matchmaking'],
+    queryFn: fetchMyMatchmakingRequests,
+    refetchInterval: 30000,
   })
   const { data: myProfile } = useQuery({
     queryKey: ['social', 'profile', user?.id],
@@ -96,7 +101,29 @@ export function PlayerPage() {
       tournament: r.tournament,
     }))
 
-  const upcomingEvents = [...upcomingBookingEvents, ...upcomingTournamentEvents]
+  const upcomingMatchmakingEvents: UpcomingEvent[] = (matchmakingRequests ?? [])
+    .filter(
+      (r) =>
+        r.status === 'matched' &&
+        ((r.venue_registration && new Date(r.venue_registration.ends_at).getTime() > now) ||
+          (!!r.preferred_start_at && new Date(r.preferred_start_at).getTime() > now))
+    )
+    .map((r) => {
+      const scheduleStart = r.venue_registration?.starts_at ?? r.preferred_start_at ?? ''
+      const venueName = r.venue_registration?.court ? `${r.venue?.name ?? 'Match venue'} — ${r.venue_registration.court.name}` : r.venue?.name ?? 'Match venue'
+
+      return {
+        key: `matchmaking-${r.id}`,
+        date: scheduleStart || r.preferred_start_at || r.venue_registration?.starts_at || new Date().toISOString(),
+        primary: `${r.sport.name} vs ${r.opponent?.name ?? r.opponent_team?.name ?? 'opponent'}`,
+        secondary: `${venueName} — ${scheduleStart ? new Date(scheduleStart).toLocaleString() : 'Time TBD'}`,
+        status: r.status,
+        kind: 'matchmaking',
+        matchmaking: r,
+      }
+    })
+
+  const upcomingEvents = [...upcomingBookingEvents, ...upcomingTournamentEvents, ...upcomingMatchmakingEvents]
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(0, 5)
 
