@@ -125,7 +125,6 @@ export function PlayerPage() {
 
   const upcomingEvents = [...upcomingBookingEvents, ...upcomingTournamentEvents, ...upcomingMatchmakingEvents]
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .slice(0, 5)
 
   return (
     <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={setActive}>

@@ -84,7 +84,6 @@ export function CoachPage() {
   const upcomingTournamentEvents: UpcomingEventCardData[] = (myRegistrations ?? [])
     .filter((r) => r.tournament.status !== 'completed' && r.tournament.status !== 'cancelled')
     .sort((a, b) => new Date(a.tournament.starts_at).getTime() - new Date(b.tournament.starts_at).getTime())
-    .slice(0, 5)
     .map((r) => ({
       key: `tournament-${r.tournament.id}`,
       primary: r.tournament.name,
@@ -129,7 +128,6 @@ export function CoachPage() {
 
       return getTime(a) - getTime(b)
     })
-    .slice(0, 5)
 
   return (
     <DashboardShell navItems={NAV_ITEMS} activeId={active} onNavigate={setActive}>
