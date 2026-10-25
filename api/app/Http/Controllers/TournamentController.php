@@ -69,6 +69,8 @@ class TournamentController extends Controller
             // stranding already-registered players/teams under a changed
             // restriction.
             'required_gender' => ['nullable', Rule::in(['male', 'female'])],
+            'min_age' => ['nullable', 'integer', 'min:1', 'max:120'],
+            'max_age' => ['nullable', 'integer', 'min:1', 'max:120', 'gte:min_age'],
             'name' => ['required', 'string', 'max:255'],
             'format' => ['required', 'in:single_elimination,double_elimination,round_robin,group_stage,swiss'],
             'starts_at' => ['required', 'date'],
@@ -127,6 +129,10 @@ class TournamentController extends Controller
         ]);
 
         $this->validateSportFormat($data);
+
+        if (($data['min_age'] ?? null) !== null && ($data['max_age'] ?? null) !== null && $data['min_age'] > $data['max_age']) {
+            throw ValidationException::withMessages(['max_age' => ['The minimum age must be less than or equal to the maximum age.']]);
+        }
 
         // A venue facilitator fills the venue-organizer/livestream-
         // organizer jobs themselves rather than assigning someone else to

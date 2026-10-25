@@ -20,6 +20,10 @@ export type Tournament = {
   // where this gets set, and TournamentRegistrationController for where
   // it's actually enforced (applies to every player on a team too).
   required_gender: 'male' | 'female' | null
+  // Null = open to all ages. Enforced at registration time for every player
+  // on a roster as well as solo registrations.
+  min_age: number | null
+  max_age: number | null
   // Null = free to join. Set once at tournament creation, never changed
   // afterward — see TournamentWizard.tsx and TournamentController::store().
   registration_fee: string | null

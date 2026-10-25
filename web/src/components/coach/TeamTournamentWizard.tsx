@@ -101,6 +101,11 @@ export function TeamTournamentWizard({
                         {t.required_gender} only
                       </span>
                     )}
+                    {(t.min_age !== null || t.max_age !== null) && (
+                      <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
+                        {t.min_age ?? 'Any'}-{t.max_age ?? 'Any'} yrs
+                      </span>
+                    )}
                     {t.sport_format_id && (
                       <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">
                         Team ({t.sport_format?.players_per_side} per side)
@@ -126,6 +131,12 @@ export function TeamTournamentWizard({
           {tournament.required_gender && (
             <p className="text-xs text-slate-500">
               Every player on your roster must be <strong>{tournament.required_gender}</strong> for this tournament.
+            </p>
+          )}
+          {(tournament.min_age !== null || tournament.max_age !== null) && (
+            <p className="text-xs text-slate-500">
+              This tournament is open to players ages <strong>{tournament.min_age ?? 'Any'}</strong> to{' '}
+              <strong>{tournament.max_age ?? 'Any'}</strong>.
             </p>
           )}
           {!isVerified && (
