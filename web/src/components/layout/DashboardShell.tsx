@@ -278,6 +278,7 @@ const STATUS_BADGE_STYLES: Record<string, string> = {
   inactive: 'bg-slate-100 text-slate-500',
   rejected: 'bg-red-100 text-red-700',
   cancelled: 'bg-slate-100 text-slate-500',
+  archived: 'bg-slate-200 text-slate-700',
   open: 'bg-teal-100 text-teal-700',
   registration: 'bg-teal-100 text-teal-700',
   preparation: 'bg-amber-100 text-amber-700',

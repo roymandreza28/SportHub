@@ -304,6 +304,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/tournaments/{tournament}/generate-bracket', [TournamentController::class, 'generateBracket']);
         Route::post('/tournaments/{tournament}/proceed', [TournamentController::class, 'proceed']);
         Route::post('/tournaments/{tournament}/cancel', [TournamentController::class, 'cancel']);
+        Route::post('/tournaments/{tournament}/archive', [TournamentController::class, 'archive']);
         Route::get('/tournaments/{tournament}/registrations', [TournamentController::class, 'registrations']);
         Route::patch('/tournaments/{tournament}/registrations/{registration}/payment', [TournamentRegistrationController::class, 'updatePayment']);
         Route::patch('/tournaments/{tournament}/registrations/{registration}/status', [TournamentRegistrationController::class, 'updateStatus']);

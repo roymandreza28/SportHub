@@ -2,7 +2,7 @@ import { api } from './api'
 import type { Court, Sport, SportFormat } from './venueApi'
 
 export type TournamentFormat = 'single_elimination' | 'double_elimination' | 'round_robin' | 'group_stage' | 'swiss'
-export type TournamentStatus = 'draft' | 'registration' | 'preparation' | 'ongoing' | 'completed' | 'cancelled'
+export type TournamentStatus = 'draft' | 'registration' | 'preparation' | 'ongoing' | 'completed' | 'cancelled' | 'archived'
 export type ScoringType = 'single_score' | 'best_of_sets'
 
 export type OrganizerOption = { id: number; name: string; email: string }
@@ -229,6 +229,11 @@ export async function proceedTournament(tournamentId: number) {
 
 export async function cancelTournament(tournamentId: number) {
   const { data } = await api.post<Tournament>(`/api/tournaments/${tournamentId}/cancel`)
+  return data
+}
+
+export async function archiveTournament(tournamentId: number) {
+  const { data } = await api.post<Tournament>(`/api/tournaments/${tournamentId}/archive`)
   return data
 }
 

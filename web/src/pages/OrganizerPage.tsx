@@ -7,6 +7,7 @@ import {
   updateTournament,
   proceedTournament,
   cancelTournament,
+  archiveTournament,
   generateBracket,
   exportTournamentRegistrations,
   exportTournamentResults,
@@ -149,7 +150,25 @@ export function OrganizerPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] }),
   })
 
+  const archiveMutation = useMutation({
+    mutationFn: archiveTournament,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] }),
+  })
+
+  const editMutation = useMutation({
+    mutationFn: ({ tournamentId, name, starts_at }: { tournamentId: number; name: string; starts_at: string }) =>
+      updateTournament(tournamentId, { name, starts_at }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] })
+      setEditingTournamentId(null)
+      setEditDraft({ name: '', starts_at: '' })
+    },
+  })
+
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
+  const [showArchivedList, setShowArchivedList] = useState(false)
+  const [editingTournamentId, setEditingTournamentId] = useState<number | null>(null)
+  const [editDraft, setEditDraft] = useState({ name: '', starts_at: '' })
   const [activeMatchId, setActiveMatchId] = useState<number | null>(null)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [exportingKind, setExportingKind] = useState<'registrations' | 'results' | 'rankings' | null>(null)
@@ -275,8 +294,9 @@ export function OrganizerPage() {
       return false
     })
     .slice(0, 20)
-  const activeTournaments = myTournaments.filter((t) => t.status !== 'completed' && t.status !== 'cancelled')
+  const activeTournaments = myTournaments.filter((t) => t.status !== 'completed' && t.status !== 'cancelled' && t.status !== 'archived')
   const inactiveTournaments = myTournaments.filter((t) => t.status === 'completed' || t.status === 'cancelled')
+  const archivedTournaments = myTournaments.filter((t) => t.status === 'archived')
 
   // Shares its query key with BracketView's own bracket query, so once a
   // score/finish mutation invalidates ['organizer', 'bracket', id] (already
@@ -535,7 +555,30 @@ export function OrganizerPage() {
               : 'Pick a tournament to run its live scoreboard.'
           }
         >
-          {canManageTournaments && <TournamentWizard />}
+          {canManageTournaments && (
+            <div className="flex flex-wrap items-center gap-2">
+              <TournamentWizard />
+              <button
+                onClick={() => setShowArchivedList((v) => !v)}
+                className={`${buttonSecondary} text-xs`}
+              >
+                {showArchivedList ? 'Hide archive' : 'Archive'}
+              </button>
+            </div>
+          )}
+
+          {showArchivedList && canManageTournaments && archivedTournaments.length > 0 && (
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Archived tournaments</h4>
+              <TournamentPickerDropdown
+                label="Archived tournaments"
+                tournaments={archivedTournaments}
+                selectedId={selectedTournamentId}
+                onSelect={setSelectedTournamentId}
+                emptyText="No archived tournaments."
+              />
+            </div>
+          )}
 
           <div className={canManageTournaments ? 'mt-4 border-t border-slate-100 pt-4' : ''}>
             <h3 className="mb-2 text-sm font-medium text-slate-700">
@@ -561,6 +604,73 @@ export function OrganizerPage() {
                   const selected = myTournaments.find((t) => t.id === selectedTournamentId)
                   if (!canManageTournaments || !selected) return null
 
+                  if (editingTournamentId === selected.id) {
+                    return (
+                      <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Edit tournament</p>
+                          <button onClick={() => setEditingTournamentId(null)} className="text-xs font-medium text-slate-500 hover:text-slate-700">
+                            Cancel
+                          </button>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <label className="text-xs font-medium text-slate-600">
+                            Name
+                            <input
+                              value={editDraft.name}
+                              onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
+                              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-700"
+                            />
+                          </label>
+                          <label className="text-xs font-medium text-slate-600">
+                            Start date
+                            <input
+                              type="datetime-local"
+                              value={editDraft.starts_at}
+                              onChange={(e) => setEditDraft((d) => ({ ...d, starts_at: e.target.value }))}
+                              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-700"
+                            />
+                          </label>
+                        </div>
+                        <div className="mt-3 flex flex-wrap justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingTournamentId(null)
+                              setEditDraft({ name: '', starts_at: '' })
+                            }}
+                            className={buttonSecondary}
+                          >
+                            Discard
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (!editDraft.name.trim() || !editDraft.starts_at) return
+                              editMutation.mutate({
+                                tournamentId: selected.id,
+                                name: editDraft.name.trim(),
+                                starts_at: new Date(editDraft.starts_at).toISOString(),
+                              })
+                            }}
+                            disabled={editMutation.isPending}
+                            className={buttonPrimary}
+                          >
+                            {editMutation.isPending ? 'Saving...' : 'Save changes'}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  if (selected.status === 'archived') {
+                    return (
+                      <div className="mb-3 rounded-lg border border-slate-200 bg-slate-100 p-3">
+                        <p className="text-xs text-slate-700">
+                          This tournament is archived. You can still browse it, but it no longer appears in the active list and no new registrations are accepted.
+                        </p>
+                      </div>
+                    )
+                  }
+
                   if (selected.status === 'draft') {
                     return (
                       <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -568,13 +678,27 @@ export function OrganizerPage() {
                           This tournament is still a draft — coaches can&apos;t see it or register players until you
                           open it for registration.
                         </p>
-                        <button
-                          onClick={() => openRegistrationMutation.mutate(selectedTournamentId)}
-                          disabled={openRegistrationMutation.isPending}
-                          className={buttonPrimary}
-                        >
-                          {openRegistrationMutation.isPending ? 'Opening...' : 'Open for registration'}
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setEditDraft({
+                                name: selected.name,
+                                starts_at: selected.starts_at ? new Date(selected.starts_at).toISOString().slice(0, 16) : '',
+                              })
+                              setEditingTournamentId(selected.id)
+                            }}
+                            className={buttonSecondary}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => openRegistrationMutation.mutate(selectedTournamentId)}
+                            disabled={openRegistrationMutation.isPending}
+                            className={buttonPrimary}
+                          >
+                            {openRegistrationMutation.isPending ? 'Opening...' : 'Open for registration'}
+                          </button>
+                        </div>
                       </div>
                     )
                   }
@@ -586,20 +710,41 @@ export function OrganizerPage() {
                           Registration is open. Close it early to generate the bracket, or cancel if turnout is too
                           low.
                         </p>
-                        <button
-                          onClick={() => bracketMutation.mutate(selectedTournamentId)}
-                          disabled={bracketMutation.isPending}
-                          className={buttonSuccess}
-                        >
-                          {bracketMutation.isPending ? 'Generating...' : 'Close registration & generate bracket'}
-                        </button>
-                        <button
-                          onClick={() => cancelMutation.mutate(selectedTournamentId)}
-                          disabled={cancelMutation.isPending}
-                          className={buttonDanger}
-                        >
-                          Cancel tournament
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setEditDraft({
+                                name: selected.name,
+                                starts_at: selected.starts_at ? new Date(selected.starts_at).toISOString().slice(0, 16) : '',
+                              })
+                              setEditingTournamentId(selected.id)
+                            }}
+                            className={buttonSecondary}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => bracketMutation.mutate(selectedTournamentId)}
+                            disabled={bracketMutation.isPending}
+                            className={buttonSuccess}
+                          >
+                            {bracketMutation.isPending ? 'Generating...' : 'Close registration & generate bracket'}
+                          </button>
+                          <button
+                            onClick={() => cancelMutation.mutate(selectedTournamentId)}
+                            disabled={cancelMutation.isPending}
+                            className={buttonDanger}
+                          >
+                            Cancel tournament
+                          </button>
+                          <button
+                            onClick={() => archiveMutation.mutate(selectedTournamentId)}
+                            disabled={archiveMutation.isPending}
+                            className={buttonSecondary}
+                          >
+                            {archiveMutation.isPending ? 'Archiving...' : 'Archive tournament'}
+                          </button>
+                        </div>
                       </div>
                     )
                   }
@@ -611,20 +756,41 @@ export function OrganizerPage() {
                           Registration closed. Schedule each match below, then proceed once you&apos;re ready to
                           play.
                         </p>
-                        <button
-                          onClick={() => proceedMutation.mutate(selectedTournamentId)}
-                          disabled={proceedMutation.isPending}
-                          className={buttonSuccess}
-                        >
-                          {proceedMutation.isPending ? 'Starting...' : 'Proceed to ongoing'}
-                        </button>
-                        <button
-                          onClick={() => cancelMutation.mutate(selectedTournamentId)}
-                          disabled={cancelMutation.isPending}
-                          className={buttonDanger}
-                        >
-                          Cancel tournament
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setEditDraft({
+                                name: selected.name,
+                                starts_at: selected.starts_at ? new Date(selected.starts_at).toISOString().slice(0, 16) : '',
+                              })
+                              setEditingTournamentId(selected.id)
+                            }}
+                            className={buttonSecondary}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => proceedMutation.mutate(selectedTournamentId)}
+                            disabled={proceedMutation.isPending}
+                            className={buttonSuccess}
+                          >
+                            {proceedMutation.isPending ? 'Starting...' : 'Proceed to ongoing'}
+                          </button>
+                          <button
+                            onClick={() => cancelMutation.mutate(selectedTournamentId)}
+                            disabled={cancelMutation.isPending}
+                            className={buttonDanger}
+                          >
+                            Cancel tournament
+                          </button>
+                          <button
+                            onClick={() => archiveMutation.mutate(selectedTournamentId)}
+                            disabled={archiveMutation.isPending}
+                            className={buttonSecondary}
+                          >
+                            {archiveMutation.isPending ? 'Archiving...' : 'Archive tournament'}
+                          </button>
+                        </div>
                       </div>
                     )
                   }
@@ -705,16 +871,18 @@ export function OrganizerPage() {
                     specifically — canScheduleMatches stays keyed off
                     canManageTournaments, not this narrower read-only-vs-
                     editable split. */}
-                <BracketView
-                  tournamentId={selectedTournamentId}
-                  tournamentName={myTournaments.find((t) => t.id === selectedTournamentId)?.name}
-                  scoringType={myTournaments.find((t) => t.id === selectedTournamentId)?.scoring_type}
-                  onSelectMatch={openMatch}
-                  onGoLive={canManageLivestreams ? openMatch : undefined}
-                  canScheduleMatches={canManageTournaments}
-                  canShareMatches={canManageTournaments}
-                  canShareBracket={canManageTournaments}
-                />
+                {myTournaments.find((t) => t.id === selectedTournamentId)?.status !== 'archived' && (
+                  <BracketView
+                    tournamentId={selectedTournamentId}
+                    tournamentName={myTournaments.find((t) => t.id === selectedTournamentId)?.name}
+                    scoringType={myTournaments.find((t) => t.id === selectedTournamentId)?.scoring_type}
+                    onSelectMatch={openMatch}
+                    onGoLive={canManageLivestreams ? openMatch : undefined}
+                    canScheduleMatches={canManageTournaments}
+                    canShareMatches={canManageTournaments}
+                    canShareBracket={canManageTournaments}
+                  />
+                )}
               </>
             )}
           </div>

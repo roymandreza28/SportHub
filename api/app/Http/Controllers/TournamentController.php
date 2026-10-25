@@ -272,11 +272,11 @@ class TournamentController extends Controller
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
             'venue_id' => ['nullable', 'exists:venues,id', $this->ownVenueRule($request->user())],
             // Every other transition now has its own dedicated endpoint
-            // (proceed()/cancel(), and preparation is set automatically by
-            // BracketService) — a raw PATCH can only ever open registration,
-            // so it can't be used to skip steps like jumping straight to
-            // 'ongoing' without a bracket.
-            'status' => ['sometimes', 'in:registration'],
+            // (proceed()/cancel()/archive(), and preparation is set automatically by
+            // BracketService) — a raw PATCH can only ever open registration or
+            // archive a tournament from a management view, so it can't be used to
+            // skip steps like jumping straight to 'ongoing' without a bracket.
+            'status' => ['sometimes', 'in:registration,archived'],
             'venue_organizer_id' => ['nullable', 'exists:users,id', $this->hasRoleRule('venue_organizer')],
             'livestream_organizer_id' => ['nullable', 'exists:users,id', $this->hasRoleRule('livestream_organizer')],
         ]);
@@ -382,13 +382,28 @@ class TournamentController extends Controller
     {
         $this->authorize('update', $tournament);
 
-        if (! in_array($tournament->status, ['registration', 'preparation'], true)) {
-            abort(422, 'Only a tournament in registration or preparation can be cancelled.');
+        if (! in_array($tournament->status, ['draft', 'registration', 'preparation'], true)) {
+            abort(422, 'Only a draft, registration, or preparation tournament can be cancelled.');
         }
 
         $tournament->update(['status' => 'cancelled']);
 
         $bracketService->notifyParticipants($tournament, "{$tournament->name} has been cancelled.");
+
+        return $tournament;
+    }
+
+    public function archive(Tournament $tournament, BracketService $bracketService)
+    {
+        $this->authorize('update', $tournament);
+
+        if ($tournament->status === 'archived') {
+            return $tournament;
+        }
+
+        $tournament->update(['status' => 'archived']);
+
+        $bracketService->notifyParticipants($tournament, "{$tournament->name} has been archived.");
 
         return $tournament;
     }
