@@ -70,6 +70,14 @@ export function LivestreamViewer({ livestream }: { livestream: LivestreamItem })
           sendWebRTCSignal(livestream.id, message.from_user_id, 'ice-candidate', event.candidate.toJSON())
         }
       }
+      pc.onconnectionstatechange = () => {
+        if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+          setConnected(false)
+          if (livestream.status === 'live') {
+            setNeedsPlayClick(false)
+          }
+        }
+      }
 
       await pc.setRemoteDescription(new RTCSessionDescription(message.data as unknown as RTCSessionDescriptionInit))
       const answer = await pc.createAnswer()

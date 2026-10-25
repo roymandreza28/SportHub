@@ -63,6 +63,14 @@ export function LiveRelayVideo({
           sendPublicSignal(livestreamId, myToken, 'broadcaster', 'ice-candidate', event.candidate.toJSON())
         }
       }
+      pc.onconnectionstatechange = () => {
+        if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+          setConnected(false)
+          if (!isEnded) {
+            setNeedsPlayClick(false)
+          }
+        }
+      }
 
       await pc.setRemoteDescription(new RTCSessionDescription(message.data as unknown as RTCSessionDescriptionInit))
       const answer = await pc.createAnswer()

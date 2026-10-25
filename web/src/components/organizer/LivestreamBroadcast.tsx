@@ -145,12 +145,27 @@ export function LivestreamBroadcast({
         sendWebRTCSignal(livestream.id, viewerId, 'ice-candidate', event.candidate.toJSON())
       }
     }
+    pc.onconnectionstatechange = () => {
+      if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+        if (peersRef.current.get(viewerId) === pc) {
+          peersRef.current.delete(viewerId)
+          pc.close()
+        }
+        if (isLiveRef.current) {
+          offerTo(viewerId).catch(() => setError('Failed to reconnect the livestream stream.'))
+        }
+      }
+    }
     peersRef.current.set(viewerId, pc)
     return pc
   }
 
   async function offerTo(viewerId: number) {
     const pc = createPeerFor(viewerId)
+    if (pc.signalingState === 'closed') {
+      peersRef.current.delete(viewerId)
+      return
+    }
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
     await sendWebRTCSignal(livestream.id, viewerId, 'offer', { sdp: offer.sdp, type: offer.type })
@@ -630,37 +645,56 @@ export function LivestreamBroadcast({
 
       {/* Minimized broadcasting view — same corner-docked footprint as
           LivestreamMiniWindow, so a broadcaster who minimizes can keep
-          working elsewhere in the app while staying live. */}
-      {isLive &&
-        minimized &&
+          working elsewhere in the app while staying live. For the pre-live
+          state, keep a compact preview and the Start broadcast action even
+          when the corner window is collapsed, so the minimized shell itself
+          doesn't become a dead-end before the stream actually begins. */}
+      {minimized &&
         createPortal(
           <div className="fixed bottom-4 right-4 z-40 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-center justify-between bg-slate-900 px-2.5 py-1.5">
-              <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-white">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
-                <span className="truncate">{livestream.title}</span>
-              </span>
-              <button
-                onClick={() => setMinimized(false)}
-                className="shrink-0 text-[11px] text-white/70 hover:text-white"
-              >
-                Expand
-              </button>
-            </div>
+           <div className="flex items-center justify-between bg-slate-900 px-2.5 py-1.5">
+             <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-white">
+               {isLive && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />}
+               <span className="truncate">{livestream.title}</span>
+             </span>
+             {isLive && (
+               <button
+                 onClick={() => setMinimized(false)}
+                 className="shrink-0 text-[11px] text-white/70 hover:text-white"
+               >
+                 Expand
+               </button>
+             )}
+           </div>
 
-            <div className="p-2">
-              <div className="relative">
-                <video ref={videoRef} autoPlay muted playsInline className="aspect-video w-full rounded-lg bg-black object-cover" />
-                {switchCameraButton('sm')}
-              </div>
-              {(error || recordingStatus !== 'idle') && <div className="mt-1.5">{statusMessages('text-red-600', 'text-slate-500')}</div>}
-              <button
-                onClick={stopBroadcast}
-                className="mt-2 w-full rounded-lg bg-red-50 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100"
-              >
-                Stop broadcast
-              </button>
-            </div>
+           <div className="p-2">
+             {!isLive ? (
+               <>
+                 <div className="relative">
+                   <video ref={videoRef} autoPlay muted playsInline className="aspect-video w-full rounded-lg bg-black object-cover" />
+                   {switchCameraButton('sm')}
+                 </div>
+                 {statusMessages('text-red-600', 'text-slate-500')}
+                 <button onClick={startBroadcast} disabled={recordingStatus === 'uploading'} className={`${buttonPrimary} mt-2 w-full text-[11px]`}>
+                   Start broadcast
+                 </button>
+               </>
+             ) : (
+               <>
+                 <div className="relative">
+                   <video ref={videoRef} autoPlay muted playsInline className="aspect-video w-full rounded-lg bg-black object-cover" />
+                   {switchCameraButton('sm')}
+                 </div>
+                 {(error || recordingStatus !== 'idle') && <div className="mt-1.5">{statusMessages('text-red-600', 'text-slate-500')}</div>}
+                 <button
+                   onClick={stopBroadcast}
+                   className="mt-2 w-full rounded-lg bg-red-50 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100"
+                 >
+                   Stop broadcast
+                 </button>
+               </>
+             )}
+           </div>
           </div>,
           document.body
         )}

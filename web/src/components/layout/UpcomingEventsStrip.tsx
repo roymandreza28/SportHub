@@ -205,7 +205,7 @@ export function UpcomingEventsStrip({
 
         <div
           ref={scrollRef}
-          className="flex scroll-smooth justify-center gap-3 overflow-x-auto px-8 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex scroll-smooth justify-start gap-3 overflow-x-auto px-2 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {events.map((e) => (
             <button
