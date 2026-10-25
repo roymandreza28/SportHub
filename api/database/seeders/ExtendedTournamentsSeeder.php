@@ -83,6 +83,24 @@ class ExtendedTournamentsSeeder extends Seeder
             self::PLAYER_FIRST_NAME_GENDERS[$i % 10]
         ))->values();
 
+        if ($organizer && $venueOrganizer && $livestreamOrganizer) {
+            $this->seedOrganizerBracketShowcaseTournaments(
+                organizer: $organizer,
+                venueOrganizer: $venueOrganizer,
+                livestreamOrganizer: $livestreamOrganizer,
+                basketball: $basketball,
+                volleyball: $volleyball,
+                badminton: $badminton,
+                pickleball: $pickleball,
+                tableTennis: $tableTennis,
+                gymnasium: $gymnasium,
+                badmintonCenter: $badmintonCenter,
+                coaches: $coaches,
+                players: $players,
+                bracketService: $bracketService,
+            );
+        }
+
         if ($basketball) {
             $fiveVFive = SportFormat::where('sport_id', $basketball->id)->where('name', '5v5')->first();
             $mainCourt = $gymnasium->courts()->where('name', 'Main Court')->first();
@@ -391,6 +409,345 @@ class ExtendedTournamentsSeeder extends Seeder
         $points[$topIndex] += $total - array_sum($points);
 
         return $points;
+    }
+
+    /** @param  Collection<int, User>  $coaches
+     *  @param  Collection<int, User>  $players */
+    private function seedOrganizerBracketShowcaseTournaments(
+        User $organizer,
+        User $venueOrganizer,
+        User $livestreamOrganizer,
+        ?Sport $basketball,
+        ?Sport $volleyball,
+        ?Sport $badminton,
+        ?Sport $pickleball,
+        ?Sport $tableTennis,
+        ?Venue $gymnasium,
+        ?Venue $badmintonCenter,
+        Collection $coaches,
+        Collection $players,
+        BracketService $bracketService,
+    ): void {
+        $basketballCourt = $gymnasium?->courts()->where('name', 'Main Court')->first();
+        $volleyballCourt = $gymnasium?->courts()->where('name', 'Volleyball Court')->first();
+        $pickleballCourt = $badmintonCenter?->courts()->where('name', 'Court 1')->first();
+        $tableTennisCourt = $gymnasium?->courts()->where('name', 'Table Tennis Corner')->first();
+
+        if ($basketball && $basketballCourt) {
+            $basketballFormat = SportFormat::where('sport_id', $basketball->id)->where('name', '5v5')->first();
+            if ($basketballFormat) {
+                $this->seedSingleEliminationBasketballShowcase(
+                    organizer: $organizer,
+                    venueOrganizer: $venueOrganizer,
+                    livestreamOrganizer: $livestreamOrganizer,
+                    sport: $basketball,
+                    format: $basketballFormat,
+                    venue: $gymnasium,
+                    court: $basketballCourt,
+                    coaches: $coaches,
+                    players: $players,
+                    bracketService: $bracketService,
+                );
+            }
+        }
+
+        if ($volleyball && $volleyballCourt) {
+            $volleyballFormat = SportFormat::where('sport_id', $volleyball->id)->where('name', '6v6')->first();
+            if ($volleyballFormat) {
+                $this->seedDoubleEliminationVolleyballShowcase(
+                    organizer: $organizer,
+                    venueOrganizer: $venueOrganizer,
+                    livestreamOrganizer: $livestreamOrganizer,
+                    sport: $volleyball,
+                    format: $volleyballFormat,
+                    venue: $gymnasium,
+                    court: $volleyballCourt,
+                    coaches: $coaches,
+                    players: $players,
+                    bracketService: $bracketService,
+                );
+            }
+        }
+
+        if ($pickleball && $pickleballCourt) {
+            $pickleballFormat = SportFormat::where('sport_id', $pickleball->id)->where('name', 'Doubles')->first();
+            if ($pickleballFormat) {
+                $this->seedGroupStagePickleballShowcase(
+                    organizer: $organizer,
+                    venueOrganizer: $venueOrganizer,
+                    livestreamOrganizer: $livestreamOrganizer,
+                    sport: $pickleball,
+                    format: $pickleballFormat,
+                    venue: $badmintonCenter,
+                    court: $pickleballCourt,
+                    coaches: $coaches,
+                    players: $players,
+                    bracketService: $bracketService,
+                );
+            }
+        }
+
+        if ($badminton) {
+            $badmintonFormat = SportFormat::where('sport_id', $badminton->id)->where('name', 'Singles')->first();
+            if ($badmintonFormat) {
+                $this->seedSwissBadmintonShowcase(
+                    organizer: $organizer,
+                    venueOrganizer: $venueOrganizer,
+                    livestreamOrganizer: $livestreamOrganizer,
+                    sport: $badminton,
+                    format: $badmintonFormat,
+                    venue: $badmintonCenter,
+                    coaches: $coaches,
+                    players: $players,
+                    bracketService: $bracketService,
+                );
+            }
+        }
+
+        if ($tableTennis && $tableTennisCourt) {
+            $tableTennisFormat = SportFormat::where('sport_id', $tableTennis->id)->where('name', 'Singles')->first();
+            if ($tableTennisFormat) {
+                $this->seedRoundRobinTableTennisShowcase(
+                    organizer: $organizer,
+                    venueOrganizer: $venueOrganizer,
+                    livestreamOrganizer: $livestreamOrganizer,
+                    sport: $tableTennis,
+                    format: $tableTennisFormat,
+                    venue: $gymnasium,
+                    court: $tableTennisCourt,
+                    coaches: $coaches,
+                    players: $players,
+                    bracketService: $bracketService,
+                );
+            }
+        }
+    }
+
+    private function seedSingleEliminationBasketballShowcase(
+        User $organizer,
+        User $venueOrganizer,
+        User $livestreamOrganizer,
+        Sport $sport,
+        SportFormat $format,
+        ?Venue $venue,
+        Court $court,
+        Collection $coaches,
+        Collection $players,
+        BracketService $bracketService,
+    ): void {
+        $tournament = Tournament::create([
+            'organizer_id' => $organizer->id,
+            'name' => 'Organizer Showcase: Basketball Single Elimination Cup',
+            'sport_id' => $sport->id,
+            'sport_format_id' => $format->id,
+            'format' => 'single_elimination',
+            'starts_at' => now()->subDays(11),
+            'ends_at' => now()->subDays(9),
+            'venue_id' => $venue?->id,
+            'venue_organizer_id' => $venueOrganizer->id,
+            'livestream_organizer_id' => $livestreamOrganizer->id,
+            'status' => 'ongoing',
+            'scoring_type' => 'single_score',
+        ]);
+
+        foreach (['Rizal Strikers', 'Laguna Heat', 'Bayan Knights', 'Talon Rangers'] as $i => $teamName) {
+            $roster = $players->slice($i * 5, 5)->values();
+            $team = $this->makeTeam($sport, $format, $coaches[$i % $coaches->count()], $teamName, $roster);
+            $this->registerTeam($tournament, $team);
+        }
+
+        $bracket = $bracketService->generate($tournament);
+        foreach (GameMatch::where('bracket_id', $bracket->id)->orderBy('round')->orderBy('id')->get() as $match) {
+            $this->simulateTeamMatch($match, $bracketService, 62, 96);
+        }
+        GameMatch::where('bracket_id', $bracket->id)->where('round', 3)->first()?->update(['court_id' => $court->id]);
+    }
+
+    private function seedDoubleEliminationVolleyballShowcase(
+        User $organizer,
+        User $venueOrganizer,
+        User $livestreamOrganizer,
+        Sport $sport,
+        SportFormat $format,
+        ?Venue $venue,
+        Court $court,
+        Collection $coaches,
+        Collection $players,
+        BracketService $bracketService,
+    ): void {
+        $tournament = Tournament::create([
+            'organizer_id' => $organizer->id,
+            'name' => 'Organizer Showcase: Volleyball Double Elimination League',
+            'sport_id' => $sport->id,
+            'sport_format_id' => $format->id,
+            'format' => 'double_elimination',
+            'starts_at' => now()->subDays(18),
+            'ends_at' => now()->subDays(12),
+            'venue_id' => $venue?->id,
+            'venue_organizer_id' => $venueOrganizer->id,
+            'livestream_organizer_id' => $livestreamOrganizer->id,
+            'status' => 'ongoing',
+            'scoring_type' => 'best_of_sets',
+            'sets_to_win' => 3,
+        ]);
+
+        foreach (['Harbor Spikers', 'Bayside Blockers', 'Metro Aces', 'Coastline Diggers'] as $i => $teamName) {
+            $roster = $players->slice(10 + $i * 6, 6)->values();
+            $team = $this->makeTeam($sport, $format, $coaches[(4 + $i) % $coaches->count()], $teamName, $roster);
+            $this->registerTeam($tournament, $team);
+        }
+
+        $bracket = $bracketService->generate($tournament);
+        foreach (GameMatch::where('bracket_id', $bracket->id)->orderBy('round')->orderBy('id')->get() as $match) {
+            $this->simulateBestOfSetsTeamMatch($match, $bracketService, $tournament, 18, 25);
+        }
+        GameMatch::where('bracket_id', $bracket->id)->where('round', 4)->first()?->update(['court_id' => $court->id]);
+    }
+
+    private function seedGroupStagePickleballShowcase(
+        User $organizer,
+        User $venueOrganizer,
+        User $livestreamOrganizer,
+        Sport $sport,
+        SportFormat $format,
+        ?Venue $venue,
+        Court $court,
+        Collection $coaches,
+        Collection $players,
+        BracketService $bracketService,
+    ): void {
+        $tournament = Tournament::create([
+            'organizer_id' => $organizer->id,
+            'name' => 'Organizer Showcase: Pickleball Group Stage Cup',
+            'sport_id' => $sport->id,
+            'sport_format_id' => $format->id,
+            'format' => 'group_stage',
+            'starts_at' => now()->subDays(23),
+            'ends_at' => now()->subDays(18),
+            'venue_id' => $venue?->id,
+            'venue_organizer_id' => $venueOrganizer->id,
+            'livestream_organizer_id' => $livestreamOrganizer->id,
+            'status' => 'ongoing',
+            'scoring_type' => 'best_of_sets',
+            'sets_to_win' => 2,
+        ]);
+
+        $teams = [
+            ['Sunset Serve', [$players[0], $coaches[0]]],
+            ['Harbor Drops', [$players[1], $coaches[1]]],
+            ['Court Cutters', [$players[2], $coaches[2]]],
+            ['Net Runners', [$players[3], $coaches[3]]],
+        ];
+
+        foreach ($teams as [$teamName, $roster]) {
+            $team = $this->makeTeam($sport, $format, $coaches[0], $teamName, collect($roster));
+            $this->registerTeam($tournament, $team);
+        }
+
+        $bracket = $bracketService->generate($tournament);
+        foreach (GameMatch::where('bracket_id', $bracket->id)->orderBy('group_number')->orderBy('round')->orderBy('id')->get() as $match) {
+            $this->simulateBestOfSetsTeamMatch($match, $bracketService, $tournament, 11, 18);
+        }
+        GameMatch::where('bracket_id', $bracket->id)->whereNull('group_number')->orderBy('round')->get()->each(function ($match) use ($bracketService, $tournament) {
+            $this->simulateBestOfSetsTeamMatch($match, $bracketService, $tournament, 11, 18);
+        });
+        GameMatch::where('bracket_id', $bracket->id)->where('group_number', 0)->first()?->update(['court_id' => $court->id]);
+    }
+
+    private function seedSwissBadmintonShowcase(
+        User $organizer,
+        User $venueOrganizer,
+        User $livestreamOrganizer,
+        Sport $sport,
+        SportFormat $format,
+        ?Venue $venue,
+        Collection $coaches,
+        Collection $players,
+        BracketService $bracketService,
+    ): void {
+        $tournament = Tournament::create([
+            'organizer_id' => $organizer->id,
+            'name' => 'Organizer Showcase: Badminton Swiss Open',
+            'sport_id' => $sport->id,
+            'sport_format_id' => $format->id,
+            'format' => 'swiss',
+            'starts_at' => now()->subDays(15),
+            'ends_at' => now()->subDays(10),
+            'venue_id' => $venue?->id,
+            'venue_organizer_id' => $venueOrganizer->id,
+            'livestream_organizer_id' => $livestreamOrganizer->id,
+            'status' => 'ongoing',
+            'scoring_type' => 'best_of_sets',
+            'sets_to_win' => 2,
+        ]);
+
+        $entries = collect(array_merge(
+            $players->take(6)->all(),
+            $coaches->take(2)->all()
+        ))->shuffle();
+
+        foreach ($entries as $user) {
+            TournamentRegistration::create([
+                'tournament_id' => $tournament->id,
+                'user_id' => $user->id,
+                'registered_by' => $user->id,
+                'status' => 'confirmed',
+            ]);
+        }
+
+        $bracket = $bracketService->generate($tournament);
+        foreach (GameMatch::where('bracket_id', $bracket->id)->orderBy('round')->orderBy('id')->get() as $match) {
+            $this->simulateBestOfSetsIndividualMatch($match, $bracketService, $tournament, 15, 21);
+        }
+    }
+
+    private function seedRoundRobinTableTennisShowcase(
+        User $organizer,
+        User $venueOrganizer,
+        User $livestreamOrganizer,
+        Sport $sport,
+        SportFormat $format,
+        ?Venue $venue,
+        Court $court,
+        Collection $coaches,
+        Collection $players,
+        BracketService $bracketService,
+    ): void {
+        $tournament = Tournament::create([
+            'organizer_id' => $organizer->id,
+            'name' => 'Organizer Showcase: Table Tennis Round Robin Sprint',
+            'sport_id' => $sport->id,
+            'sport_format_id' => $format->id,
+            'format' => 'round_robin',
+            'starts_at' => now()->subDays(20),
+            'ends_at' => now()->subDays(16),
+            'venue_id' => $venue?->id,
+            'venue_organizer_id' => $venueOrganizer->id,
+            'livestream_organizer_id' => $livestreamOrganizer->id,
+            'status' => 'ongoing',
+            'scoring_type' => 'best_of_sets',
+            'sets_to_win' => 3,
+        ]);
+
+        $entries = collect(array_merge(
+            $players->slice(20, 6)->all(),
+            $coaches->slice(0, 2)->all()
+        ))->shuffle();
+
+        foreach ($entries as $user) {
+            TournamentRegistration::create([
+                'tournament_id' => $tournament->id,
+                'user_id' => $user->id,
+                'registered_by' => $user->id,
+                'status' => 'confirmed',
+            ]);
+        }
+
+        $bracket = $bracketService->generate($tournament);
+        foreach (GameMatch::where('bracket_id', $bracket->id)->orderBy('round')->orderBy('id')->get() as $match) {
+            $this->simulateBestOfSetsIndividualMatch($match, $bracketService, $tournament, 4, 11);
+        }
+        GameMatch::where('bracket_id', $bracket->id)->first()?->update(['court_id' => $court->id]);
     }
 
     /** @param  Collection<int, User>  $coaches

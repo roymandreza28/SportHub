@@ -706,7 +706,7 @@ class BracketService
         $bField = $teamMode ? 'participant_b_team_id' : 'participant_b_id';
         $winnerField = $teamMode ? 'winner_team_id' : 'winner_id';
 
-        $remaining = $orderedIds->values()->all();
+        $remaining = array_values(array_filter($orderedIds->values()->all(), fn ($id) => $id !== null));
         $pastPairs = $round > 1 ? $this->swissPastPairs($bracket, $teamMode) : collect();
         $priorByes = $round > 1 ? $this->swissPriorByeIds($bracket, $teamMode) : collect();
         $pairs = [];
@@ -725,9 +725,15 @@ class BracketService
 
         while (count($remaining) > 0) {
             $p = array_shift($remaining);
+            if ($p === null) {
+                continue;
+            }
 
             $idx = null;
             foreach ($remaining as $j => $candidate) {
+                if ($candidate === null) {
+                    continue;
+                }
                 if (! $pastPairs->contains($this->swissPairKey($p, $candidate))) {
                     $idx = $j;
                     break;
@@ -737,8 +743,16 @@ class BracketService
             // against whoever's next rather than leave $p unpaired.
             $idx ??= 0;
 
+            if (! array_key_exists($idx, $remaining)) {
+                continue;
+            }
+
             $opp = $remaining[$idx];
             array_splice($remaining, $idx, 1);
+            if ($opp === null) {
+                $pairs[] = [$p, null];
+                continue;
+            }
             $pairs[] = [$p, $opp];
         }
 
@@ -755,8 +769,12 @@ class BracketService
         }
     }
 
-    private function swissPairKey(int $a, int $b): string
+    private function swissPairKey(?int $a, ?int $b): string
     {
+        if ($a === null || $b === null) {
+            return 'bye';
+        }
+
         return implode('-', [min($a, $b), max($a, $b)]);
     }
 

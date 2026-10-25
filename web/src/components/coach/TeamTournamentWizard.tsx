@@ -85,10 +85,10 @@ export function TeamTournamentWizard({
               <li key={t.id}>
                 <button
                   onClick={() => pickTournament(t)}
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                  className="flex w-full flex-col gap-2 px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 md:flex-row md:items-center md:justify-between"
                 >
-                  <span>{t.name}</span>
-                  <span className="flex shrink-0 items-center gap-1.5">
+                  <span className="min-w-0 flex-1 break-words">{t.name}</span>
+                  <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5 md:justify-end">
                     {t.registration_fee ? (
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                         {formatPeso(Number(t.registration_fee))}
