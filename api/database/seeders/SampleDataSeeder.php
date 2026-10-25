@@ -17,6 +17,8 @@ class SampleDataSeeder extends Seeder
 {
     public function run(): void
     {
+        $randomBirthDate = fn (): string => now()->subYears(rand(18, 28))->subDays(rand(0, 364))->toDateString();
+
         $facilitator = User::where('email', 'venue_facilitator@sporthub.test')->first();
         $player = User::where('email', 'player@sporthub.test')->first();
         $coach = User::where('email', 'coach@sporthub.test')->first();
@@ -52,14 +54,17 @@ class SampleDataSeeder extends Seeder
             ['quantity_total' => 20, 'quantity_available' => 20]
         );
 
+        $playerBirthday = $randomBirthDate();
+
         PlayerProfile::firstOrCreate(
             ['user_id' => $player->id],
             [
                 'bio' => 'Local recreational player.',
-                'date_of_birth' => '2000-05-14',
+                'date_of_birth' => $playerBirthday,
                 'primary_sport_id' => $basketball?->id,
             ]
         );
+        $player->update(['birthday' => $playerBirthday]);
 
         if ($basketball) {
             $player->playerProfile->skillLevels()->firstOrCreate(
@@ -99,12 +104,13 @@ class SampleDataSeeder extends Seeder
                 7 => 'male', 8 => 'female', 9 => 'male', 10 => 'female', 11 => 'male',
             ];
 
-            $extraPlayers = collect(range(1, 11))->map(function (int $n) use ($extraPlayerNames, $extraPlayerGenders) {
+            $extraPlayers = collect(range(1, 11))->map(function (int $n) use ($extraPlayerNames, $extraPlayerGenders, $randomBirthDate) {
                 $name = $extraPlayerNames[$n];
                 $gender = $extraPlayerGenders[$n];
+                $birthday = $randomBirthDate();
                 $user = User::firstOrCreate(
                     ['email' => "player{$n}@sporthub.test"],
-                    ['name' => $name, 'gender' => $gender, 'password' => bcrypt('password')]
+                    ['name' => $name, 'gender' => $gender, 'birthday' => $birthday, 'password' => bcrypt('password')]
                 );
                 if ($user->name !== $name) {
                     $user->update(['name' => $name]);
@@ -112,6 +118,7 @@ class SampleDataSeeder extends Seeder
                 if ($user->gender !== $gender) {
                     $user->update(['gender' => $gender]);
                 }
+                $user->update(['birthday' => $birthday]);
                 if (! $user->hasRole('player')) {
                     $user->assignRole('player');
                 }

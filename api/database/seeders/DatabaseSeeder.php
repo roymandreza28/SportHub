@@ -17,6 +17,10 @@ class DatabaseSeeder extends Seeder
     {
         $this->call(RolesAndPermissionsSeeder::class);
 
+        $randomAgeInRange = function (): string {
+            return now()->subYears(rand(18, 28))->subDays(rand(0, 364))->toDateString();
+        };
+
         $demoUsers = [
             'admin' => ['Marites Villanueva', null],
             'organizer' => ['Ramon Cruz', null],
@@ -32,21 +36,23 @@ class DatabaseSeeder extends Seeder
         ];
 
         foreach ($demoUsers as $role => [$name, $gender]) {
+            $birthday = $randomAgeInRange();
             $user = User::firstOrCreate(
                 ['email' => "{$role}@sporthub.test"],
-                ['name' => $name, 'gender' => $gender, 'password' => bcrypt('password')]
+                ['name' => $name, 'gender' => $gender, 'birthday' => $birthday, 'password' => bcrypt('password')]
             );
 
             // firstOrCreate only applies the attributes on the *first* run —
             // re-running this seeder against a database that already has
             // these rows (e.g. re-seeding production) wouldn't otherwise
-            // pick up a renamed demo user.
+            // pick up a renamed demo user or refreshed birthdate.
             if ($user->name !== $name) {
                 $user->update(['name' => $name]);
             }
             if ($gender && $user->gender !== $gender) {
                 $user->update(['gender' => $gender]);
             }
+            $user->update(['birthday' => $birthday]);
 
             if (! $user->hasRole($role)) {
                 $user->assignRole($role);

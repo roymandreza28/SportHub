@@ -25,7 +25,8 @@ class MalePlayerTopUpSeeder extends Seeder
     {
         collect(self::NAMES)->each(function (string $name, int $i) {
             $email = 'player'.($i + 61).'@sporthub.test';
-            $user = User::firstOrCreate(['email' => $email], ['name' => $name, 'gender' => 'male', 'password' => bcrypt('password')]);
+            $birthday = now()->subYears(rand(18, 28))->subDays(rand(0, 364))->toDateString();
+            $user = User::firstOrCreate(['email' => $email], ['name' => $name, 'gender' => 'male', 'birthday' => $birthday, 'password' => bcrypt('password')]);
 
             if ($user->name !== $name) {
                 $user->update(['name' => $name]);
@@ -33,6 +34,7 @@ class MalePlayerTopUpSeeder extends Seeder
             if ($user->gender !== 'male') {
                 $user->update(['gender' => 'male']);
             }
+            $user->update(['birthday' => $birthday]);
             if (! $user->hasRole('player')) {
                 $user->assignRole('player');
             }

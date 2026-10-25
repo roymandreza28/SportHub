@@ -145,7 +145,8 @@ class ExtendedTournamentsSeeder extends Seeder
 
     private function makeUser(string $email, string $name, string $role, ?string $gender = null): User
     {
-        $user = User::firstOrCreate(['email' => $email], ['name' => $name, 'gender' => $gender, 'password' => bcrypt('password')]);
+        $birthday = now()->subYears(rand(18, 28))->subDays(rand(0, 364))->toDateString();
+        $user = User::firstOrCreate(['email' => $email], ['name' => $name, 'gender' => $gender, 'birthday' => $birthday, 'password' => bcrypt('password')]);
 
         if ($user->name !== $name) {
             $user->update(['name' => $name]);
@@ -153,6 +154,7 @@ class ExtendedTournamentsSeeder extends Seeder
         if ($gender && $user->gender !== $gender) {
             $user->update(['gender' => $gender]);
         }
+        $user->update(['birthday' => $birthday]);
         if (! $user->hasRole($role)) {
             $user->assignRole($role);
         }
