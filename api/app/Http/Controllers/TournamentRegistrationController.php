@@ -61,16 +61,9 @@ class TournamentRegistrationController extends Controller
             throw ValidationException::withMessages(['tournament' => ['Registration is closed for this tournament.']]);
         }
 
-        // A coach registers one entrant per tournament, full stop — never a
-        // second player once they've already used their one slot here.
-        $coachAlreadyRegistered = TournamentRegistration::where('tournament_id', $tournament->id)
-            ->where('registered_by', $request->user()->id)
-            ->exists();
-
-        if ($coachAlreadyRegistered) {
-            throw ValidationException::withMessages(['tournament' => ['You have already registered a player for this tournament.']]);
-        }
-
+        // Coaches can register multiple individual entrants into a non-team
+        // tournament, so the only duplicate to block here is the exact same
+        // player being registered twice to the same tournament.
         $alreadyRegistered = TournamentRegistration::where('tournament_id', $tournament->id)
             ->where('user_id', $data['user_id'])
             ->exists();

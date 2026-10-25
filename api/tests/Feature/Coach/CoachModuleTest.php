@@ -4,9 +4,10 @@ use App\Models\Sport;
 use App\Models\Tournament;
 use App\Models\User;
 
-it('lets a coach register a player for an open tournament and rejects duplicate registration', function () {
+it('lets a coach register multiple players for an open individual tournament and rejects a duplicate player', function () {
     $coach = userWithRole('coach');
-    $player = userWithRole('player');
+    $playerA = userWithRole('player');
+    $playerB = userWithRole('player');
     $organizer = userWithRole('organizer');
     $sport = Sport::create(['name' => 'Basketball']);
 
@@ -19,10 +20,13 @@ it('lets a coach register a player for an open tournament and rejects duplicate 
         'status' => 'registration',
     ]);
 
-    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $player->id])
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $playerA->id])
         ->assertCreated();
 
-    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $player->id])
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $playerB->id])
+        ->assertCreated();
+
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $playerA->id])
         ->assertStatus(422);
 });
 
@@ -53,7 +57,7 @@ it('enforces a tournament\'s gender restriction on individual registration', fun
         ->assertCreated();
 });
 
-it('rejects a coach registering a second, different player for a tournament they already registered someone for', function () {
+it('allows a coach to register different players for the same individual tournament', function () {
     $coach = userWithRole('coach');
     $playerA = userWithRole('player');
     $playerB = userWithRole('player');
@@ -72,11 +76,11 @@ it('rejects a coach registering a second, different player for a tournament they
     $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $playerA->id])
         ->assertCreated();
 
-    $response = $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $playerB->id]);
-    $response->assertStatus(422);
-    expect($response->json('message'))->toContain('already registered a player');
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", ['user_id' => $playerB->id])
+        ->assertCreated();
 
-    $this->assertDatabaseMissing('tournament_registrations', ['tournament_id' => $tournament->id, 'user_id' => $playerB->id]);
+    $this->assertDatabaseHas('tournament_registrations', ['tournament_id' => $tournament->id, 'user_id' => $playerA->id]);
+    $this->assertDatabaseHas('tournament_registrations', ['tournament_id' => $tournament->id, 'user_id' => $playerB->id]);
 });
 
 it('makes a freshly-created tournament visible to coaches only after the organizer opens it for registration', function () {
