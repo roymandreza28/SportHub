@@ -41,6 +41,7 @@ export function TeamPanel() {
   const [sportId, setSportId] = useState<number | ''>('')
   const [formatId, setFormatId] = useState<number | ''>('')
   const [teamName, setTeamName] = useState('')
+  const [expandedTeamId, setExpandedTeamId] = useState<number | null>(null)
 
   const { data: formats } = useQuery({
     queryKey: ['sport-formats', sportId],
@@ -193,70 +194,80 @@ export function TeamPanel() {
       )}
 
       <ul className="flex flex-col gap-2">
-        {teams?.map((team) => (
-          <li key={team.id} className="flex flex-col gap-2 rounded-lg border border-slate-100 bg-white p-3 shadow-sm">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-medium text-slate-800">{team.name}</p>
-                <p className="text-xs text-slate-500">
-                  {team.sport.name} — {team.sport_format.name}
-                </p>
-              </div>
-              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[team.status]}`}>
-                {STATUS_LABEL(team)}
-              </span>
-            </div>
+        {teams?.map((team) => {
+          const isExpanded = expandedTeamId === team.id
 
-            <ul className="flex flex-col divide-y divide-slate-50 text-xs text-slate-600">
-              {team.members.map((m) => (
-                <li key={m.id} className="flex items-center justify-between py-1">
-                  <span className="flex items-center gap-1.5">
-                    <Avatar name={m.user.name} size="sm" />
-                    {m.user.name}
-                    {m.status !== 'accepted' && <span className="text-slate-400"> ({m.status})</span>}
-                  </span>
-                  {team.is_captain && m.user_id !== team.captain_id && (
-                    <button
-                      onClick={() => remove.mutate({ teamId: team.id, memberId: m.id })}
-                      className="font-medium text-red-600 hover:text-red-700"
-                    >
-                      Remove
-                    </button>
-                  )}
-                  {/* A joined (non-captain) member can quit on their own —
-                      not just the captain removing them. Pending invites are
-                      handled separately above via Accept/Decline, so this
-                      only applies once a member has actually accepted. */}
-                  {!team.is_captain && m.user_id === user?.id && m.status === 'accepted' && (
-                    <button
-                      onClick={() => remove.mutate({ teamId: team.id, memberId: m.id })}
-                      className="font-medium text-red-600 hover:text-red-700"
-                    >
-                      Leave
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-
-            {team.is_captain && team.status === 'forming' && (
-              <TeamInviteRow
-                existingMemberIds={team.members.map((m) => m.user_id)}
-                friends={friends ?? []}
-                onInvite={(userId) => invite.mutate({ teamId: team.id, userId })}
-              />
-            )}
-
-            {team.is_captain && (
+          return (
+            <li key={team.id} className="overflow-hidden rounded-lg border border-slate-100 bg-white shadow-sm">
               <button
-                onClick={() => disband.mutate(team.id)}
-                className="self-start text-xs font-medium text-red-600 hover:text-red-700"
+                type="button"
+                onClick={() => setExpandedTeamId((current) => (current === team.id ? null : team.id))}
+                className="flex w-full items-center justify-between gap-2 bg-white p-3 text-left"
               >
-                Disband team
+                <div>
+                  <p className="text-sm font-medium text-slate-800">{team.name}</p>
+                  <p className="text-xs text-slate-500">
+                    {team.sport.name} — {team.sport_format.name}
+                  </p>
+                </div>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[team.status]}`}>
+                  {STATUS_LABEL(team)}
+                </span>
               </button>
-            )}
-          </li>
-        ))}
+
+              {isExpanded && (
+                <div className="border-t border-slate-100 bg-slate-50/80 p-3">
+                  <ul className="flex flex-col divide-y divide-slate-100 text-xs text-slate-600">
+                    {team.members.map((m) => (
+                      <li key={m.id} className="flex items-center justify-between py-2">
+                        <span className="flex items-center gap-1.5">
+                          <Avatar name={m.user.name} size="sm" />
+                          {m.user.name}
+                          {m.status !== 'accepted' && <span className="text-slate-400"> ({m.status})</span>}
+                        </span>
+                        {team.is_captain && m.user_id !== team.captain_id && (
+                          <button
+                            onClick={() => remove.mutate({ teamId: team.id, memberId: m.id })}
+                            className="font-medium text-red-600 hover:text-red-700"
+                          >
+                            Remove
+                          </button>
+                        )}
+                        {!team.is_captain && m.user_id === user?.id && m.status === 'accepted' && (
+                          <button
+                            onClick={() => remove.mutate({ teamId: team.id, memberId: m.id })}
+                            className="font-medium text-red-600 hover:text-red-700"
+                          >
+                            Leave
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+
+                  {team.is_captain && team.status === 'forming' && (
+                    <div className="mt-3">
+                      <TeamInviteRow
+                        existingMemberIds={team.members.map((m) => m.user_id)}
+                        friends={friends ?? []}
+                        onInvite={(userId) => invite.mutate({ teamId: team.id, userId })}
+                      />
+                    </div>
+                  )}
+
+                  {team.is_captain && (
+                    <button
+                      onClick={() => disband.mutate(team.id)}
+                      className="mt-3 self-start text-xs font-medium text-red-600 hover:text-red-700"
+                    >
+                      Disband team
+                    </button>
+                  )}
+                </div>
+              )}
+            </li>
+          )
+        })}
         {teams?.length === 0 && <p className="text-sm text-slate-400">No teams yet — create one for a team sport above.</p>}
       </ul>
     </div>
