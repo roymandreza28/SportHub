@@ -13,7 +13,7 @@ function CollapsibleSection({ title, children }: { title: string; children: Reac
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="max-w-2xl">
+    <div className="w-full">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -77,15 +77,15 @@ export function EvaluationForm() {
   })
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className={`${fieldGroup} max-w-md`}>
+    <div className="flex w-full flex-col gap-4">
+      <div className={fieldGroup}>
         <label className={label}>Player</label>
         <PlayerSearchPicker selected={player} onSelect={setPlayer} />
       </div>
 
       {player && (
         <>
-          <div className="grid max-w-md gap-4 sm:grid-cols-2">
+          <div className="grid w-full gap-4 sm:grid-cols-2">
             <div className={fieldGroup}>
               <label className={label}>Sport</label>
               <select
