@@ -14,8 +14,16 @@ export function PlayerSearchPicker({
   const { data: results } = useQuery({
     queryKey: ['coach', 'players', search],
     queryFn: () => searchPlayers(search),
-    enabled: search.length > 0,
+    enabled: search.trim().length > 0,
   })
+
+  const normalizedSearch = search.trim().toLowerCase()
+  const filteredResults = (results ?? []).filter((player) => {
+    const name = player.name.toLowerCase()
+    const email = player.email.toLowerCase()
+    return name.startsWith(normalizedSearch) || email.startsWith(normalizedSearch)
+  })
+  const visibleResults = filteredResults.slice(0, 5)
 
   if (selected) {
     return (
@@ -39,9 +47,9 @@ export function PlayerSearchPicker({
         onChange={(e) => setSearch(e.target.value)}
         className={input}
       />
-      {results && results.length > 0 && (
-        <ul className="flex flex-col gap-0.5 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
-          {results.map((player) => (
+      {visibleResults.length > 0 && (
+        <ul className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+          {visibleResults.map((player) => (
             <li key={player.id}>
               <button
                 type="button"
