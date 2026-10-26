@@ -35,6 +35,7 @@ export function EvaluationForm() {
   const { data: sports } = useQuery({ queryKey: ['sports'], queryFn: fetchSports })
 
   const [player, setPlayer] = useState<PlayerSearchResult | null>(null)
+  const [expandedSkillId, setExpandedSkillId] = useState<number | null>(null)
   const { data: selectedProfile } = useQuery({
     queryKey: ['social', 'profile', player?.id],
     queryFn: () => fetchProfile(player!.id),
@@ -93,8 +94,8 @@ export function EvaluationForm() {
 
       {player && (
         <>
-          <div className="w-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-3">
+          <div className="mx-auto w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-center gap-3 text-center">
               <Avatar name={player.name} url={selectedProfile?.user.avatar_url ?? null} size="lg" className="border-2 border-white shadow-sm" />
               <div className="min-w-0">
                 <p className="text-base font-bold text-slate-900">{player.name}</p>
@@ -103,13 +104,50 @@ export function EvaluationForm() {
             </div>
 
             {selectedProfile?.user.skill_levels && selectedProfile.user.skill_levels.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {selectedProfile.user.skill_levels.map((skillLevel) => (
-                  <SkillLevelBadge key={skillLevel.id} skillLevel={skillLevel} />
-                ))}
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {selectedProfile.user.skill_levels.map((skillLevel) => {
+                  const isExpanded = expandedSkillId === skillLevel.id
+                  const details = skillLevel.latest_evaluation
+
+                  return (
+                    <div key={skillLevel.id} className="flex w-full flex-col items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedSkillId((current) => (current === skillLevel.id ? null : skillLevel.id))}
+                        className="w-full max-w-sm"
+                      >
+                        <SkillLevelBadge skillLevel={skillLevel} />
+                      </button>
+
+                      {isExpanded && details && (
+                        <div className="w-full max-w-xl rounded-lg border border-slate-100 bg-slate-50/70 p-3 text-left text-xs text-slate-600">
+                          <div className="flex flex-wrap gap-x-4 gap-y-2">
+                            {details.criteria?.attributes && Object.entries(details.criteria.attributes).map(([key, value]) => (
+                              <span key={key} className="rounded-full bg-white px-2 py-1 text-slate-700 ring-1 ring-slate-200">
+                                {key.replace(/_/g, ' ')}: <strong>{value}/10</strong>
+                              </span>
+                            ))}
+                          </div>
+
+                          {details.criteria?.sport_stats?.computed && Object.keys(details.criteria.sport_stats.computed).length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {Object.entries(details.criteria.sport_stats.computed).map(([key, value]) => (
+                                <span key={key} className="rounded-full bg-teal-50 px-2.5 py-1 font-medium text-teal-700">
+                                  {key.replace(/_/g, ' ')}: {value}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {details.notes && <p className="mt-3 text-slate-600">Notes: {details.notes}</p>}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             ) : (
-              <p className="mt-3 text-sm text-slate-400">No coach evaluations yet.</p>
+              <p className="mt-3 text-center text-sm text-slate-400">No coach evaluations yet.</p>
             )}
           </div>
 
