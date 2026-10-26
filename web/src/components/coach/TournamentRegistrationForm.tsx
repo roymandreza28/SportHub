@@ -24,6 +24,14 @@ export function TournamentRegistrationForm({
   const [receipt, setReceipt] = useState<PaymentReceipt | null>(null)
   const queryClient = useQueryClient()
 
+  const formatTournamentLabel = (t: { name: string; sport: { name: string }; required_gender?: string | null; min_age?: number | null; max_age?: number | null }) => {
+    const baseName = t.name.length > 48 ? `${t.name.slice(0, 45)}...` : t.name
+    const sportInfo = t.sport.name
+    const genderInfo = t.required_gender ? `, ${t.required_gender} only` : ''
+    const ageInfo = t.min_age !== null || t.max_age !== null ? `, ages ${t.min_age ?? 'Any'}-${t.max_age ?? 'Any'}` : ''
+    return `${baseName} (${sportInfo}${genderInfo}${ageInfo})`
+  }
+
   const mutation = useMutation({
     mutationFn: () => registerPlayerForTournament(Number(tournamentId), player!.id),
     onSuccess: (data) => {
@@ -62,19 +70,11 @@ export function TournamentRegistrationForm({
             className={select}
           >
             <option value="">Choose a tournament...</option>
-            {tournaments?.map((t) => {
-              const ageLabel = t.min_age !== null || t.max_age !== null
-                ? `, ages ${t.min_age ?? 'Any'}-${t.max_age ?? 'Any'}`
-                : ''
-
-              return (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({t.sport.name}
-                  {t.required_gender ? `, ${t.required_gender} only` : ''}
-                  {ageLabel})
-                </option>
-              )
-            })}
+            {tournaments?.map((t) => (
+              <option key={t.id} value={t.id}>
+                {formatTournamentLabel(t)}
+              </option>
+            ))}
           </select>
         </div>
       )}
