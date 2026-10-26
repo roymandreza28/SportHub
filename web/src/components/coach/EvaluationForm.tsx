@@ -211,14 +211,14 @@ export function EvaluationForm() {
                 </div>
               )}
             </div>
-            <div className={fieldGroup}>
+            <div className={`${fieldGroup} sm:col-span-2`}>
               <label className={label}>Score (optional)</label>
               <input
                 type="number"
                 placeholder="0–100"
                 value={score}
                 onChange={(e) => setScore(e.target.value)}
-                className={input}
+                className={`${input} w-full`}
               />
             </div>
             <div className={`${fieldGroup} sm:col-span-2`}>
