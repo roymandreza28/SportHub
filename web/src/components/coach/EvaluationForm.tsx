@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createEvaluation, type PlayerSearchResult } from '../../lib/coachApi'
+import { fetchProfile } from '../../lib/socialApi'
 import { fetchSports } from '../../lib/venueApi'
 import { SKILL_LEVEL_LABELS, tiersFor, criteriaFor, type SkillLevelTier } from '../../lib/skillLevels'
 import { SPORT_ATTRIBUTE_CRITERIA, SPORT_STAT_FIELDS, SPORT_COMPUTED_FIELDS, computeSportStats } from '../../lib/evaluationCriteria'
 import { PlayerSearchPicker } from './PlayerSearchPicker'
 import { PlayerSkillHistoryChart } from './PlayerSkillHistoryChart'
+import { SkillLevelBadge } from '../player/SkillLevelBadge'
+import { Avatar } from '../layout/Avatar'
 import { buttonPrimary, fieldGroup, input, label, select, textarea } from '../../lib/formStyles'
 import { IconChevronDown } from '../layout/icons'
 
@@ -32,6 +35,11 @@ export function EvaluationForm() {
   const { data: sports } = useQuery({ queryKey: ['sports'], queryFn: fetchSports })
 
   const [player, setPlayer] = useState<PlayerSearchResult | null>(null)
+  const { data: selectedProfile } = useQuery({
+    queryKey: ['social', 'profile', player?.id],
+    queryFn: () => fetchProfile(player!.id),
+    enabled: !!player,
+  })
   const [sportId, setSportId] = useState<number | ''>('')
   const [level, setLevel] = useState<SkillLevelTier>('beginner')
   const [score, setScore] = useState('')
@@ -85,6 +93,26 @@ export function EvaluationForm() {
 
       {player && (
         <>
+          <div className="w-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <Avatar name={player.name} url={selectedProfile?.user.avatar_url ?? null} size="lg" className="border-2 border-white shadow-sm" />
+              <div className="min-w-0">
+                <p className="text-base font-bold text-slate-900">{player.name}</p>
+                <p className="text-sm text-slate-500">{player.email}</p>
+              </div>
+            </div>
+
+            {selectedProfile?.user.skill_levels && selectedProfile.user.skill_levels.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {selectedProfile.user.skill_levels.map((skillLevel) => (
+                  <SkillLevelBadge key={skillLevel.id} skillLevel={skillLevel} />
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-slate-400">No coach evaluations yet.</p>
+            )}
+          </div>
+
           <div className="grid w-full gap-4 sm:grid-cols-2">
             <div className={fieldGroup}>
               <label className={label}>Sport</label>
