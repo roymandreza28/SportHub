@@ -129,67 +129,83 @@ export function TeamPanel() {
       </div>
 
       {showCreate && (
-        <div className="flex flex-col gap-3 rounded-lg border border-slate-100 bg-slate-50/60 p-4">
-          <div className={fieldGroup}>
-            <label className={label}>Sport</label>
-            <select
-              data-testid="team-sport"
-              value={sportId}
-              onChange={(e) => {
-                setSportId(e.target.value ? Number(e.target.value) : '')
-                setFormatId('')
-              }}
-              className={select}
-            >
-              <option value="">Choose a sport...</option>
-              {sports?.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">Create a team</h3>
+              <button type="button" onClick={() => setShowCreate(false)} className={buttonGhost}>
+                Close
+              </button>
+            </div>
 
-          <div className={fieldGroup}>
-            <label className={label}>Format</label>
-            <select
-              data-testid="team-format"
-              value={formatId}
-              onChange={(e) => setFormatId(e.target.value ? Number(e.target.value) : '')}
-              disabled={!sportId}
-              className={select}
-            >
-              <option value="">{sportId ? 'Choose a format...' : 'Choose a sport first'}</option>
-              {teamFormats.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name} ({f.players_per_side} per side)
-                </option>
-              ))}
-            </select>
-            {sportId && teamFormats.length === 0 && (
-              <p className="text-xs text-slate-400">
-                This sport has no multi-player formats — use Join or Create Match directly instead.
-              </p>
-            )}
-          </div>
+            <div className="flex flex-col gap-3">
+              <div className={fieldGroup}>
+                <label className={label}>Sport</label>
+                <select
+                  data-testid="team-sport"
+                  value={sportId}
+                  onChange={(e) => {
+                    setSportId(e.target.value ? Number(e.target.value) : '')
+                    setFormatId('')
+                  }}
+                  className={select}
+                >
+                  <option value="">Choose a sport...</option>
+                  {sports?.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div className={fieldGroup}>
-            <label className={label}>Team name (optional)</label>
-            <input
-              value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
-              className={input}
-              placeholder="e.g. The Riverside Ballers"
-            />
-          </div>
+              <div className={fieldGroup}>
+                <label className={label}>Format</label>
+                <select
+                  data-testid="team-format"
+                  value={formatId}
+                  onChange={(e) => setFormatId(e.target.value ? Number(e.target.value) : '')}
+                  disabled={!sportId}
+                  className={select}
+                >
+                  <option value="">{sportId ? 'Choose a format...' : 'Choose a sport first'}</option>
+                  {teamFormats.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name} ({f.players_per_side} per side)
+                    </option>
+                  ))}
+                </select>
+                {sportId && teamFormats.length === 0 && (
+                  <p className="text-xs text-slate-400">
+                    This sport has no multi-player formats — use Join or Create Match directly instead.
+                  </p>
+                )}
+              </div>
 
-          <button
-            onClick={() => create.mutate()}
-            disabled={!sportId || !formatId || create.isPending}
-            className={`${buttonPrimary} self-start`}
-          >
-            Create team
-          </button>
+              <div className={fieldGroup}>
+                <label className={label}>Team name (optional)</label>
+                <input
+                  value={teamName}
+                  onChange={(e) => setTeamName(e.target.value)}
+                  className={input}
+                  placeholder="e.g. The Riverside Ballers"
+                />
+              </div>
+
+              <div className="mt-2 flex justify-end gap-2">
+                <button type="button" onClick={() => setShowCreate(false)} className={buttonGhost}>
+                  Cancel
+                </button>
+                <button
+                  onClick={() => create.mutate()}
+                  disabled={!sportId || !formatId || create.isPending}
+                  className={buttonPrimary}
+                >
+                  Create team
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
