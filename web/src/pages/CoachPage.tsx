@@ -51,6 +51,7 @@ export function CoachPage() {
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
   const [venuesSubTab, setVenuesSubTab] = useState<'venues' | 'bookings'>('venues')
   const [statSheetMatchId, setStatSheetMatchId] = useState<number | null>(null)
+  const showStatSheets = false
 
   const { data: upcomingStatSheetMatches } = useQuery({
     queryKey: ['coach', 'matches', 'upcoming-stat-sheets'],
@@ -198,7 +199,7 @@ export function CoachPage() {
             onSelectTournament={setSelectedTournamentId}
           />
 
-          {(upcomingStatSheetMatches ?? []).length > 0 && (
+          {showStatSheets && (upcomingStatSheetMatches ?? []).length > 0 && (
             <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stat Sheets</p>
               {upcomingStatSheetMatches!.map((m) => (
@@ -248,10 +249,10 @@ export function CoachPage() {
       )}
 
       {showRegisterModal && <RegisterPlayerModal onClose={() => setShowRegisterModal(false)} />}
-      {statSheetMatchId !== null && (
+      {showStatSheets && statSheetMatchId !== null && (
         <StatSheetModal matchId={statSheetMatchId} onClose={() => setStatSheetMatchId(null)} />
       )}
-      <StatSheetTrigger />
+      {showStatSheets && <StatSheetTrigger />}
     </DashboardShell>
   )
 }
