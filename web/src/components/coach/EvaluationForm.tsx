@@ -104,42 +104,49 @@ export function EvaluationForm() {
             </div>
 
             {selectedProfile?.user.skill_levels && selectedProfile.user.skill_levels.length > 0 ? (
-              <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <div className="mt-4 flex w-full flex-col gap-2">
                 {selectedProfile.user.skill_levels.map((skillLevel) => {
                   const isExpanded = expandedSkillId === skillLevel.id
                   const details = skillLevel.latest_evaluation
 
                   return (
-                    <div key={skillLevel.id} className="flex w-full flex-col items-center gap-2">
+                    <div key={skillLevel.id} className="w-full rounded-lg border border-slate-200 bg-slate-50/60">
                       <button
                         type="button"
                         onClick={() => setExpandedSkillId((current) => (current === skillLevel.id ? null : skillLevel.id))}
-                        className="w-full max-w-sm"
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
                       >
-                        <SkillLevelBadge skillLevel={skillLevel} />
+                        <span className="w-full max-w-full">
+                          <SkillLevelBadge skillLevel={skillLevel} />
+                        </span>
+                        <span className="shrink-0 text-xs font-medium text-slate-500">{isExpanded ? 'Hide' : 'Show'}</span>
                       </button>
 
                       {isExpanded && details && (
-                        <div className="w-full max-w-xl rounded-lg border border-slate-100 bg-slate-50/70 p-3 text-left text-xs text-slate-600">
-                          <div className="flex flex-wrap gap-x-4 gap-y-2">
+                        <div className="border-t border-slate-200 bg-white p-3 text-left text-xs text-slate-600">
+                          <div className="grid gap-2 sm:grid-cols-2">
                             {details.criteria?.attributes && Object.entries(details.criteria.attributes).map(([key, value]) => (
-                              <span key={key} className="rounded-full bg-white px-2 py-1 text-slate-700 ring-1 ring-slate-200">
-                                {key.replace(/_/g, ' ')}: <strong>{value}/10</strong>
-                              </span>
+                              <div key={key} className="rounded-md bg-slate-50 px-2.5 py-2 ring-1 ring-slate-200">
+                                <span className="capitalize text-slate-500">{key.replace(/_/g, ' ')}</span>
+                                <div className="mt-1 text-base font-semibold text-slate-800">{value}/10</div>
+                              </div>
                             ))}
                           </div>
 
                           {details.criteria?.sport_stats?.computed && Object.keys(details.criteria.sport_stats.computed).length > 0 && (
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              {Object.entries(details.criteria.sport_stats.computed).map(([key, value]) => (
-                                <span key={key} className="rounded-full bg-teal-50 px-2.5 py-1 font-medium text-teal-700">
-                                  {key.replace(/_/g, ' ')}: {value}
-                                </span>
-                              ))}
+                            <div className="mt-3">
+                              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Computed stats</p>
+                              <div className="flex flex-wrap gap-2">
+                                {Object.entries(details.criteria.sport_stats.computed).map(([key, value]) => (
+                                  <span key={key} className="rounded-full bg-teal-50 px-2.5 py-1 font-medium text-teal-700">
+                                    {key.replace(/_/g, ' ')}: {value}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           )}
 
-                          {details.notes && <p className="mt-3 text-slate-600">Notes: {details.notes}</p>}
+                          {details.notes && <p className="mt-3 rounded-md bg-amber-50 p-2 text-slate-700">Notes: {details.notes}</p>}
                         </div>
                       )}
                     </div>
