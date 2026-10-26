@@ -353,23 +353,29 @@ export function MatchmakingPanel() {
       </div>
 
       {matchedWithReservation.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {matchedWithReservation.map((req) => (
-            <DownPaymentPrompt key={req.id} req={req} />
-          ))}
+        <div className="flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Match paired</p>
+          <div className="flex flex-col gap-3">
+            {matchedWithReservation.map((req) => (
+              <DownPaymentPrompt key={req.id} req={req} />
+            ))}
+          </div>
         </div>
       )}
 
       {openRequests.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {openRequests.map((req) => (
-            <MatchmakingLoader
-              key={req.id}
-              sportName={req.sport.name}
-              cancelling={cancel.isPending}
-              onCancel={() => cancel.mutate(req.id)}
-            />
-          ))}
+        <div className="flex flex-col gap-3 rounded-lg border border-sky-200 bg-sky-50/60 p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Matchmaking</p>
+          <div className="flex flex-col gap-3">
+            {openRequests.map((req) => (
+              <MatchmakingLoader
+                key={req.id}
+                sportName={req.sport.name}
+                cancelling={cancel.isPending}
+                onCancel={() => cancel.mutate(req.id)}
+              />
+            ))}
+          </div>
         </div>
       )}
 

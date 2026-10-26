@@ -56,8 +56,8 @@ function EventDetailModal({ event, onClose }: { event: UpcomingEventCardData; on
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-800">{event.primary}</p>
+          <div className="min-w-0 flex-1">
+            <p className="line-clamp-2 text-sm font-semibold text-slate-800">{event.primary}</p>
             <p className="mt-0.5 text-xs text-slate-500">{event.secondary}</p>
           </div>
           <button onClick={onClose} aria-label="Close" className="shrink-0 text-slate-400 hover:text-slate-600">
@@ -69,79 +69,80 @@ function EventDetailModal({ event, onClose }: { event: UpcomingEventCardData; on
           <StatusBadge status={event.status} />
         </div>
 
-        <div className="mt-4 flex flex-col gap-2 text-xs text-slate-600">
+        <div className="mt-4 grid grid-cols-1 gap-3 text-xs text-slate-600 sm:grid-cols-2">
           {event.kind === 'booking' ? (
             <>
-              <p>
+              <div className="min-w-0">
                 <span className="font-semibold text-slate-700">When:</span>{' '}
                 {new Date(event.booking.starts_at).toLocaleString()} &ndash;{' '}
                 {new Date(event.booking.ends_at).toLocaleTimeString()}
-              </p>
-              <p>
+              </div>
+              <div className="min-w-0">
                 <span className="font-semibold text-slate-700">Where:</span> {event.booking.venue.name}
                 {event.booking.court ? ` — ${event.booking.court.name}` : ''}
-              </p>
-              <p className="text-slate-500">{event.booking.venue.address}</p>
-              <div className="mt-1 overflow-hidden rounded-lg">
+              </div>
+              <div className="min-w-0 text-slate-500 sm:col-span-2">{event.booking.venue.address}</div>
+              <div className="mt-1 overflow-hidden rounded-lg sm:col-span-2">
                 <VenueMap venues={[event.booking.venue]} />
               </div>
             </>
           ) : event.kind === 'tournament' ? (
             <>
-              <p>
+              <div className="min-w-0">
                 <span className="font-semibold text-slate-700">When:</span>{' '}
                 {new Date(event.tournament.starts_at).toLocaleString()}
-              </p>
-              <p>
+              </div>
+              <div className="min-w-0">
                 <span className="font-semibold text-slate-700">Sport:</span> {event.tournament.sport.name}
-              </p>
+              </div>
               {event.tournament.venue ? (
                 <>
-                  <p>
+                  <div className="min-w-0">
                     <span className="font-semibold text-slate-700">Where:</span> {event.tournament.venue.name}
-                  </p>
-                  {venueLoading && <p className="text-slate-400">Loading map...</p>}
-                  {fullVenue && (
-                    <>
-                      <p className="text-slate-500">{fullVenue.address}</p>
-                      <div className="mt-1 overflow-hidden rounded-lg">
-                        <VenueMap venues={[fullVenue]} />
-                      </div>
-                    </>
-                  )}
+                  </div>
+                  <div className="min-w-0 sm:col-span-2">
+                    {venueLoading && <span className="text-slate-400">Loading map...</span>}
+                    {fullVenue && (
+                      <>
+                        <div className="text-slate-500">{fullVenue.address}</div>
+                        <div className="mt-1 overflow-hidden rounded-lg">
+                          <VenueMap venues={[fullVenue]} />
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </>
               ) : (
-                <p className="text-slate-400">Venue not assigned yet.</p>
+                <div className="min-w-0 text-slate-400 sm:col-span-2">Venue not assigned yet.</div>
               )}
             </>
           ) : (
             <>
-              <p>
+              <div className="min-w-0">
                 <span className="font-semibold text-slate-700">When:</span>{' '}
                 {new Date(event.matchmaking.venue_registration?.starts_at ?? event.matchmaking.preferred_start_at ?? 0).toLocaleString()} &ndash;{' '}
                 {new Date(event.matchmaking.venue_registration?.ends_at ?? event.matchmaking.preferred_end_at ?? 0).toLocaleTimeString()}
-              </p>
-              <p>
+              </div>
+              <div className="min-w-0">
                 <span className="font-semibold text-slate-700">Sport:</span> {event.matchmaking.sport.name}
-              </p>
-              <p>
+              </div>
+              <div className="min-w-0">
                 <span className="font-semibold text-slate-700">Opponent:</span>{' '}
                 {event.matchmaking.opponent?.name ?? event.matchmaking.opponent_team?.name ?? 'TBD'}
-              </p>
+              </div>
               {event.matchmaking.venue ? (
-                <>
-                  <p>
-                    <span className="font-semibold text-slate-700">Where:</span> {event.matchmaking.venue.name}
-                  </p>
+                <div className="min-w-0">
+                  <span className="font-semibold text-slate-700">Where:</span> {event.matchmaking.venue.name}
                   {event.matchmaking.venue_registration?.court && (
-                    <p>
+                    <>
+                      <br />
                       <span className="font-semibold text-slate-700">Court:</span>{' '}
                       {event.matchmaking.venue_registration.court.name}
-                    </p>
+                    </>
                   )}
-                </>
+                </div>
               ) : (
-                <p className="text-slate-400">No venue assigned yet.</p>
+                <div className="min-w-0 text-slate-400">No venue assigned yet.</div>
               )}
             </>
           )}
