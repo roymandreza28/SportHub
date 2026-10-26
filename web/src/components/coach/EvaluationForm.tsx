@@ -30,8 +30,17 @@ function CollapsibleSection({ title, children }: { title: string; children: Reac
   )
 }
 
-function allowedEvaluationTiers(currentLevel: SkillLevelTier | null, sportName: string | undefined): SkillLevelTier[] {
+function allowedEvaluationTiers(
+  currentLevel: SkillLevelTier | null,
+  sportName: string | undefined,
+  hasSportHistory: boolean,
+): SkillLevelTier[] {
   const allTiers = tiersFor(sportName)
+
+  if (!hasSportHistory) {
+    return allTiers.filter((tier) => tier === 'beginner' || tier === 'casual_player')
+  }
+
   if (!currentLevel) return allTiers
 
   const currentIndex = SKILL_LEVELS.indexOf(currentLevel)
@@ -58,10 +67,16 @@ export function EvaluationForm() {
   const [sportId, setSportId] = useState<number | ''>('')
   const [level, setLevel] = useState<SkillLevelTier>('beginner')
   const activeSport = sports?.find((s) => s.id === sportId)
+  const hasSportHistory = !!(
+    activeSport && (
+      selectedProfile?.user.skill_levels.some((skill) => skill.sport.name === activeSport.name) ||
+      selectedStatSummary?.sports.some((summary) => summary.sport_name === activeSport.name)
+    )
+  )
   const currentPlayerLevel = selectedProfile?.user.skill_levels.find(
     (skill) => skill.sport_id === Number(sportId) || skill.sport.id === Number(sportId)
   )?.level ?? null
-  const availableTiers = allowedEvaluationTiers(currentPlayerLevel, activeSport?.name)
+  const availableTiers = allowedEvaluationTiers(currentPlayerLevel, activeSport?.name, hasSportHistory)
 
   useEffect(() => {
     if (!sportId) {
@@ -210,10 +225,16 @@ export function EvaluationForm() {
                   setRawStats({})
                   setAttributes({})
                   const nextSportName = sports?.find((s) => s.id === nextSportId)?.name
+                  const nextSportHistory = !!(
+                    nextSportName && (
+                      selectedProfile?.user.skill_levels.some((skill) => skill.sport.name === nextSportName) ||
+                      selectedStatSummary?.sports.some((summary) => summary.sport_name === nextSportName)
+                    )
+                  )
                   const nextPlayerTier = selectedProfile?.user.skill_levels.find(
                     (skill) => skill.sport_id === Number(nextSportId) || skill.sport.id === Number(nextSportId)
                   )?.level ?? null
-                  const nextTiers = allowedEvaluationTiers(nextPlayerTier, nextSportName)
+                  const nextTiers = allowedEvaluationTiers(nextPlayerTier, nextSportName, nextSportHistory)
                   if (!nextTiers.includes(level)) setLevel(nextTiers[0] ?? 'beginner')
                 }}
                 className={select}
