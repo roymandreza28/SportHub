@@ -19,9 +19,9 @@ export function PlayerSearchPicker({
 
   const normalizedSearch = search.trim().toLowerCase()
   const filteredResults = (results ?? []).filter((player) => {
-    const name = player.name.toLowerCase()
+    const nameParts = player.name.toLowerCase().split(/\s+/)
     const email = player.email.toLowerCase()
-    return name.startsWith(normalizedSearch) || email.startsWith(normalizedSearch)
+    return nameParts.some((part) => part.startsWith(normalizedSearch)) || email.startsWith(normalizedSearch)
   })
   const visibleResults = filteredResults.slice(0, 5)
 
