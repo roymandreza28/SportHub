@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createEvaluation, type PlayerSearchResult } from '../../lib/coachApi'
-import { fetchProfile } from '../../lib/socialApi'
+import { fetchPlayerStatSummary, fetchProfile } from '../../lib/socialApi'
 import { fetchSports } from '../../lib/venueApi'
-import { SKILL_LEVEL_LABELS, tiersFor, criteriaFor, type SkillLevelTier } from '../../lib/skillLevels'
+import { SKILL_LEVELS, SKILL_LEVEL_LABELS, tiersFor, criteriaFor, type SkillLevelTier } from '../../lib/skillLevels'
 import { SPORT_ATTRIBUTE_CRITERIA, SPORT_STAT_FIELDS, SPORT_COMPUTED_FIELDS, computeSportStats } from '../../lib/evaluationCriteria'
 import { PlayerSearchPicker } from './PlayerSearchPicker'
 import { PlayerSkillHistoryChart } from './PlayerSkillHistoryChart'
@@ -30,6 +30,15 @@ function CollapsibleSection({ title, children }: { title: string; children: Reac
   )
 }
 
+function allowedEvaluationTiers(currentLevel: SkillLevelTier | null, sportName: string | undefined): SkillLevelTier[] {
+  const allTiers = tiersFor(sportName)
+  if (!currentLevel) return allTiers
+
+  const currentIndex = SKILL_LEVELS.indexOf(currentLevel)
+  const maxIndex = Math.min(currentIndex + 1, allTiers.length - 1)
+  return allTiers.slice(Math.max(0, currentIndex), maxIndex + 1)
+}
+
 export function EvaluationForm() {
   const queryClient = useQueryClient()
   const { data: sports } = useQuery({ queryKey: ['sports'], queryFn: fetchSports })
@@ -41,18 +50,50 @@ export function EvaluationForm() {
     queryFn: () => fetchProfile(player!.id),
     enabled: !!player,
   })
+  const { data: selectedStatSummary } = useQuery({
+    queryKey: ['social', 'stat-summary', player?.id],
+    queryFn: () => fetchPlayerStatSummary(player!.id),
+    enabled: !!player,
+  })
   const [sportId, setSportId] = useState<number | ''>('')
   const [level, setLevel] = useState<SkillLevelTier>('beginner')
+  const activeSport = sports?.find((s) => s.id === sportId)
+  const currentPlayerLevel = selectedProfile?.user.skill_levels.find(
+    (skill) => skill.sport_id === Number(sportId) || skill.sport.id === Number(sportId)
+  )?.level ?? null
+  const availableTiers = allowedEvaluationTiers(currentPlayerLevel, activeSport?.name)
+
+  useEffect(() => {
+    if (!sportId) {
+      setLevel('beginner')
+      return
+    }
+
+    if (!availableTiers.includes(level)) {
+      setLevel(availableTiers[0] ?? 'beginner')
+    }
+  }, [sportId, availableTiers, level])
   const [score, setScore] = useState('')
   const [notes, setNotes] = useState('')
   const [attributes, setAttributes] = useState<Partial<Record<string, number>>>({})
   const [rawStats, setRawStats] = useState<Record<string, string>>({})
 
-  const sportName = sports?.find((s) => s.id === sportId)?.name
+  const recommendedSportNames = new Set<string>([
+    ...(selectedProfile?.user.skill_levels ?? []).map((skill) => skill.sport.name),
+    ...(selectedStatSummary?.sports ?? []).map((summary) => summary.sport_name),
+  ])
+
+  const orderedSports = [...(sports ?? [])].sort((a, b) => {
+    const aRecommended = recommendedSportNames.has(a.name) ? 0 : 1
+    const bRecommended = recommendedSportNames.has(b.name) ? 0 : 1
+    if (aRecommended !== bRecommended) return aRecommended - bRecommended
+    return a.name.localeCompare(b.name)
+  })
+
+  const sportName = activeSport?.name
   const statFields = sportName ? SPORT_STAT_FIELDS[sportName] : undefined
   const computedFields = sportName ? SPORT_COMPUTED_FIELDS[sportName] : undefined
   const attributeFields = sportName ? SPORT_ATTRIBUTE_CRITERIA[sportName] : undefined
-  const availableTiers = tiersFor(sportName)
   const tierCriteria = criteriaFor(sportName, level)
 
   const rawStatsNumeric = Object.fromEntries(
@@ -168,17 +209,24 @@ export function EvaluationForm() {
                   setSportId(nextSportId)
                   setRawStats({})
                   setAttributes({})
-                  const nextTiers = tiersFor(sports?.find((s) => s.id === nextSportId)?.name)
-                  if (!nextTiers.includes(level)) setLevel(nextTiers[0])
+                  const nextSportName = sports?.find((s) => s.id === nextSportId)?.name
+                  const nextPlayerTier = selectedProfile?.user.skill_levels.find(
+                    (skill) => skill.sport_id === Number(nextSportId) || skill.sport.id === Number(nextSportId)
+                  )?.level ?? null
+                  const nextTiers = allowedEvaluationTiers(nextPlayerTier, nextSportName)
+                  if (!nextTiers.includes(level)) setLevel(nextTiers[0] ?? 'beginner')
                 }}
                 className={select}
               >
                 <option value="">Sport...</option>
-                {sports?.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
+                {orderedSports.map((s) => {
+                  const isRecommended = recommendedSportNames.has(s.name)
+                  return (
+                    <option key={s.id} value={s.id}>
+                      {isRecommended ? `Recommended — ${s.name}` : s.name}
+                    </option>
+                  )
+                })}
               </select>
             </div>
             <div className={fieldGroup}>
