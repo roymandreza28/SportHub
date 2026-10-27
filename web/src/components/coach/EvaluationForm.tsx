@@ -8,6 +8,7 @@ import { SPORT_ATTRIBUTE_CRITERIA, SPORT_STAT_FIELDS, SPORT_COMPUTED_FIELDS, com
 import { PlayerSearchPicker } from './PlayerSearchPicker'
 import { PlayerSkillHistoryChart } from './PlayerSkillHistoryChart'
 import { SkillLevelBadge } from '../player/SkillLevelBadge'
+import { SkillEvaluationChart } from '../player/SkillEvaluationChart'
 import { Avatar } from '../layout/Avatar'
 import { buttonPrimary, fieldGroup, input, label, select, textarea } from '../../lib/formStyles'
 import { IconChevronDown } from '../layout/icons'
@@ -180,14 +181,28 @@ export function EvaluationForm() {
 
                       {isExpanded && details && (
                         <div className="border-t border-slate-200 bg-white p-3 text-left text-xs text-slate-600">
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {details.criteria?.attributes && Object.entries(details.criteria.attributes).map(([key, value]) => (
-                              <div key={key} className="rounded-md bg-slate-50 px-2.5 py-2 ring-1 ring-slate-200">
-                                <span className="capitalize text-slate-500">{key.replace(/_/g, ' ')}</span>
-                                <div className="mt-1 text-base font-semibold text-slate-800">{value}/10</div>
+                          {details.criteria?.attributes && Object.keys(details.criteria.attributes).length > 0 && (
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                              <SkillEvaluationChart
+                                sportName={skillLevel.sport.name}
+                                attributes={details.criteria.attributes}
+                                caption={skillLevel.coach ? `Evaluated by ${skillLevel.coach.name}` : undefined}
+                              />
+                            </div>
+                          )}
+
+                          {details.criteria?.attributes && Object.keys(details.criteria.attributes).length > 0 && (
+                            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Attribute ratings</p>
+                              <div className="flex flex-wrap gap-x-3 gap-y-2">
+                                {Object.entries(details.criteria.attributes).map(([key, value]) => (
+                                  <span key={key} className="text-xs text-slate-600">
+                                    {key.replace(/_/g, ' ')}: <strong className="font-semibold text-slate-800">{value}/10</strong>
+                                  </span>
+                                ))}
                               </div>
-                            ))}
-                          </div>
+                            </div>
+                          )}
 
                           {details.criteria?.sport_stats?.computed && Object.keys(details.criteria.sport_stats.computed).length > 0 && (
                             <div className="mt-3">
