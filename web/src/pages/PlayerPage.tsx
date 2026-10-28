@@ -197,11 +197,19 @@ export function PlayerPage() {
 
       {active === 'venues' && (
         <Section title="Venues & Bookings" compact>
-          <div className="mb-4 flex gap-2">
-            <button type="button" className={chip(venuesSubTab === 'venues')} onClick={() => setVenuesSubTab('venues')}>
+          <div className="mb-4 grid w-full grid-cols-2 gap-2">
+            <button
+              type="button"
+              className={`${chip(venuesSubTab === 'venues')} inline-flex w-full items-center justify-center`}
+              onClick={() => setVenuesSubTab('venues')}
+            >
               Venues
             </button>
-            <button type="button" className={chip(venuesSubTab === 'bookings')} onClick={() => setVenuesSubTab('bookings')}>
+            <button
+              type="button"
+              className={`${chip(venuesSubTab === 'bookings')} inline-flex w-full items-center justify-center`}
+              onClick={() => setVenuesSubTab('bookings')}
+            >
               My Bookings
             </button>
           </div>

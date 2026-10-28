@@ -17,13 +17,13 @@ export function VenueDirectory({ onSelect, selectedId }: { onSelect: (venue: Ven
   const filtered = (venues ?? []).filter((v) => v.name.toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex w-full flex-col gap-4">
       <input
         type="text"
         placeholder="Search venues"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className={`${input} max-w-sm`}
+        className={`${input} w-full`}
       />
 
       {isLoading && <p className="text-sm text-slate-500">Loading...</p>}

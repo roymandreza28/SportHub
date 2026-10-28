@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createEvaluation, type PlayerSearchResult } from '../../lib/coachApi'
 import { fetchPlayerStatSummary, fetchProfile } from '../../lib/socialApi'
+import { fetchMatchRecord } from '../../lib/organizerApi'
 import { fetchSports } from '../../lib/venueApi'
 import { SKILL_LEVELS, SKILL_LEVEL_LABELS, tiersFor, criteriaFor, type SkillLevelTier } from '../../lib/skillLevels'
 import { SPORT_ATTRIBUTE_CRITERIA, SPORT_STAT_FIELDS, SPORT_COMPUTED_FIELDS, computeSportStats } from '../../lib/evaluationCriteria'
@@ -27,6 +28,66 @@ function CollapsibleSection({ title, children }: { title: string; children: Reac
         <IconChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && <div className="mt-2 rounded-lg border border-slate-200 bg-white p-4">{children}</div>}
+    </div>
+  )
+}
+
+function GameHistoryDetails({ matchId }: { matchId: number }) {
+  const { data: record, isLoading } = useQuery({
+    queryKey: ['match-record', matchId],
+    queryFn: () => fetchMatchRecord(matchId),
+  })
+
+  if (isLoading) return <p className="mt-2 text-xs text-slate-500">Loading stat sheet...</p>
+  if (!record || record.stat_sheets.length === 0) {
+    return <p className="mt-2 text-xs text-slate-400">No detailed stat sheet recorded for this match.</p>
+  }
+
+  return (
+    <div className="mt-3 flex flex-col gap-3">
+      {record.stat_sheets.map((sheet, index) => {
+        const rows =
+          sheet.mode === 'roster'
+            ? (sheet.data.rows ?? []).map((row) => ({ id: row.player_id, name: row.name, stats: row.stats }))
+            : [{ id: 0, name: sheet.participant_name ?? 'Player', stats: sheet.data.values ?? {} }]
+
+        return (
+          <div key={`${sheet.participant_name ?? 'sheet'}-${index}`} className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50/60">
+            <p className="border-b border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              {sheet.participant_name ?? 'Stat sheet'}
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-left text-slate-500">
+                    <th className="px-2.5 py-1.5 font-medium">Player</th>
+                    {sheet.fields.map((field) => (
+                      <th key={field.key} className="px-2 py-1.5 text-right font-medium">
+                        {field.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.id} className="border-t border-slate-100">
+                      <td className="truncate px-2.5 py-1.5 font-medium text-slate-700">{row.name}</td>
+                      {sheet.fields.map((field) => (
+                        <td key={field.key} className="px-2 py-1.5 text-right tabular-nums text-slate-600">
+                          {row.stats[field.key] ?? 0}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {sheet.data.further_comments && (
+              <p className="border-t border-slate-200 bg-white px-3 py-2 italic text-slate-500">"{sheet.data.further_comments}"</p>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -463,6 +524,10 @@ export function EvaluationForm() {
                             <div><span className="font-medium text-slate-700">Result:</span> {entry.result}</div>
                           </div>
                           {entry.score && <p className="mt-2"><span className="font-medium text-slate-700">Score:</span> {entry.score}</p>}
+                          <div className="mt-3">
+                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Match stat sheet</p>
+                            <GameHistoryDetails matchId={entry.match_id} />
+                          </div>
                         </div>
                       )}
                     </div>
