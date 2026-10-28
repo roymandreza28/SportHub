@@ -95,6 +95,7 @@ export function EvaluationForm() {
   const [notes, setNotes] = useState('')
   const [attributes, setAttributes] = useState<Partial<Record<string, number>>>({})
   const [rawStats, setRawStats] = useState<Record<string, string>>({})
+  const [expandedGameId, setExpandedGameId] = useState<number | null>(null)
 
   const recommendedSportNames = new Set<string>([
     ...(selectedProfile?.user.skill_levels ?? []).map((skill) => skill.sport.name),
@@ -413,6 +414,63 @@ export function EvaluationForm() {
             <h4 className={`${label} mb-2`}>Skill history</h4>
             <PlayerSkillHistoryChart playerId={player.id} />
           </div>
+
+          {selectedStatSummary && selectedStatSummary.history.length > 0 && (
+            <div className="border-t border-slate-100 pt-4">
+              <h4 className={`${label} mb-2`}>Game history</h4>
+              <div className="flex flex-col gap-2">
+                {selectedStatSummary.history.map((entry) => {
+                  const expanded = expandedGameId === entry.match_id
+                  return (
+                    <div key={entry.match_id} className="rounded-lg border border-slate-200 bg-slate-50/50">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedGameId((current) => (current === entry.match_id ? null : entry.match_id))}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-800">
+                            {entry.sport_name} vs {entry.opponent_name}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {entry.tournament_name ?? 'Tournament'}
+                            {entry.date ? ` · ${new Date(entry.date).toLocaleDateString()}` : ''}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {entry.score && <span className="text-xs text-slate-400">{entry.score}</span>}
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                              entry.result === 'win'
+                                ? 'bg-teal-100 text-teal-700'
+                                : entry.result === 'loss'
+                                  ? 'bg-rose-100 text-rose-700'
+                                  : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {entry.result === 'win' ? 'W' : entry.result === 'loss' ? 'L' : 'D'}
+                          </span>
+                          <span className="text-xs font-medium text-slate-500">{expanded ? 'Hide' : 'Details'}</span>
+                        </div>
+                      </button>
+
+                      {expanded && (
+                        <div className="border-t border-slate-200 bg-white p-3 text-xs text-slate-600">
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <div><span className="font-medium text-slate-700">Tournament:</span> {entry.tournament_name ?? 'N/A'}</div>
+                            <div><span className="font-medium text-slate-700">Date:</span> {entry.date ? new Date(entry.date).toLocaleDateString() : 'N/A'}</div>
+                            <div><span className="font-medium text-slate-700">Opponent:</span> {entry.opponent_name}</div>
+                            <div><span className="font-medium text-slate-700">Result:</span> {entry.result}</div>
+                          </div>
+                          {entry.score && <p className="mt-2"><span className="font-medium text-slate-700">Score:</span> {entry.score}</p>}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
