@@ -1,8 +1,17 @@
 import { buttonDanger } from '../../lib/formStyles'
 
-// Continuous rotation for every "spinning" sport (basketball, badminton,
-// tennis, pickleball, table tennis) — a shared keyframe so they all spin at
-// the same speed instead of each SVG rolling its own animation timing.
+const SPORT_ACCENTS: Record<string, string> = {
+  basketball: '#f97316',
+  volleyball: '#2563eb',
+  badminton: '#f43f5e',
+  tennis: '#84cc16',
+  pickleball: '#facc15',
+  'table tennis': '#fb923c',
+  soccer: '#22c55e',
+  football: '#22c55e',
+  default: '#14b8a6',
+}
+
 const spin = 'animate-[spin_1.8s_linear_infinite]'
 
 function BasketballIcon() {
@@ -76,11 +85,9 @@ function TennisBallIcon() {
 }
 
 function PickleballIcon() {
-  // Small hole pattern scattered across the face, mimicking a whiffle-style
-  // pickleball rather than a smooth ball.
   const holes = [
-    [50, 22], [32, 30], [68, 30], [22, 50], [78, 50],
-    [32, 70], [68, 70], [50, 78], [50, 50], [40, 42], [60, 42], [40, 58], [60, 58],
+    [50, 22], [32, 30], [68, 30], [22, 50], [78, 50], [32, 70], [68, 70], [50, 78], [50, 50], [40, 42],
+    [60, 42], [40, 58], [60, 58],
   ]
   return (
     <svg viewBox="0 0 100 100" className={`h-full w-full ${spin}`}>
@@ -93,11 +100,6 @@ function PickleballIcon() {
 }
 
 function TableTennisIcon() {
-  // Previously an all near-white palette (fill/stroke/highlight) on this
-  // card's near-white bg-teal-50/50 background, making the icon render but
-  // be effectively invisible — switched to the orange competition-ball
-  // colorway used at most table tennis clubs, matching every other icon
-  // here's use of a strongly saturated fill against a darker stroke.
   return (
     <svg viewBox="0 0 100 100" className={`h-full w-full ${spin}`}>
       <circle cx="50" cy="50" r="46" fill="#fb923c" stroke="#c2410c" strokeWidth="3" />
@@ -143,18 +145,55 @@ export function MatchmakingLoader({
   onCancel: () => void
   cancelling: boolean
 }) {
+  const accent = SPORT_ACCENTS[sportName.trim().toLowerCase()] ?? SPORT_ACCENTS.default
+
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-teal-100 bg-teal-50/50 p-6 text-center">
-      <div className="h-20 w-20">
-        <SportIcon sportName={sportName} />
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-teal-50/80 p-5 shadow-sm">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.9),_transparent_55%)]" />
+      <div className="relative flex flex-col items-center gap-4 text-center">
+        <div className="relative flex h-24 w-24 items-center justify-center">
+          <div
+            className="absolute inset-0 rounded-full border-2 border-dashed opacity-80"
+            style={{ borderColor: accent, animation: 'spin-slow 4s linear infinite' }}
+          />
+          <div
+            className="absolute inset-2 rounded-full border border-white/80"
+            style={{ boxShadow: `inset 0 0 20px ${accent}33, 0 0 18px ${accent}22` }}
+          />
+          <div
+            className="absolute inset-3 rounded-full"
+            style={{
+              background: `radial-gradient(circle, ${accent}20 0%, ${accent}10 38%, rgba(255,255,255,0.4) 62%, rgba(255,255,255,0.05) 100%)`,
+            }}
+          />
+          <div className="relative h-12 w-12 drop-shadow-[0_0_16px_rgba(20,184,166,0.35)]">
+            <SportIcon sportName={sportName} />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <p className="text-sm font-semibold text-slate-800">
+            Looking for a <span style={{ color: accent }}>{sportName}</span> match
+            <span className="ml-1 inline-flex gap-1 align-middle">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.2s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.1s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+            </span>
+          </p>
+          <p className="text-xs text-slate-500">We'll alert you as soon as a suitable opponent is found.</p>
+        </div>
+
+        <button onClick={onCancel} disabled={cancelling} className={buttonDanger}>
+          {cancelling ? 'Cancelling...' : 'Cancel Matchmaking'}
+        </button>
       </div>
-      <div>
-        <p className="text-sm font-semibold text-slate-800">Looking for a {sportName} match&hellip;</p>
-        <p className="mt-0.5 text-xs text-slate-500">We'll notify you the instant an opponent is found.</p>
-      </div>
-      <button onClick={onCancel} disabled={cancelling} className={buttonDanger}>
-        {cancelling ? 'Cancelling...' : 'Cancel Matchmaking'}
-      </button>
+
+      <style>{`
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   )
 }
