@@ -555,10 +555,10 @@ export function OrganizerPage() {
           }
         >
           {canManageTournaments && (
-            <div className="mb-4 flex justify-end">
+            <div className="mb-4">
               <button
                 onClick={() => setShowCreateTournamentModal(true)}
-                className={buttonPrimary}
+                className={`${buttonPrimary} w-full justify-center`}
               >
                 + Create tournament
               </button>
