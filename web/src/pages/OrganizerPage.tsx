@@ -566,7 +566,10 @@ export function OrganizerPage() {
           )}
 
           {showCreateTournamentModal && canManageTournaments && (
-            <TournamentWizard onClose={() => setShowCreateTournamentModal(false)} />
+            <TournamentWizard
+              defaultOpen={showCreateTournamentModal}
+              onClose={() => setShowCreateTournamentModal(false)}
+            />
           )}
 
           <div className={canManageTournaments ? 'mt-4 border-t border-slate-100 pt-4' : ''}>

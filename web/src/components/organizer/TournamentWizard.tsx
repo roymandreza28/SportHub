@@ -96,7 +96,13 @@ const SCORING_OPTIONS: { value: string; label: string; scoringType: ScoringType;
   { value: 'best_of_7', label: 'Best of 7 sets', scoringType: 'best_of_sets', setsToWin: 4 },
 ]
 
-export function TournamentWizard({ onClose }: { onClose?: () => void } = {}) {
+export function TournamentWizard({
+  onClose,
+  defaultOpen = false,
+}: {
+  onClose?: () => void
+  defaultOpen?: boolean
+} = {}) {
   const queryClient = useQueryClient()
   const { hasRole } = useAuth()
   // A venue facilitator can only ever hold their tournament at a venue they
@@ -120,7 +126,11 @@ export function TournamentWizard({ onClose }: { onClose?: () => void } = {}) {
   // Collapsed by default — the full form is a dozen-plus fields, which used
   // to sit permanently expanded above the tournament list every time this
   // tab was opened, even just to check on existing tournaments.
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(defaultOpen)
+
+  useEffect(() => {
+    setOpen(defaultOpen)
+  }, [defaultOpen])
 
   const [sportId, setSportId] = useState<number | ''>('')
   const [sportFormatId, setSportFormatId] = useState<number | ''>('')
