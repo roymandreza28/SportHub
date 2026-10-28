@@ -160,6 +160,7 @@ export function OrganizerPage() {
   })
 
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
+  const [showCreateTournamentModal, setShowCreateTournamentModal] = useState(false)
   const [editingTournamentId, setEditingTournamentId] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState({ name: '', starts_at: '' })
   const [activeMatchId, setActiveMatchId] = useState<number | null>(null)
@@ -527,7 +528,13 @@ export function OrganizerPage() {
               ))}
               action={
                 <button
-                  onClick={() => setActive('tournaments')}
+                  onClick={() => {
+                    if (canManageTournaments) {
+                      setShowCreateTournamentModal(true)
+                      return
+                    }
+                    setActive('tournaments')
+                  }}
                   className="text-sm font-medium text-teal-600 hover:text-teal-700"
                 >
                   {canManageTournaments ? 'Create tournament' : 'Open scoreboard'} &rarr;
@@ -547,7 +554,20 @@ export function OrganizerPage() {
               : 'Pick a tournament to run its live scoreboard.'
           }
         >
-          {canManageTournaments && <TournamentWizard />}
+          {canManageTournaments && (
+            <div className="mb-4 flex justify-end">
+              <button
+                onClick={() => setShowCreateTournamentModal(true)}
+                className={buttonPrimary}
+              >
+                + Create tournament
+              </button>
+            </div>
+          )}
+
+          {showCreateTournamentModal && canManageTournaments && (
+            <TournamentWizard onClose={() => setShowCreateTournamentModal(false)} />
+          )}
 
           <div className={canManageTournaments ? 'mt-4 border-t border-slate-100 pt-4' : ''}>
             <h3 className="mb-2 text-sm font-medium text-slate-700">

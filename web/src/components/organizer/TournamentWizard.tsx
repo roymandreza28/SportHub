@@ -96,7 +96,7 @@ const SCORING_OPTIONS: { value: string; label: string; scoringType: ScoringType;
   { value: 'best_of_7', label: 'Best of 7 sets', scoringType: 'best_of_sets', setsToWin: 4 },
 ]
 
-export function TournamentWizard() {
+export function TournamentWizard({ onClose }: { onClose?: () => void } = {}) {
   const queryClient = useQueryClient()
   const { hasRole } = useAuth()
   // A venue facilitator can only ever hold their tournament at a venue they
@@ -208,22 +208,14 @@ export function TournamentWizard() {
     },
   })
 
-  if (!open) {
-    return (
-      <button onClick={() => setOpen(true)} className={buttonPrimary}>
-        + Create tournament
-      </button>
-    )
+  const closeModal = () => {
+    setOpen(false)
+    onClose?.()
   }
 
-  return (
+  const renderContent = () => (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-800">Create a tournament</h3>
-        <button onClick={() => setOpen(false)} className="text-xs font-medium text-slate-500 hover:text-slate-700">
-          Minimize
-        </button>
-      </div>
+      <h3 className="text-sm font-semibold text-slate-800">Create a tournament</h3>
 
       <div className="grid max-w-xl gap-4 sm:grid-cols-2">
         <div className={fieldGroup}>
@@ -512,4 +504,32 @@ export function TournamentWizard() {
       )}
     </div>
   )
+
+  if (!open) {
+    if (onClose) return null
+
+    return (
+      <button onClick={() => setOpen(true)} className={buttonPrimary}>
+        + Create tournament
+      </button>
+    )
+  }
+
+  if (onClose) {
+    return (
+      <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+        <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold text-slate-900">Create a tournament</h3>
+            <button onClick={closeModal} className="text-sm font-medium text-slate-500 hover:text-slate-700">
+              Close
+            </button>
+          </div>
+          <div className="flex flex-col gap-4">{renderContent()}</div>
+        </div>
+      </div>
+    )
+  }
+
+  return renderContent()
 }

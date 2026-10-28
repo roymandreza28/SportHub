@@ -174,9 +174,17 @@ export function MatchmakingPanel() {
   // "every still-searching request", not just the one just submitted — each
   // gets its own sport-specific loading card. Anything already resolved
   // (matched/expired/cancelled) moves down into the plain history list below
-  // instead, so it isn't shown twice.
+  // instead, so it isn't shown twice. A join-match cancellation is treated as
+  // a transient action rather than history — only a create-match cancellation
+  // (the one that actually specified a venue/time preference) remains visible
+  // as a historical record. See MatchmakingPanel.tsx's user-facing filtering
+  // rule for the intent behind this split.
   const openRequests = (requests ?? []).filter((r) => r.status === 'open')
-  const resolvedRequests = (requests ?? []).filter((r) => r.status !== 'open')
+  const resolvedRequests = (requests ?? []).filter(
+    (r) =>
+      r.status !== 'open' &&
+      !(r.status === 'cancelled' && !r.venue && !r.preferred_start_at)
+  )
   // Surfaced above everything else, not buried in "Match history" — this is
   // the down-payment prompt itself, and a player shouldn't have to go
   // looking for it. Scoped to a still-pending reservation only: the backend
@@ -194,17 +202,29 @@ export function MatchmakingPanel() {
   )
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
-          <button type="button" className={chip(mode === 'join')} onClick={() => switchMode('join')}>
+    <div className="flex w-full flex-col gap-4">
+      <div className="grid w-full gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="grid w-full grid-cols-2 gap-2">
+          <button
+            type="button"
+            className={`${chip(mode === 'join')} w-full justify-center`}
+            onClick={() => switchMode('join')}
+          >
             Join Match
           </button>
-          <button type="button" className={chip(mode === 'create')} onClick={() => switchMode('create')}>
+          <button
+            type="button"
+            className={`${chip(mode === 'create')} w-full justify-center`}
+            onClick={() => switchMode('create')}
+          >
             Create Match
           </button>
         </div>
-        <button type="button" onClick={() => setShowTeamsModal(true)} className={buttonGhost}>
+        <button
+          type="button"
+          onClick={() => setShowTeamsModal(true)}
+          className={`${buttonGhost} inline-flex w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 font-medium shadow-sm hover:bg-slate-50 md:min-w-[160px]`}
+        >
           Manage teams
         </button>
       </div>
@@ -342,8 +362,8 @@ export function MatchmakingPanel() {
           </>
         )}
 
-        <div className="flex flex-col gap-1.5">
-          <button onClick={() => request.mutate()} disabled={!canSubmit} className={`${buttonPrimary} self-start`}>
+        <div className="flex w-full flex-col gap-1.5">
+          <button onClick={() => request.mutate()} disabled={!canSubmit} className={`${buttonPrimary} w-full`}>
             {mode === 'join' ? 'Find a match' : 'Create match'}
           </button>
           {!isVerified && (
