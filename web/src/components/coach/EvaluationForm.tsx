@@ -191,19 +191,6 @@ export function EvaluationForm() {
                             </div>
                           )}
 
-                          {details.criteria?.attributes && Object.keys(details.criteria.attributes).length > 0 && (
-                            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Attribute ratings</p>
-                              <div className="flex flex-wrap gap-x-3 gap-y-2">
-                                {Object.entries(details.criteria.attributes).map(([key, value]) => (
-                                  <span key={key} className="text-xs text-slate-600">
-                                    {key.replace(/_/g, ' ')}: <strong className="font-semibold text-slate-800">{value}/10</strong>
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
                           {details.criteria?.sport_stats?.computed && Object.keys(details.criteria.sport_stats.computed).length > 0 && (
                             <div className="mt-3">
                               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Computed stats</p>
