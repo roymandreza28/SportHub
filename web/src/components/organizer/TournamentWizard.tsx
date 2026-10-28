@@ -227,7 +227,7 @@ export function TournamentWizard({
     <div className="flex flex-col gap-4">
       <h3 className="text-sm font-semibold text-slate-800">Create a tournament</h3>
 
-      <div className="grid max-w-xl gap-4 sm:grid-cols-2">
+      <div className="grid w-full gap-4 sm:grid-cols-2">
         <div className={fieldGroup}>
           <label className={label}>Sport</label>
           <select
@@ -452,7 +452,7 @@ export function TournamentWizard({
         )}
       </div>
 
-      <div className="max-w-xl border-t border-slate-200 pt-4">
+      <div className="w-full border-t border-slate-200 pt-4">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Newsfeed announcement (optional)</h4>
         <p className="mb-3 text-xs text-slate-500">
           Posts to the newsfeed once you open registration. Coaches can tap it to register their team.
@@ -503,7 +503,7 @@ export function TournamentWizard({
             !hasValidAgeRange ||
             createMutation.isPending
           }
-          className={buttonPrimary}
+          className={`${buttonPrimary} w-full`}
         >
           {createMutation.isPending ? 'Creating...' : 'Create tournament'}
         </button>
@@ -528,7 +528,7 @@ export function TournamentWizard({
   if (onClose) {
     return (
       <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-        <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+        <div className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="text-lg font-semibold text-slate-900">Create a tournament</h3>
             <button onClick={closeModal} className="text-sm font-medium text-slate-500 hover:text-slate-700">

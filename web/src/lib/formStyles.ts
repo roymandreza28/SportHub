@@ -15,7 +15,7 @@ export const textarea = input + ' resize-y'
 
 export const label = 'text-xs font-semibold uppercase tracking-wide text-slate-500'
 
-export const fieldGroup = 'flex flex-col gap-1.5'
+export const fieldGroup = 'flex w-full flex-col gap-1.5'
 
 // active:scale-[0.98] dropped from the shared base — .grad-surface/
 // .grad-brand (index.css) already choreograph their own press feedback,
