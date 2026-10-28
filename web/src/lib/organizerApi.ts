@@ -232,11 +232,6 @@ export async function cancelTournament(tournamentId: number) {
   return data
 }
 
-export async function archiveTournament(tournamentId: number) {
-  const { data } = await api.post<Tournament>(`/api/tournaments/${tournamentId}/archive`)
-  return data
-}
-
 export async function scheduleMatch(matchId: number, input: { scheduled_at?: string | null; court_id?: number | null }) {
   const { data } = await api.patch<BracketMatch>(`/api/matches/${matchId}/schedule`, input)
   return data

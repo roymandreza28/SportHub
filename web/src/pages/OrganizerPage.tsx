@@ -7,7 +7,6 @@ import {
   updateTournament,
   proceedTournament,
   cancelTournament,
-  archiveTournament,
   generateBracket,
   exportTournamentRegistrations,
   exportTournamentResults,
@@ -150,11 +149,6 @@ export function OrganizerPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] }),
   })
 
-  const archiveMutation = useMutation({
-    mutationFn: archiveTournament,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] }),
-  })
-
   const editMutation = useMutation({
     mutationFn: ({ tournamentId, name, starts_at }: { tournamentId: number; name: string; starts_at: string }) =>
       updateTournament(tournamentId, { name, starts_at }),
@@ -166,7 +160,6 @@ export function OrganizerPage() {
   })
 
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null)
-  const [showArchivedList, setShowArchivedList] = useState(false)
   const [editingTournamentId, setEditingTournamentId] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState({ name: '', starts_at: '' })
   const [activeMatchId, setActiveMatchId] = useState<number | null>(null)
@@ -296,7 +289,6 @@ export function OrganizerPage() {
     .slice(0, 20)
   const activeTournaments = myTournaments.filter((t) => t.status !== 'completed' && t.status !== 'cancelled' && t.status !== 'archived')
   const inactiveTournaments = myTournaments.filter((t) => t.status === 'completed' || t.status === 'cancelled')
-  const archivedTournaments = myTournaments.filter((t) => t.status === 'archived')
 
   // Shares its query key with BracketView's own bracket query, so once a
   // score/finish mutation invalidates ['organizer', 'bracket', id] (already
@@ -555,30 +547,7 @@ export function OrganizerPage() {
               : 'Pick a tournament to run its live scoreboard.'
           }
         >
-          {canManageTournaments && (
-            <div className="flex flex-wrap items-center gap-2">
-              <TournamentWizard />
-              <button
-                onClick={() => setShowArchivedList((v) => !v)}
-                className={`${buttonSecondary} text-xs`}
-              >
-                {showArchivedList ? 'Hide archive' : 'Archive'}
-              </button>
-            </div>
-          )}
-
-          {showArchivedList && canManageTournaments && archivedTournaments.length > 0 && (
-            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Archived tournaments</h4>
-              <TournamentPickerDropdown
-                label="Archived tournaments"
-                tournaments={archivedTournaments}
-                selectedId={selectedTournamentId}
-                onSelect={setSelectedTournamentId}
-                emptyText="No archived tournaments."
-              />
-            </div>
-          )}
+          {canManageTournaments && <TournamentWizard />}
 
           <div className={canManageTournaments ? 'mt-4 border-t border-slate-100 pt-4' : ''}>
             <h3 className="mb-2 text-sm font-medium text-slate-700">
@@ -661,16 +630,6 @@ export function OrganizerPage() {
                     )
                   }
 
-                  if (selected.status === 'archived') {
-                    return (
-                      <div className="mb-3 rounded-lg border border-slate-200 bg-slate-100 p-3">
-                        <p className="text-xs text-slate-700">
-                          This tournament is archived. You can still browse it, but it no longer appears in the active list and no new registrations are accepted.
-                        </p>
-                      </div>
-                    )
-                  }
-
                   if (selected.status === 'draft') {
                     return (
                       <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -737,13 +696,6 @@ export function OrganizerPage() {
                           >
                             Cancel tournament
                           </button>
-                          <button
-                            onClick={() => archiveMutation.mutate(selectedTournamentId)}
-                            disabled={archiveMutation.isPending}
-                            className={buttonSecondary}
-                          >
-                            {archiveMutation.isPending ? 'Archiving...' : 'Archive tournament'}
-                          </button>
                         </div>
                       </div>
                     )
@@ -782,13 +734,6 @@ export function OrganizerPage() {
                             className={buttonDanger}
                           >
                             Cancel tournament
-                          </button>
-                          <button
-                            onClick={() => archiveMutation.mutate(selectedTournamentId)}
-                            disabled={archiveMutation.isPending}
-                            className={buttonSecondary}
-                          >
-                            {archiveMutation.isPending ? 'Archiving...' : 'Archive tournament'}
                           </button>
                         </div>
                       </div>
