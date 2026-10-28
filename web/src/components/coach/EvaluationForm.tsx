@@ -67,7 +67,8 @@ export function EvaluationForm() {
   })
   const [sportId, setSportId] = useState<number | ''>('')
   const [level, setLevel] = useState<SkillLevelTier>('beginner')
-  const [showLevelInfo, setShowLevelInfo] = useState(false)
+  const [showLevelMenu, setShowLevelMenu] = useState(false)
+  const [hoveredLevel, setHoveredLevel] = useState<SkillLevelTier | null>(null)
   const activeSport = sports?.find((s) => s.id === sportId)
   const hasSportHistory = !!(
     activeSport && (
@@ -111,7 +112,9 @@ export function EvaluationForm() {
   const statFields = sportName ? SPORT_STAT_FIELDS[sportName] : undefined
   const computedFields = sportName ? SPORT_COMPUTED_FIELDS[sportName] : undefined
   const attributeFields = sportName ? SPORT_ATTRIBUTE_CRITERIA[sportName] : undefined
+  const hoverTierCriteria = hoveredLevel ? criteriaFor(sportName, hoveredLevel) : null
   const tierCriteria = criteriaFor(sportName, level)
+  const activeLevelInfo = hoverTierCriteria ?? tierCriteria
 
   const rawStatsNumeric = Object.fromEntries(
     Object.entries(rawStats)
@@ -254,61 +257,61 @@ export function EvaluationForm() {
               </select>
             </div>
             <div className={`${fieldGroup} relative`}>
-              <div className="flex items-center justify-between gap-2">
-                <label className={label}>Level</label>
-                {tierCriteria && (
-                  <button
-                    type="button"
-                    onClick={() => setShowLevelInfo((v) => !v)}
-                    onMouseEnter={() => setShowLevelInfo(true)}
-                    onMouseLeave={() => setShowLevelInfo(false)}
-                    className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 hover:border-slate-300 hover:text-slate-700"
-                    aria-label={`Open ${SKILL_LEVEL_LABELS[level]} description`}
-                  >
-                    Info
-                  </button>
+              <label className={label}>Level</label>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowLevelMenu((v) => !v)}
+                  className={`${select} flex w-full items-center justify-between text-left`}
+                >
+                  <span>{SKILL_LEVEL_LABELS[level]}</span>
+                  <span className="text-slate-400">▾</span>
+                </button>
+
+                {showLevelMenu && (
+                  <div className="absolute left-0 right-0 top-full z-20 mt-2 flex gap-2">
+                    <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                      {availableTiers.map((l) => (
+                        <button
+                          key={l}
+                          type="button"
+                          onMouseEnter={() => setHoveredLevel(l)}
+                          onMouseLeave={() => setHoveredLevel(null)}
+                          onClick={() => {
+                            setLevel(l)
+                            setHoveredLevel(null)
+                            setShowLevelMenu(false)
+                          }}
+                          className={`flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm transition ${
+                            level === l ? 'bg-slate-100 font-semibold text-slate-800' : 'text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span>{SKILL_LEVEL_LABELS[l]}</span>
+                          {level === l && <span className="text-xs text-teal-600">Selected</span>}
+                        </button>
+                      ))}
+                    </div>
+
+                    {activeLevelInfo && (
+                      <div className="hidden w-72 rounded-xl border border-slate-200 bg-white p-3 text-left text-xs text-slate-600 shadow-lg md:block">
+                        <div className="mb-2 font-semibold text-slate-800">
+                          {SKILL_LEVEL_LABELS[(hoveredLevel ?? level)]}
+                        </div>
+                        {activeLevelInfo.range && <p className="mb-1 font-semibold text-teal-700">{activeLevelInfo.range}</p>}
+                        <p>
+                          <span className="font-medium text-slate-700">Profile:</span> {activeLevelInfo.profile}
+                        </p>
+                        <p className="mt-1">
+                          <span className="font-medium text-slate-700">Skills:</span> {activeLevelInfo.skills}
+                        </p>
+                        <p className="mt-1">
+                          <span className="font-medium text-slate-700">Focus:</span> {activeLevelInfo.focus}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
-              <select
-                value={level}
-                onChange={(e) => {
-                  setLevel(e.target.value as SkillLevelTier)
-                  setShowLevelInfo(false)
-                }}
-                className={select}
-              >
-                {availableTiers.map((l) => (
-                  <option key={l} value={l}>
-                    {SKILL_LEVEL_LABELS[l]}
-                  </option>
-                ))}
-              </select>
-              {showLevelInfo && tierCriteria && (
-                <div className="absolute left-0 right-0 top-full z-20 mt-2 rounded-xl border border-slate-200 bg-white p-3 text-left text-xs text-slate-600 shadow-lg">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="font-semibold text-slate-800">{SKILL_LEVEL_LABELS[level]}</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowLevelInfo(false)}
-                      className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-700"
-                    >
-                      Close
-                    </button>
-                  </div>
-                  {tierCriteria.range && (
-                    <p className="mb-1 font-semibold text-teal-700">{tierCriteria.range}</p>
-                  )}
-                  <p>
-                    <span className="font-medium text-slate-700">Profile:</span> {tierCriteria.profile}
-                  </p>
-                  <p className="mt-1">
-                    <span className="font-medium text-slate-700">Skills:</span> {tierCriteria.skills}
-                  </p>
-                  <p className="mt-1">
-                    <span className="font-medium text-slate-700">Focus:</span> {tierCriteria.focus}
-                  </p>
-                </div>
-              )}
             </div>
             <div className={`${fieldGroup} sm:col-span-2`}>
               <label className={label}>Score (optional)</label>
