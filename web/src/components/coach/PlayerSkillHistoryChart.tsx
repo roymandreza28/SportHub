@@ -7,14 +7,6 @@ import { useAuth } from '../../lib/AuthContext'
 import { buttonGhost, buttonPrimary, buttonSecondary, fieldGroup, input, label, select, textarea } from '../../lib/formStyles'
 import { extractErrorMessage } from '../../lib/errors'
 
-const LEVEL_HEIGHT: Record<SkillLevelTier, string> = {
-  beginner: '20%',
-  casual_player: '40%',
-  developing_athlete: '60%',
-  competitive_athlete: '80%',
-  professional: '100%',
-}
-
 function EvaluationDetail({ evaluation }: { evaluation: EvaluationEntry }) {
   const criteria = evaluation.criteria
   const attributes = criteria?.attributes
@@ -138,9 +130,6 @@ export function PlayerSkillHistoryChart({ playerId }: { playerId: number }) {
     return <p className="text-sm text-slate-400">No evaluation history for this player yet.</p>
   }
 
-  // Oldest first, so the bar chart reads left-to-right as a timeline.
-  const chronological = [...evaluations].reverse()
-
   // Only the most recent evaluation per sport is editable (the backend
   // enforces this too) — evaluations arrive newest-first, so the first
   // occurrence of each skill_level id is that sport's editable one.
@@ -154,18 +143,8 @@ export function PlayerSkillHistoryChart({ playerId }: { playerId: number }) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex h-24 items-end gap-1.5 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
-        {chronological.map((evaluation) => (
-          <div
-            key={evaluation.id}
-            title={`${evaluation.skill_level.sport.name}: ${SKILL_LEVEL_LABELS[evaluation.skill_level.level]} on ${new Date(evaluation.created_at).toLocaleDateString()}`}
-            className="w-4 rounded-t-sm bg-gradient-to-t from-teal-600 to-teal-400"
-            style={{ height: LEVEL_HEIGHT[evaluation.skill_level.level] }}
-          />
-        ))}
-      </div>
-      <ul className="flex flex-col divide-y divide-slate-100 text-xs text-slate-600">
+   <div className="flex flex-col gap-3">
+     <ul className="flex flex-col divide-y divide-slate-100 text-xs text-slate-600">
         {evaluations.map((evaluation) => {
           const hasDetail = !!(evaluation.criteria?.attributes || evaluation.criteria?.sport_stats?.raw)
           const canEdit = editableIds.has(evaluation.id) && user?.id === evaluation.coach.id
