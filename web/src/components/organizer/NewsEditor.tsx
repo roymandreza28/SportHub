@@ -144,31 +144,6 @@ export function NewsEditor() {
 
       {mutation.isError && <p className="text-xs text-red-600">Couldn't publish that — check your attachments and try again.</p>}
 
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setPostType('normal')
-            setSelectedTournamentId('')
-          }}
-          className={`rounded-xl px-3 py-2 text-sm font-medium transition-all ${
-            postType === 'normal' ? 'grad-brand text-pure-white' : 'grad-surface text-slate-700'
-          }`}
-        >
-          Normal post
-        </button>
-        <button
-          type="button"
-          onClick={() => setPostType('livestream')}
-          disabled={activeTournaments.length === 0}
-          className={`rounded-xl px-3 py-2 text-sm font-medium transition-all ${
-            postType === 'livestream' ? 'grad-brand text-pure-white' : 'grad-surface text-slate-700'
-          } disabled:cursor-not-allowed disabled:opacity-50`}
-        >
-          Live link
-        </button>
-      </div>
-
       {postType === 'livestream' && activeTournaments.length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -213,6 +188,19 @@ export function NewsEditor() {
         <button type="button" onClick={() => fileInputRef.current?.click()} className={`${buttonSecondary} flex-1`}>
           <IconImage className="h-4 w-4" />
           Photo/Video
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (postType === 'livestream' && activeTournaments.length === 0) return
+            setPostType((value) => (value === 'normal' ? 'livestream' : 'normal'))
+            if (postType === 'livestream') setSelectedTournamentId('')
+          }}
+          disabled={activeTournaments.length === 0}
+          className={`${buttonSecondary} flex-1 ${postType === 'livestream' ? 'grad-brand text-pure-white' : ''}`}
+        >
+          {postType === 'livestream' ? 'Livestream On' : 'Livestream Off'}
         </button>
 
         <button
