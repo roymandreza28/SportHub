@@ -17,7 +17,6 @@ export function NewsEditor() {
   const [body, setBody] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | ''>('')
-  const [showTournamentPicker, setShowTournamentPicker] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { data: tournaments } = useQuery({ queryKey: ['organizer', 'tournaments'], queryFn: fetchOrganizerTournaments })
   const activeTournaments = (tournaments ?? []).filter(
@@ -61,7 +60,6 @@ export function NewsEditor() {
     setBody('')
     setAttachments([])
     setSelectedTournamentId('')
-    setShowTournamentPicker(false)
   }
 
   const mutation = useMutation({
@@ -75,7 +73,6 @@ export function NewsEditor() {
     onSuccess: () => {
       reset()
       setSelectedTournamentId('')
-      setShowTournamentPicker(false)
       // ['news'] is the plain organizer/facilitator list (NewsFeed.tsx);
       // ['newsfeed'] is the shared feed OrganizerPage now also renders below
       // this editor — both need to pick up the freshly published post.
@@ -145,6 +142,38 @@ export function NewsEditor() {
 
       {mutation.isError && <p className="text-xs text-red-600">Couldn't publish that — check your attachments and try again.</p>}
 
+      {activeTournaments.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <label className={label}>Live link</label>
+            {selectedTournamentId !== '' && (
+              <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-teal-700">
+                Linked
+              </span>
+            )}
+          </div>
+          <select
+            value={selectedTournamentId}
+            onChange={(e) => setSelectedTournamentId(e.target.value ? Number(e.target.value) : '')}
+            className={`${input} bg-white/80`}
+          >
+            <option value="">No tournament link</option>
+            {activeTournaments.map((tournament) => (
+              <option key={tournament.id} value={tournament.id}>
+                {tournament.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-2 text-[11px] text-slate-500">Attach this post to a live tournament or leave it as a general update.</p>
+        </div>
+      )}
+
+      {activeTournaments.length === 0 && (
+        <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+          No active tournaments are available to link right now.
+        </p>
+      )}
+
       <div className="flex w-full items-center gap-2">
         <input
           ref={fileInputRef}
@@ -160,14 +189,6 @@ export function NewsEditor() {
         </button>
 
         <button
-          type="button"
-          onClick={() => setShowTournamentPicker((value) => !value)}
-          className={`${buttonSecondary} flex-1`}
-        >
-          Livestream
-        </button>
-
-        <button
           onClick={() => mutation.mutate()}
           disabled={!title || !body || tooLarge || mutation.isPending}
           className={`${buttonPrimary} flex-1`}
@@ -175,28 +196,6 @@ export function NewsEditor() {
           {mutation.isPending ? 'Publishing...' : 'Publish'}
         </button>
       </div>
-
-      {showTournamentPicker && activeTournaments.length > 0 && (
-        <div className={fieldGroup}>
-          <label className={label}>Link tournament</label>
-          <select
-            value={selectedTournamentId}
-            onChange={(e) => setSelectedTournamentId(e.target.value ? Number(e.target.value) : '')}
-            className={input}
-          >
-            <option value="">No tournament link</option>
-            {activeTournaments.map((tournament) => (
-              <option key={tournament.id} value={tournament.id}>
-                {tournament.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {showTournamentPicker && activeTournaments.length === 0 && (
-        <p className="text-xs text-slate-500">No active tournaments are available to link right now.</p>
-      )}
     </div>
   )
 }
