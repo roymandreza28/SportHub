@@ -224,7 +224,7 @@ export function DashboardShell({
           ))}
         </nav>
 
-        <main className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
+        <main className="mx-auto w-full max-w-[1500px] px-4 py-8 sm:px-8">
           {showVerificationBanner && (
             <div
               className={`mb-6 rounded-xl border p-4 text-sm ${
