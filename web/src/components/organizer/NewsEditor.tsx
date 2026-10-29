@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createNews } from '../../lib/organizerApi'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { createNews, fetchOrganizerTournaments, type Tournament } from '../../lib/organizerApi'
 import { buttonPrimary, buttonSecondary, fieldGroup, input, label, textarea } from '../../lib/formStyles'
 import { IconImage } from '../layout/icons'
 
@@ -16,7 +16,13 @@ export function NewsEditor() {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [selectedTournamentId, setSelectedTournamentId] = useState<number | ''>('')
+  const [showTournamentPicker, setShowTournamentPicker] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { data: tournaments } = useQuery({ queryKey: ['organizer', 'tournaments'], queryFn: fetchOrganizerTournaments })
+  const activeTournaments = (tournaments ?? []).filter(
+    (tournament: Tournament) => !['completed', 'cancelled', 'archived'].includes(tournament.status)
+  )
 
   // Ref mirrors the latest attachments so the unmount cleanup below always
   // revokes whatever's actually pending, not a stale empty array captured
@@ -54,12 +60,22 @@ export function NewsEditor() {
     setTitle('')
     setBody('')
     setAttachments([])
+    setSelectedTournamentId('')
+    setShowTournamentPicker(false)
   }
 
   const mutation = useMutation({
-    mutationFn: () => createNews({ title, body, media: attachments.map((a) => a.file) }),
+    mutationFn: () =>
+      createNews({
+        title,
+        body,
+        tournament_id: selectedTournamentId === '' ? undefined : Number(selectedTournamentId),
+        media: attachments.map((a) => a.file),
+      }),
     onSuccess: () => {
       reset()
+      setSelectedTournamentId('')
+      setShowTournamentPicker(false)
       // ['news'] is the plain organizer/facilitator list (NewsFeed.tsx);
       // ['newsfeed'] is the shared feed OrganizerPage now also renders below
       // this editor — both need to pick up the freshly published post.
@@ -69,7 +85,7 @@ export function NewsEditor() {
   })
 
   return (
-    <div className="flex max-w-xl flex-col gap-4">
+    <div className="flex w-full flex-col gap-4">
       <h3 className="text-sm font-semibold text-slate-800">Post news</h3>
       <div className={fieldGroup}>
         <label className={label}>Title</label>
@@ -129,7 +145,7 @@ export function NewsEditor() {
 
       {mutation.isError && <p className="text-xs text-red-600">Couldn't publish that — check your attachments and try again.</p>}
 
-      <div className="flex items-center gap-2">
+      <div className="flex w-full items-center gap-2">
         <input
           ref={fileInputRef}
           type="file"
@@ -138,19 +154,49 @@ export function NewsEditor() {
           className="hidden"
           onChange={(e) => addFiles(e.target.files)}
         />
-        <button type="button" onClick={() => fileInputRef.current?.click()} className={buttonSecondary}>
+        <button type="button" onClick={() => fileInputRef.current?.click()} className={`${buttonSecondary} flex-1`}>
           <IconImage className="h-4 w-4" />
           Photo/Video
         </button>
 
         <button
+          type="button"
+          onClick={() => setShowTournamentPicker((value) => !value)}
+          className={`${buttonSecondary} flex-1`}
+        >
+          Livestream
+        </button>
+
+        <button
           onClick={() => mutation.mutate()}
           disabled={!title || !body || tooLarge || mutation.isPending}
-          className={buttonPrimary}
+          className={`${buttonPrimary} flex-1`}
         >
           {mutation.isPending ? 'Publishing...' : 'Publish'}
         </button>
       </div>
+
+      {showTournamentPicker && activeTournaments.length > 0 && (
+        <div className={fieldGroup}>
+          <label className={label}>Link tournament</label>
+          <select
+            value={selectedTournamentId}
+            onChange={(e) => setSelectedTournamentId(e.target.value ? Number(e.target.value) : '')}
+            className={input}
+          >
+            <option value="">No tournament link</option>
+            {activeTournaments.map((tournament) => (
+              <option key={tournament.id} value={tournament.id}>
+                {tournament.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {showTournamentPicker && activeTournaments.length === 0 && (
+        <p className="text-xs text-slate-500">No active tournaments are available to link right now.</p>
+      )}
     </div>
   )
 }
