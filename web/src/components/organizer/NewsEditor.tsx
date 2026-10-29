@@ -16,6 +16,7 @@ export function NewsEditor() {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [postType, setPostType] = useState<'normal' | 'livestream'>('normal')
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | ''>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { data: tournaments } = useQuery({ queryKey: ['organizer', 'tournaments'], queryFn: fetchOrganizerTournaments })
@@ -59,6 +60,7 @@ export function NewsEditor() {
     setTitle('')
     setBody('')
     setAttachments([])
+    setPostType('normal')
     setSelectedTournamentId('')
   }
 
@@ -67,7 +69,7 @@ export function NewsEditor() {
       createNews({
         title,
         body,
-        tournament_id: selectedTournamentId === '' ? undefined : Number(selectedTournamentId),
+        tournament_id: postType === 'livestream' && selectedTournamentId !== '' ? Number(selectedTournamentId) : undefined,
         media: attachments.map((a) => a.file),
       }),
     onSuccess: () => {
@@ -142,10 +144,35 @@ export function NewsEditor() {
 
       {mutation.isError && <p className="text-xs text-red-600">Couldn't publish that — check your attachments and try again.</p>}
 
-      {activeTournaments.length > 0 && (
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setPostType('normal')
+            setSelectedTournamentId('')
+          }}
+          className={`rounded-xl px-3 py-2 text-sm font-medium transition-all ${
+            postType === 'normal' ? 'grad-brand text-pure-white' : 'grad-surface text-slate-700'
+          }`}
+        >
+          Normal post
+        </button>
+        <button
+          type="button"
+          onClick={() => setPostType('livestream')}
+          disabled={activeTournaments.length === 0}
+          className={`rounded-xl px-3 py-2 text-sm font-medium transition-all ${
+            postType === 'livestream' ? 'grad-brand text-pure-white' : 'grad-surface text-slate-700'
+          } disabled:cursor-not-allowed disabled:opacity-50`}
+        >
+          Live link
+        </button>
+      </div>
+
+      {postType === 'livestream' && activeTournaments.length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <label className={label}>Live link</label>
+            <label className={label}>Tournament</label>
             {selectedTournamentId !== '' && (
               <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-teal-700">
                 Linked
@@ -157,18 +184,18 @@ export function NewsEditor() {
             onChange={(e) => setSelectedTournamentId(e.target.value ? Number(e.target.value) : '')}
             className={`${input} bg-white/80`}
           >
-            <option value="">No tournament link</option>
+            <option value="">Choose tournament</option>
             {activeTournaments.map((tournament) => (
               <option key={tournament.id} value={tournament.id}>
                 {tournament.name}
               </option>
             ))}
           </select>
-          <p className="mt-2 text-[11px] text-slate-500">Attach this post to a live tournament or leave it as a general update.</p>
+          <p className="mt-2 text-[11px] text-slate-500">This post will be linked to the selected live tournament.</p>
         </div>
       )}
 
-      {activeTournaments.length === 0 && (
+      {postType === 'livestream' && activeTournaments.length === 0 && (
         <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
           No active tournaments are available to link right now.
         </p>
