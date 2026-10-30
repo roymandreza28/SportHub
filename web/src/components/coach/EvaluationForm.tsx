@@ -212,7 +212,7 @@ export function EvaluationForm() {
     <div className="flex w-full flex-col gap-4">
       <div className={fieldGroup}>
         <label className={label}>Player</label>
-        <PlayerSearchPicker selected={player} onSelect={setPlayer} />
+        <PlayerSearchPicker selected={player} onSelect={setPlayer} multiple={false} />
       </div>
 
       {player && (

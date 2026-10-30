@@ -4,13 +4,23 @@ import { searchPlayers, type PlayerSearchResult } from '../../lib/coachApi'
 import { input } from '../../lib/formStyles'
 import { Avatar } from '../layout/Avatar'
 
-export function PlayerSearchPicker({
-  selected,
-  onSelect,
-}: {
+type SinglePickerProps = {
+  selected: PlayerSearchResult | null
+  onSelect: (player: PlayerSearchResult | null) => void
+  multiple?: false
+}
+
+type MultiPickerProps = {
   selected: PlayerSearchResult[]
   onSelect: (players: PlayerSearchResult[]) => void
-}) {
+  multiple?: true
+}
+
+type PickerProps = SinglePickerProps | MultiPickerProps
+
+export function PlayerSearchPicker(props: PickerProps) {
+  const { selected, onSelect } = props
+  const multiple = props.multiple ?? true
   const [search, setSearch] = useState('')
   const { data: results } = useQuery({
     queryKey: ['coach', 'players', search],
@@ -26,15 +36,32 @@ export function PlayerSearchPicker({
   })
   const visibleResults = filteredResults.slice(0, 10)
 
-  const isSelected = (playerId: number) => selected.some((player) => player.id === playerId)
+  const selectedPlayers = multiple ? (selected as PlayerSearchResult[]) : selected ? [selected as PlayerSearchResult] : []
+
+  const isSelected = (playerId: number) => {
+    if (!multiple) {
+      return (selected as PlayerSearchResult | null)?.id === playerId
+    }
+
+    return (selected as PlayerSearchResult[]).some((player) => player.id === playerId)
+  }
 
   const togglePlayer = (player: PlayerSearchResult) => {
-    if (isSelected(player.id)) {
-      onSelect(selected.filter((selectedPlayer) => selectedPlayer.id !== player.id))
+    if (!multiple) {
+      const currentSelected = selected as PlayerSearchResult | null
+      const singleOnSelect = onSelect as (player: PlayerSearchResult | null) => void
+      singleOnSelect(currentSelected?.id === player.id ? null : player)
       return
     }
 
-    onSelect([...selected, player])
+    const currentSelected = selected as PlayerSearchResult[]
+    const multiOnSelect = onSelect as (players: PlayerSearchResult[]) => void
+    if (isSelected(player.id)) {
+      multiOnSelect(currentSelected.filter((selectedPlayer) => selectedPlayer.id !== player.id))
+      return
+    }
+
+    multiOnSelect([...currentSelected, player])
   }
 
   return (
@@ -47,9 +74,9 @@ export function PlayerSearchPicker({
         className={input}
       />
 
-      {selected.length > 0 && (
+      {selectedPlayers.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {selected.map((player) => (
+          {selectedPlayers.map((player) => (
             <button
               key={player.id}
               type="button"
