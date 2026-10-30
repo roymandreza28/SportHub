@@ -69,7 +69,7 @@ export function TournamentRegistrationForm({
   }
 
   return (
-    <div className="flex max-w-md flex-col gap-4">
+    <div className="flex w-full max-w-full flex-col gap-4">
       {!fixedTournamentId && (
         <div className={fieldGroup}>
           <label className={label}>Tournament</label>
