@@ -26,7 +26,7 @@ import {
   StatusBadge,
   type NavItem,
 } from '../components/layout/DashboardShell'
-import { IconChevronDown, IconFileText, IconHome, IconRadio, IconTrophy } from '../components/layout/icons'
+import { IconChevronDown, IconFileText, IconHome, IconTrophy } from '../components/layout/icons'
 import { buttonDanger, buttonPrimary, buttonSecondary, buttonSuccess } from '../lib/formStyles'
 import { TournamentWizard } from '../components/organizer/TournamentWizard'
 import { BracketView } from '../components/organizer/BracketView'
@@ -37,10 +37,6 @@ import { MatchScoreboardViewer } from '../components/organizer/MatchScoreboardVi
 import { NewsEditor } from '../components/organizer/NewsEditor'
 import { TournamentRegistrationsList } from '../components/organizer/TournamentRegistrationsList'
 import { Newsfeed } from '../components/newsfeed/Newsfeed'
-import { LivestreamCreateForm } from '../components/organizer/LivestreamCreateForm'
-import { LivestreamBroadcast } from '../components/organizer/LivestreamBroadcast'
-import { LivestreamViewer } from '../components/organizer/LivestreamViewer'
-import { LivestreamChat } from '../components/organizer/LivestreamChat'
 import { useTabParam } from '../lib/useTabParam'
 
 function TournamentPickerDropdown({
@@ -104,14 +100,6 @@ export function OrganizerPage() {
   const isVenueFacilitator = hasRole('venue_facilitator')
   const canManageTournaments = isMainOrganizer || isVenueFacilitator
   const canScoreMatches = canManageTournaments || hasRole('venue_organizer')
-  // A venue facilitator holds 'manage livestreams' via a direct permission
-  // grant (LivestreamPolicy::create checks $user->can(...), not a role
-  // name — see RolesAndPermissionsSeeder), not the 'livestream_organizer'
-  // role itself, so this needs its own OR clause rather than falling out of
-  // hasRole('livestream_organizer') the way it does for a real livestream
-  // organizer account.
-  const canManageLivestreams = isMainOrganizer || isVenueFacilitator || hasRole('livestream_organizer')
-
   const NAV_ITEMS: NavItem[] = [
     { id: 'overview', label: 'Dashboard', icon: IconHome },
     ...(canScoreMatches
@@ -121,7 +109,6 @@ export function OrganizerPage() {
     // main organizer — see NewsController/NewsPolicy's 'manage news'
     // permission, now also granted to venue_organizer/livestream_organizer.
     { id: 'news', label: 'News', icon: IconFileText },
-    ...(canManageLivestreams ? [{ id: 'livestreams', label: 'Livestreams', icon: IconRadio }] : []),
   ]
 
   const queryClient = useQueryClient()
@@ -311,8 +298,6 @@ export function OrganizerPage() {
   const activeMatch = activeBracket?.structure?.flat().find((m) => m.id === activeMatchId) ?? null
 
   const myLivestreams = livestreams ?? []
-  const [selectedLivestreamId, setSelectedLivestreamId] = useState<number | null>(null)
-  const selectedLivestream = myLivestreams.find((l) => l.id === selectedLivestreamId)
 
   const inProgressCount = myTournaments.filter((t) => t.status === 'ongoing').length
   const liveStreamCount = myLivestreams.filter((l) => l.status === 'live').length
@@ -845,7 +830,7 @@ export function OrganizerPage() {
                     tournamentName={myTournaments.find((t) => t.id === selectedTournamentId)?.name}
                     scoringType={myTournaments.find((t) => t.id === selectedTournamentId)?.scoring_type}
                     onSelectMatch={openMatch}
-                    onGoLive={canManageLivestreams ? openMatch : undefined}
+                    onGoLive={undefined}
                     canScheduleMatches={canManageTournaments}
                     canShareMatches={canManageTournaments}
                     canShareBracket={canManageTournaments}
@@ -900,54 +885,6 @@ export function OrganizerPage() {
           {isMainOrganizer && <NewsEditor />}
           <div className={isMainOrganizer ? 'mt-4 border-t border-slate-100 pt-4' : undefined}>
             <Newsfeed />
-          </div>
-        </Section>
-      )}
-
-      {active === 'livestreams' && (
-        <Section title="Livestreams" description="Start a livestream tied to a tournament.">
-          <LivestreamCreateForm tournaments={myTournaments} />
-
-          <div className="mt-4 border-t border-slate-100 pt-4">
-            <div className="mb-3 flex flex-wrap gap-2">
-              {myLivestreams.map((l) => {
-                // A tournament can have several of these live at once now
-                // (one per court) — tag each button with its tournament and
-                // whether it's tied to one specific game, so they're
-                // distinguishable beyond just the organizer-chosen title.
-                const tournamentName = myTournaments.find((t) => t.id === l.tournament_id)?.name
-                return (
-                  <button
-                    key={l.id}
-                    onClick={() => setSelectedLivestreamId(l.id)}
-                    className={`flex flex-col items-start rounded-lg px-3 py-1.5 text-left text-xs font-medium ${
-                      selectedLivestreamId === l.id ? 'bg-teal-600 text-pure-white' : 'bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      {l.status === 'live' && <span className="h-1.5 w-1.5 rounded-full bg-red-500" />}
-                      {l.title}
-                    </span>
-                    {tournamentName && (
-                      <span className={`text-[10px] font-normal ${selectedLivestreamId === l.id ? 'text-teal-100' : 'text-slate-400'}`}>
-                        {tournamentName}
-                        {l.match_id !== null ? ' — one game' : ' — whole tournament'}
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-            {selectedLivestream && (
-              <div className="flex flex-col gap-3">
-                {user?.id === selectedLivestream.broadcaster?.id ? (
-                  <LivestreamBroadcast livestream={selectedLivestream} />
-                ) : (
-                  <LivestreamViewer livestream={selectedLivestream} />
-                )}
-                {user && <LivestreamChat livestreamId={selectedLivestream.id} />}
-              </div>
-            )}
           </div>
         </Section>
       )}
