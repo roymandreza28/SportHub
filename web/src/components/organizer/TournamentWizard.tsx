@@ -200,11 +200,12 @@ export function TournamentWizard({
       post_media: postMedia.length ? postMedia : undefined,
     }),
     onSuccess: (tournament) => {
+      queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] })
+      closeModal()
       setMessage({
         type: 'success',
         text: `Created "${tournament.name}" as a draft. Select it from your tournament list to open registration when you're ready.`,
       })
-      queryClient.invalidateQueries({ queryKey: ['organizer', 'tournaments'] })
     },
     // Previously silent on failure — clicking "Create tournament" while
     // this rejected (a validation mismatch, an expired session, a slow
@@ -219,6 +220,7 @@ export function TournamentWizard({
   })
 
   const closeModal = () => {
+    setMessage(null)
     setOpen(false)
     onClose?.()
   }
@@ -493,7 +495,10 @@ export function TournamentWizard({
 
       <div className="flex flex-wrap gap-3">
         <button
-          onClick={() => createMutation.mutate()}
+          onClick={() => {
+            setMessage(null)
+            createMutation.mutate()
+          }}
           disabled={
             !sportId ||
             !name ||
