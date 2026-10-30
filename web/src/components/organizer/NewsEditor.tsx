@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createNews, fetchOrganizerTournaments, type Tournament } from '../../lib/organizerApi'
+import { createNews, fetchBracket, fetchOrganizerTournaments, type Tournament } from '../../lib/organizerApi'
 import { buttonPrimary, buttonSecondary, fieldGroup, input, label, textarea } from '../../lib/formStyles'
 import { IconImage } from '../layout/icons'
 
@@ -18,11 +18,18 @@ export function NewsEditor() {
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [postType, setPostType] = useState<'normal' | 'livestream'>('normal')
   const [selectedTournamentId, setSelectedTournamentId] = useState<number | ''>('')
+  const [selectedMatchId, setSelectedMatchId] = useState<number | ''>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { data: tournaments } = useQuery({ queryKey: ['organizer', 'tournaments'], queryFn: fetchOrganizerTournaments })
   const activeTournaments = (tournaments ?? []).filter(
     (tournament: Tournament) => !['completed', 'cancelled', 'archived'].includes(tournament.status)
   )
+  const { data: bracket } = useQuery({
+    queryKey: ['organizer', 'bracket', selectedTournamentId],
+    queryFn: () => fetchBracket(Number(selectedTournamentId)),
+    enabled: selectedTournamentId !== '',
+  })
+  const candidateMatches = (bracket?.matches ?? []).filter((match) => match.status !== 'completed')
 
   // Ref mirrors the latest attachments so the unmount cleanup below always
   // revokes whatever's actually pending, not a stale empty array captured
@@ -33,6 +40,17 @@ export function NewsEditor() {
   useEffect(() => {
     return () => attachmentsRef.current.forEach((a) => a.previewUrl && URL.revokeObjectURL(a.previewUrl))
   }, [])
+
+  useEffect(() => {
+    if (selectedTournamentId === '') {
+      setSelectedMatchId('')
+      return
+    }
+
+    if (selectedMatchId !== '' && !candidateMatches.some((match) => match.id === selectedMatchId)) {
+      setSelectedMatchId('')
+    }
+  }, [candidateMatches, selectedMatchId, selectedTournamentId])
 
   const totalBytes = attachments.reduce((sum, a) => sum + a.file.size, 0)
   const tooLarge = totalBytes > MAX_TOTAL_BYTES
@@ -62,6 +80,7 @@ export function NewsEditor() {
     setAttachments([])
     setPostType('normal')
     setSelectedTournamentId('')
+    setSelectedMatchId('')
   }
 
   const mutation = useMutation({
@@ -70,6 +89,7 @@ export function NewsEditor() {
         title,
         body,
         tournament_id: postType === 'livestream' && selectedTournamentId !== '' ? Number(selectedTournamentId) : undefined,
+        match_id: postType === 'livestream' && selectedMatchId !== '' ? Number(selectedMatchId) : undefined,
         media: attachments.map((a) => a.file),
       }),
     onSuccess: () => {
@@ -156,7 +176,10 @@ export function NewsEditor() {
           </div>
           <select
             value={selectedTournamentId}
-            onChange={(e) => setSelectedTournamentId(e.target.value ? Number(e.target.value) : '')}
+            onChange={(e) => {
+              setSelectedTournamentId(e.target.value ? Number(e.target.value) : '')
+              setSelectedMatchId('')
+            }}
             className={`${input} bg-white/80`}
           >
             <option value="">Choose tournament</option>
@@ -166,7 +189,35 @@ export function NewsEditor() {
               </option>
             ))}
           </select>
-          <p className="mt-2 text-[11px] text-slate-500">This post will be linked to the selected live tournament.</p>
+
+          {selectedTournamentId !== '' && (
+            <div className="mt-3">
+              <label className={label}>Game</label>
+              <select
+                value={selectedMatchId}
+                onChange={(e) => setSelectedMatchId(e.target.value ? Number(e.target.value) : '')}
+                className={`${input} mt-1 bg-white/80`}
+                disabled={candidateMatches.length === 0}
+              >
+                <option value="">Whole tournament</option>
+                {candidateMatches.map((match) => (
+                  <option key={match.id} value={match.id}>
+                    Round {match.round}: {match.participant_a?.name ?? 'TBD'} vs {match.participant_b?.name ?? 'TBD'}
+                    {match.court ? ` — ${match.court.venue.name} (${match.court.name})` : ''}
+                  </option>
+                ))}
+              </select>
+              {candidateMatches.length === 0 && (
+                <p className="mt-2 text-[11px] text-slate-500">No live or scheduled games are available for this tournament yet.</p>
+              )}
+            </div>
+          )}
+
+          <p className="mt-2 text-[11px] text-slate-500">
+            {selectedMatchId !== ''
+              ? 'This post will be linked to the selected match in the tournament.'
+              : 'This post will be linked to the selected live tournament.'}
+          </p>
         </div>
       )}
 
