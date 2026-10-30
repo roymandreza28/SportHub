@@ -271,13 +271,28 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:coach')->group(function () {
         Route::get('/players', function (Request $request) {
             $search = $request->string('search')->toString();
+            $friendsOnly = $request->boolean('friends_only');
+            $coach = $request->user();
 
-            return User::role('player')
+            $query = User::role('player')
                 ->when($search, fn ($q, $s) => $q
                     ->where(fn ($q2) => $q2->where('name', 'ilike', "%{$s}%")->orWhere('email', 'ilike', "%{$s}%")))
-                ->orderBy('name')
+                ->orderBy('name');
+
+            if ($friendsOnly) {
+                $friendIds = $coach->friends()->pluck('id');
+                $query->whereIn('id', $friendIds);
+            }
+
+            return $query
                 ->limit(20)
-                ->get(['id', 'name', 'email']);
+                ->get(['id', 'name', 'email', 'avatar_path'])
+                ->map(fn (User $user) => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'avatar_url' => $user->avatar_url,
+                ]);
         });
 
         Route::post('/tournaments/{tournament}/registrations', [TournamentRegistrationController::class, 'store']);

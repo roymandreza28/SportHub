@@ -1,223 +1,238 @@
-**USER MANUAL DURING DEVELOPMENT**
+# SportHub User Manual
+
+## 1. Introduction
+
+SportHub is a web-based sports community and management system designed to help players, teams, coaches, organizers, venue facilitators, and administrators manage sports activities in one centralized platform.
+
+The system helps users:
+- create and join matches
+- book sports venues and facilities
+- manage tournaments and brackets
+- register for events and teams
+- track schedules and announcements
+- communicate with other users and stakeholders
+
+This manual is a sample user guide for the system and is designed for everyday users.
+
+## 2. System Overview
+
+SportHub is built for modern sports coordination. It supports the full flow of sports operations, from registration and scheduling to venue booking and live match updates.
+
+The platform includes the following main functions:
+- Player matchmaking and team coordination
+- Venue booking and scheduling
+- Tournament management
+- Coach and player evaluation
+- Social and profile features
+- News and announcements
+- Administrative monitoring and role management
+
+## 3. User Roles and Access
+
+### 3.1 Player
+A player can:
+- create an account and log in
+- update personal profile information
+- search for teams and match opportunities
+- join or create matchmaking requests
+- register for tournaments
+- book or participate in venue events
+- view news feeds and announcements
+
+### 3.2 Coach
+A coach can:
+- manage assigned players or teams
+- evaluate player performance
+- coordinate tournament participation
+- book venues and facilities
+- monitor match and training activity
+
+### 3.3 Venue Facilitator
+A venue facilitator can:
+- manage venue information and bookings
+- approve or reject reservations
+- monitor facility schedules
+- communicate with players and organizers
+
+### 3.4 Organizer
+An organizer can:
+- create and manage tournaments
+- set schedules and bracket structures
+- monitor active matches and results
+- publish announcements
+- coordinate venue and participant availability
+
+### 3.5 Admin
+An admin can:
+- manage all users and roles
+- verify accounts and credentials
+- monitor system activity
+- manage records and reports
+- maintain overall system security and platform health
+
+## 4. Getting Started
+
+### 4.1 Create an Account
+1. Open the SportHub application in your browser.
+2. Click the Register button.
+3. Fill out your personal details.
+4. Select your role (Player, Coach, Organizer, Venue Facilitator, etc.).
+5. Submit your registration.
+6. Wait for admin verification if required.
+
+### 4.2 Log In
+1. Go to the login page.
+2. Enter your email address and password.
+3. Click Log In.
+4. Based on your role, you will be redirected to your dashboard.
+
+### 4.3 Dashboard Overview
+After logging in, the dashboard displays:
+- your active profile
+- upcoming bookings or matches
+- tournament updates
+- recent announcements
+- quick actions for your role
+
+## 5. Main Features
+
+### 5.1 Matchmaking
+Players can:
+- select a sport and format
+- create a matchmaking request
+- join a search for a game partner or team
+- view matched results and schedule details
+
+When a match is found, the system displays the venue, match time, and reservation details.
+
+### 5.2 Venue Booking
+Users can:
+- browse available venues
+- check sport compatibility and court availability
+- choose a preferred date and time
+- submit a booking request
+- view booking confirmation and reservation status
+
+### 5.3 Tournament Management
+Organizers can:
+- create tournaments
+- assign sports and formats
+- set registration periods
+- monitor bracket status
+- update results and final standings
+
+### 5.4 Team Management
+Players and coaches can:
+- create or join teams
+- manage roster information
+- invite members
+- coordinate match participation
+
+### 5.5 News and Updates
+Users can:
+- view official system announcements
+- follow tournament news
+- receive updates related to schedules, results, and venue changes
+
+### 5.6 Profile and Social Features
+Users can:
+- update profile and display information
+- upload profile images
+- search for other players or users
+- view social activity when available
+
+## 6. How to Use the System by Role
+
+### 6.1 For Players
+1. Log in to your player dashboard.
+2. View your upcoming matches and schedule.
+3. Create a match request under the Matchmaking feature.
+4. Select a sport, format, and team if required.
+5. Wait for a match to be found.
+6. If you are paired, review the booking and venue details.
+7. Check tournament registration, profile updates, and news feed.
+
+### 6.2 For Coaches
+1. Log in using your coach account.
+2. Open the evaluation or team dashboard.
+3. Review player profiles and skill information.
+4. Manage team rosters and match participation.
+5. Coordinate venues and schedules for training or tournaments.
+6. Record evaluation results and track player progress.
+
+### 6.3 For Organizers
+1. Open the organizer dashboard.
+2. Create a new tournament.
+3. Select the sport, format, venue, and scheduling details.
+4. Manage tournament entries and bracket flow.
+5. Publish updates or announcements.
+6. Monitor ongoing matches and finalize results.
+
+### 6.4 For Venue Facilitators
+1. Log in to the venue dashboard.
+2. View all bookings and scheduled matches.
+3. Approve or reject reservation requests.
+4. Manage venue details and court schedules.
+5. Coordinate with players and organizers for updates.
+
+### 6.5 For Admins
+1. Access admin tools from the dashboard.
+2. Manage verified accounts and user roles.
+3. Review reports and platform activity.
+4. Monitor registration approvals and system issues.
+5. Maintain operational health of the platform.
+
+## 7. Tips for Better Use
+- Keep your profile up to date.
+- Check the dashboard regularly for announcements and match updates.
+- Make sure your account details and verification status are complete.
+- Select the correct sport, format, and team before creating a request.
+- Confirm booking details before finalizing a venue reservation.
+- Review tournament schedules and match updates often.
+
+## 8. Common Troubleshooting
+
+### Problem: I cannot create a match
+- Ensure your account is verified.
+- Select a valid sport and format.
+- If team-based, make sure your team is ready.
+- Check if a venue and schedule are correctly selected.
+
+### Problem: I do not see tournament data
+- Confirm that the tournament has started or is open for registration.
+- Check your role permissions.
+- Refresh the dashboard or contact the organizer.
+
+### Problem: Booking is pending
+- Wait for venue confirmation.
+- Check your booking status on the dashboard.
+- Contact the venue facilitator if needed.
+
+### Problem: I cannot access a feature
+- Confirm your role permissions.
+- Make sure your account is verified.
+- Contact the administrator for access support.
+
+## 9. Frequently Asked Questions
+
+### Q: Can I switch roles?
+A: Role access depends on the account that was created and the system verification process.
+
+### Q: Can I update my profile later?
+A: Yes. Users can update their profile details and other information from their dashboard.
+
+### Q: What if I forget my password?
+A: Use the Forgot Password option on the login page and follow the reset instructions.
+
+### Q: Who manages tournament results?
+A: Organizers and authorized venue stakeholders manage tournament scoring and updates.
+
+## 10. Conclusion
+
+SportHub is designed to simplify sports operations and strengthen sports community engagement. Whether you are a player, coach, organizer, venue facilitator, or admin, the system provides tools to organize events, manage schedules, coordinate venues, and improve communication across the sports ecosystem.
+
+This user manual provides a basic starting guide for using the platform effectively. As the system continues to evolve, new features may be added, but the core purpose remains the same: to connect sports communities and make managing sports activity easier.
 
-1. **Introduction**
-
-This manual is designed for developers and students working on the SportHub system. It provides guidance on installing, configuring, running, and maintaining the project, including how the system is organized, how each user role works, and how development and testing are performed.
-
-SportHub is a role-based sports management and tournament platform that supports players, coaches, venue facilitators, organizers, livestream organizers, and administrators. The system allows users to manage registrations, tournaments, venues, social interactions, livestreaming, news, and administrative controls.
-
-2. **System Requirements**
-
-2.1. **Hardware**
-
-- **Processor:** Intel i5 (minimum), Intel i7 recommended
-- **RAM:** 8 GB minimum, 16 GB recommended for smoother multitasking
-- **Storage:** 256 GB SSD minimum, 512 GB SSD recommended
-- **Graphics:** Integrated graphics sufficient; dedicated GPU optional
-- **Network:** Stable internet connection for project setup, API access, and testing
-
-2.2. **Software**
-
-- **Operating System:** Windows 10/11, Linux, or macOS
-- **Code Editor/IDE:** Visual Studio Code
-- **Version Control:** Git + GitHub
-- **Package Managers:** npm and Composer
-- **Frameworks / Libraries:** React JS, TypeScript, Vite, Tailwind CSS, Laravel PHP, Sanctum, Spatie Permission
-- **Databases:** MySQL / MariaDB / SQLite for local development
-- **Web Browsers:** Chrome, Edge, Brave, Firefox
-
-3. **Development Stack**
-
-3.1. **Front-End**
-
-- **Technologies:** React JS, TypeScript, Vite, Tailwind CSS
-- **Purpose:** Building interactive pages for login, dashboards, sports management, social modules, and admin tools
-- **Key Front-End Features:** protected routes, role-specific dashboards, tournament interfaces, venue operations, news feed, chat, and admin panels
-
-3.2. **Back-End / Services**
-
-- **Server Framework:** Laravel PHP
-- **Authentication:** Laravel Sanctum token-based authentication
-- **Authorization:** Spatie Laravel Permission for role and permission management
-- **Database:** MySQL or SQLite for development
-- **API Communication:** Axios from the frontend to the Laravel API
-- **Real-Time Features:** Laravel Echo, Reverb, and push notifications
-- **Media & Files:** Public storage for profile images, venue media, proof uploads, and QR codes
-
-3.3. **Tools**
-
-- **IDE:** Visual Studio Code
-- **Version Control:** Git + GitHub
-- **Browsers for Testing:** Chrome, Edge, Brave, Firefox
-- **Build Tools:** Vite, npm, Composer
-- **Testing Tools:** Vitest, Playwright, PHP testing tools
-
-4. **Installation Guide**
-
-**Step 1: Install Core Tools**
-
-- **Visual Studio Code (VS Code):** Download and install from https://code.visualstudio.com
-- **Git:** Install from https://git-scm.com and connect to GitHub
-- **Node.js:** Install the LTS version from https://nodejs.org
-- **Composer:** Install Composer for PHP package management from https://getcomposer.org
-- **XAMPP / MySQL / SQLite tools:** Use local database support for Laravel development
-
-**Step 2: Clone the Project**
-
-- Open VS Code and open a terminal.
-- Clone the project repository:
-
-```bash
-git clone <repository-url>
-cd sporthub
-```
-
-**Step 3: Set Up the Front-End (React + Vite)**
-
-- Navigate to the front-end folder:
-
-```bash
-cd web
-npm install
-```
-
-- Start the development server:
-
-```bash
-npm run dev
-```
-
-- The app should run locally in the browser, usually at:
-
-```text
-http://localhost:5173
-```
-
-**Step 4: Set Up the Back-End (Laravel API)**
-
-- Open a second terminal and navigate to the API folder:
-
-```bash
-cd api
-composer install
-```
-
-- Copy the environment file:
-
-```bash
-cp .env.example .env
-```
-
-- Generate the Laravel app key:
-
-```bash
-php artisan key:generate
-```
-
-- Configure the database connection in `.env` file.
-
-Example:
-
-```env
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=sporthub
-DB_USERNAME=root
-DB_PASSWORD=
-```
-
-- Run migrations and seeders:
-
-```bash
-php artisan migrate
-php artisan db:seed
-```
-
-- Start the Laravel API server:
-
-```bash
-php artisan serve
-```
-
-- The API usually runs at:
-
-```text
-http://localhost:8000
-```
-
-**Step 5: Configure Application Connectivity**
-
-- Ensure the frontend is connected to the Laravel backend correctly.
-- Check the project API base URL in the frontend configuration files.
-- Make sure the environment variables for API endpoints are set correctly.
-
-**Step 6: Run and Test**
-
-- Start both services:
-  - Front-end: `npm run dev`
-  - Back-end: `php artisan serve`
-- Open the app in a browser and test login, registration, and role handling.
-- Verify that the user is redirected correctly based on their role.
-
-5. **System Modules and User Roles**
-
-SportHub consists of several user roles and modules, each with specific responsibilities.
-
-5.1. **Player**
-
-- Register and log in
-- View available venues and tournaments
-- Register for tournaments
-- Create matchmaking requests
-- Update profile and social details
-- Interact with the news feed and chat systems
-
-5.2. **Coach**
-
-- Register as a coach with eligibility proof
-- Also receives player permissions automatically
-- Evaluate players
-- Manage team and tournament registrations
-- Book venues and interact with social features
-
-5.3. **Venue Facilitator**
-
-- Manage venue details and facilities
-- Approve or reject venue bookings
-- View schedules and manage bookings
-- Handle news updates and venue-related tournament operations
-
-5.4. **Main Organizer**
-
-- Create and manage tournaments
-- Assign venue organizers and livestream organizers
-- Generate tournament brackets
-- Update match scores and control tournament flow
-
-5.5. **Venue Organizer**
-
-- Manage assigned match operations
-- Update live score and match progress
-- Support venue-side tournament operations
-
-5.6. **Livestream Organizer**
-
-- Manage livestream sessions
-- Start or stop broadcast events
-- Moderate livestream-related chat or feed activities
-
-5.7. **Admin**
-
-- Manage all users and roles
-- Verify registrations and proofs
-- Monitor system activity
-- Review public inquiries and audit logs
-- Access all protected administrative functions
-
-6. **How to Use**
-
-**Development Workflow**
 
 - **Plan:** Define system requirements and features based on the role modules and business processes.
 - **Design:** Create UI wireframes, route structure, and database model design for the platform.

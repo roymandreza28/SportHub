@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1800" viewBox="0 0 1200 1800" role="img" aria-labelledby="title desc">
+  <title id="title">SportHub Poster</title>
+  <desc id="desc">Dark poster matching the reference style with large red headline, summary panel, icon row, and QR code display.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#070d14"/>
+      <stop offset="100%" stop-color="#0d1a2c"/>
+    </linearGradient>
+    <linearGradient id="redGlow" x1="0" x2="1">
+      <stop offset="0%" stop-color="#ff4d4d"/>
+      <stop offset="100%" stop-color="#dc1f26"/>
+    </linearGradient>
+    <filter id="nameGlow">
+      <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#ffffff" flood-opacity="0.25"/>
+    </filter>
+    <style>
+      .headline { font: 900 210px 'Segoe UI', Arial, sans-serif; fill: url(#redGlow); letter-spacing: -10px; }
+      .section { font: 800 42px 'Segoe UI', Arial, sans-serif; fill: #edf4ff; letter-spacing: 8px; }
+      .summary { font: 600 30px 'Segoe UI', Arial, sans-serif; fill: #eef5ff; }
+      .summaryLarge { font: 700 60px 'Segoe UI', Arial, sans-serif; fill: #f4f7ff; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="1800" fill="url(#bg)"/>
+
+  <g opacity="0.35">
+    <circle cx="88" cy="80" r="4" fill="#f4f7ff"/>
+    <circle cx="170" cy="120" r="4" fill="#f4f7ff"/>
+    <circle cx="248" cy="60" r="4" fill="#f4f7ff"/>
+    <circle cx="330" cy="130" r="4" fill="#f4f7ff"/>
+    <circle cx="436" cy="100" r="4" fill="#f4f7ff"/>
+    <circle cx="582" cy="60" r="4" fill="#f4f7ff"/>
+    <circle cx="760" cy="110" r="4" fill="#f4f7ff"/>
+    <circle cx="940" cy="94" r="4" fill="#f4f7ff"/>
+    <circle cx="1062" cy="150" r="4" fill="#f4f7ff"/>
+    <circle cx="1120" cy="254" r="4" fill="#f4f7ff"/>
+    <circle cx="1000" cy="326" r="4" fill="#f4f7ff"/>
+    <circle cx="900" cy="280" r="4" fill="#f4f7ff"/>
+    <circle cx="760" cy="360" r="4" fill="#f4f7ff"/>
+    <circle cx="580" cy="340" r="4" fill="#f4f7ff"/>
+    <circle cx="440" cy="310" r="4" fill="#f4f7ff"/>
+    <circle cx="280" cy="360" r="4" fill="#f4f7ff"/>
+    <circle cx="142" cy="402" r="4" fill="#f4f7ff"/>
+    <circle cx="150" cy="560" r="4" fill="#f4f7ff"/>
+    <circle cx="310" cy="620" r="4" fill="#f4f7ff"/>
+    <circle cx="560" cy="600" r="4" fill="#f4f7ff"/>
+    <circle cx="840" cy="610" r="4" fill="#f4f7ff"/>
+    <circle cx="1038" cy="560" r="4" fill="#f4f7ff"/>
+    <circle cx="1124" cy="660" r="4" fill="#f4f7ff"/>
+    <circle cx="960" cy="760" r="4" fill="#f4f7ff"/>
+    <circle cx="740" cy="730" r="4" fill="#f4f7ff"/>
+    <circle cx="480" cy="760" r="4" fill="#f4f7ff"/>
+    <circle cx="230" cy="720" r="4" fill="#f4f7ff"/>
+    <circle cx="110" cy="820" r="4" fill="#f4f7ff"/>
+  </g>
+
+  <g transform="translate(0 0)">
+    <rect x="62" y="52" width="1076" height="6" fill="#dfe8f4" opacity="0.9"/>
+  </g>
+
+  <g transform="translate(110 120)">
+    <text x="0" y="0" class="headline">ORGANIZE.</text>
+    <text x="0" y="180" class="headline">MOBILIZE.</text>
+    <text x="0" y="360" class="headline">DELIVER.</text>
+  </g>
+
+  <g transform="translate(96 470)">
+    <rect x="0" y="0" width="1008" height="320" rx="28" fill="#111827" stroke="#e5edf9" stroke-opacity="0.18"/>
+    <text x="52" y="92" class="summaryLarge">SPORTS COMMUNITY MANAGEMENT SYSTEM</text>
+    <text x="52" y="180" class="summary">A web-based sports platform that connects players, coaches, venue</text>
+    <text x="52" y="225" class="summary">facilitators, organizers, and supporters in one centralized</text>
+    <text x="52" y="270" class="summary">digital ecosystem for scheduling, matchmaking, and event coordination.</text>
+  </g>
+
+  <g transform="translate(104 860)">
+    <g transform="translate(0 0)">
+      <circle cx="86" cy="86" r="74" fill="#f3f7ff"/>
+      <circle cx="86" cy="86" r="52" fill="#f4f7ff"/>
+      <path d="M58 86 L86 52 L114 86 M60 112 H112" stroke="#111827" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <circle cx="86" cy="38" r="18" fill="#ff4d4d"/>
+    </g>
+
+    <g transform="translate(230 0)">
+      <circle cx="86" cy="86" r="74" fill="#f3f7ff"/>
+      <circle cx="86" cy="86" r="52" fill="#f4f7ff"/>
+      <path d="M56 70 L86 42 L116 70 M48 116 H124" stroke="#111827" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <circle cx="86" cy="86" r="12" fill="#ff4d4d"/>
+    </g>
+
+    <g transform="translate(460 0)">
+      <circle cx="86" cy="86" r="74" fill="#f3f7ff"/>
+      <circle cx="86" cy="86" r="52" fill="#f4f7ff"/>
+      <path d="M58 88 L86 58 L114 88 M58 108 H114" stroke="#111827" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <circle cx="86" cy="86" r="12" fill="#ff4d4d"/>
+    </g>
+  </g>
+
+  <g transform="translate(826 820)">
+    <rect x="0" y="0" width="270" height="210" rx="22" fill="#f3f7ff"/>
+    <rect x="24" y="22" width="222" height="166" rx="12" fill="#ffffff" stroke="#0b1320" stroke-width="4"/>
+    <g transform="translate(52 44)">
+      <rect x="0" y="0" width="164" height="116" rx="6" fill="#ffffff" stroke="#0b1320" stroke-width="3"/>
+      <rect x="14" y="16" width="55" height="55" fill="#ffffff" stroke="#0b1320" stroke-width="3"/>
+      <rect x="82" y="20" width="18" height="18" fill="#0b1320"/>
+      <rect x="108" y="20" width="18" height="18" fill="#0b1320"/>
+      <rect x="134" y="20" width="18" height="18" fill="#0b1320"/>
+      <rect x="82" y="46" width="68" height="12" fill="#0b1320"/>
+      <rect x="82" y="66" width="54" height="12" fill="#0b1320"/>
+    </g>
+  </g>
+
+  <g transform="translate(120 1050)">
+    <text x="0" y="0" class="summary" font-size="38" fill="#f3f7ff">A sports community system for:</text>
+    <text x="0" y="62" class="summary" font-size="38" fill="#f3f7ff">Matchmaking • Tournaments • Facilities • Scheduling</text>
+  </g>
+
+  <g transform="translate(70 1200)">
+    <line x1="0" y1="0" x2="1060" y2="0" stroke="#dfe8f4" stroke-opacity="0.5" stroke-width="2"/>
+  </g>
+
+  <g transform="translate(390 1300)">
+    <text x="0" y="0" class="section">DEVELOPERS</text>
+  </g>
+
+  <g transform="translate(120 1422)">
+    <circle cx="70" cy="70" r="70" fill="#f4f7ff"/>
+    <circle cx="70" cy="70" r="56" fill="#0d1729" stroke="#f4f7ff" stroke-width="2"/>
+    <circle cx="70" cy="70" r="42" fill="#87e3ff"/>
+    <path d="M70 40 L86 58 L70 104 L54 58 Z" fill="#ffffff"/>
+  </g>
+
+  <g transform="translate(530 1422)">
+    <circle cx="70" cy="70" r="70" fill="#f4f7ff"/>
+    <circle cx="70" cy="70" r="56" fill="#0d1729" stroke="#f4f7ff" stroke-width="2"/>
+    <circle cx="70" cy="70" r="42" fill="#87e3ff"/>
+    <path d="M70 40 L86 58 L70 104 L54 58 Z" fill="#ffffff"/>
+  </g>
+
+  <g transform="translate(940 1422)">
+    <circle cx="70" cy="70" r="70" fill="#f4f7ff"/>
+    <circle cx="70" cy="70" r="56" fill="#0d1729" stroke="#f4f7ff" stroke-width="2"/>
+    <circle cx="70" cy="70" r="42" fill="#87e3ff"/>
+    <path d="M70 40 L86 58 L70 104 L54 58 Z" fill="#ffffff"/>
+  </g>
+</svg>

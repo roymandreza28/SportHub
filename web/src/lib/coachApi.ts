@@ -64,8 +64,13 @@ export type EvaluationEntry = {
   }
 }
 
-export async function searchPlayers(search: string) {
-  const { data } = await api.get<PlayerSearchResult[]>('/api/players', { params: { search } })
+export async function searchPlayers(search: string, friendsOnly = true) {
+  const { data } = await api.get<PlayerSearchResult[]>('/api/players', {
+    params: {
+      search,
+      friends_only: friendsOnly || undefined,
+    },
+  })
   return data
 }
 
@@ -84,8 +89,15 @@ export async function fetchTournament(id: number) {
 }
 
 export async function registerPlayerForTournament(tournamentId: number, userId: number) {
-  const { data } = await api.post<{ payment_receipt: PaymentReceipt | null }>(`/api/tournaments/${tournamentId}/registrations`, {
+  const { data } = await api.post<{ payment_receipt: PaymentReceipt | null; created_count?: number }>(`/api/tournaments/${tournamentId}/registrations`, {
     user_id: userId,
+  })
+  return data
+}
+
+export async function registerPlayersForTournament(tournamentId: number, userIds: number[]) {
+  const { data } = await api.post<{ payment_receipt: PaymentReceipt | null; created_count?: number }>(`/api/tournaments/${tournamentId}/registrations`, {
+    user_ids: userIds,
   })
   return data
 }

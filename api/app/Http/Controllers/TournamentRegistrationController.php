@@ -52,7 +52,9 @@ class TournamentRegistrationController extends Controller
         );
 
         $data = $request->validate([
-            'user_id' => ['required', 'exists:users,id'],
+            'user_id' => ['sometimes', 'required_without:user_ids', 'exists:users,id'],
+            'user_ids' => ['sometimes', 'required_without:user_id', 'array', 'min:1'],
+            'user_ids.*' => ['integer', 'exists:users,id'],
         ]);
 
         abort_if($tournament->sport_format_id !== null, 422, 'This tournament requires team registration.');
@@ -61,72 +63,104 @@ class TournamentRegistrationController extends Controller
             throw ValidationException::withMessages(['tournament' => ['Registration is closed for this tournament.']]);
         }
 
-        // Coaches can register multiple individual entrants into a non-team
-        // tournament, so the only duplicate to block here is the exact same
-        // player being registered twice to the same tournament.
-        $alreadyRegistered = TournamentRegistration::where('tournament_id', $tournament->id)
-            ->where('user_id', $data['user_id'])
-            ->exists();
+        $userIds = array_values(
+            array_unique(
+                array_filter(
+                    array_map(
+                        fn ($id) => is_numeric($id) ? (int) $id : null,
+                        $data['user_ids'] ?? [$data['user_id']]
+                    ),
+                    fn ($id) => $id !== null
+                )
+            )
+        );
 
-        if ($alreadyRegistered) {
-            throw ValidationException::withMessages(['user_id' => ['Your player is already registered in this tournament.']]);
+        if (count($userIds) === 0) {
+            throw ValidationException::withMessages(['user_id' => ['Select at least one player to register.']]);
         }
 
-        if ($tournament->required_gender) {
-            $player = User::find($data['user_id']);
-            if ($player->gender !== $tournament->required_gender) {
+        $seenUserIds = [];
+        foreach ($userIds as $userId) {
+            if (isset($seenUserIds[$userId])) {
+                throw ValidationException::withMessages(['user_id' => ['A player was selected more than once.']]);
+            }
+            $seenUserIds[$userId] = true;
+
+            $alreadyRegistered = TournamentRegistration::where('tournament_id', $tournament->id)
+                ->where('user_id', $userId)
+                ->exists();
+
+            if ($alreadyRegistered) {
+                $player = User::find($userId);
+                $playerName = $player?->name ?? 'This player';
                 throw ValidationException::withMessages([
-                    'user_id' => ["This tournament is restricted to {$tournament->required_gender} players."],
+                    'user_id' => ["{$playerName} is already registered in this tournament."],
                 ]);
+            }
+
+            $player = User::find($userId);
+            if ($tournament->required_gender) {
+                if ($player->gender !== $tournament->required_gender) {
+                    throw ValidationException::withMessages([
+                        'user_id' => ["This tournament is restricted to {$tournament->required_gender} players."],
+                    ]);
+                }
+            }
+
+            if ($tournament->min_age !== null || $tournament->max_age !== null) {
+                $dateOfBirth = $player && $player->playerProfile ? $player->playerProfile->date_of_birth : ($player ? $player->birthday : null);
+
+                if (! $dateOfBirth) {
+                    throw ValidationException::withMessages([
+                        'user_id' => ['This tournament requires a date of birth on the player profile.'],
+                    ]);
+                }
+
+                $age = $dateOfBirth->diffInYears(now());
+
+                if ($tournament->min_age !== null && $age < $tournament->min_age) {
+                    throw ValidationException::withMessages([
+                        'user_id' => ["This tournament is open to players aged {$tournament->min_age}+ only."],
+                    ]);
+                }
+
+                if ($tournament->max_age !== null && $age > $tournament->max_age) {
+                    throw ValidationException::withMessages([
+                        'user_id' => ["This tournament is only for players up to {$tournament->max_age} years old."],
+                    ]);
+                }
             }
         }
 
-        if ($tournament->min_age !== null || $tournament->max_age !== null) {
-            $player = User::find($data['user_id']);
-            $dateOfBirth = $player?->playerProfile?->date_of_birth ?? $player?->birthday;
-
-            if (! $dateOfBirth) {
-                throw ValidationException::withMessages([
-                    'user_id' => ['This tournament requires a date of birth on the player profile.'],
-                ]);
-            }
-
-            $age = $dateOfBirth->diffInYears(now());
-
-            if ($tournament->min_age !== null && $age < $tournament->min_age) {
-                throw ValidationException::withMessages([
-                    'user_id' => ["This tournament is open to players aged {$tournament->min_age}+ only."],
-                ]);
-            }
-
-            if ($tournament->max_age !== null && $age > $tournament->max_age) {
-                throw ValidationException::withMessages([
-                    'user_id' => ["This tournament is only for players up to {$tournament->max_age} years old."],
-                ]);
-            }
-        }
-
-        $registration = TournamentRegistration::create([
-            'tournament_id' => $tournament->id,
-            'user_id' => $data['user_id'],
-            'registered_by' => $request->user()->id,
-            'status' => 'pending',
-        ]);
-
-        // Only notify when someone else did the registering (a coach
-        // entering their player) — no need to tell a player they just
-        // registered themselves.
-        if ((int) $data['user_id'] !== $request->user()->id) {
-            NotificationService::send($data['user_id'], 'tournament_update', [
+        $registrations = [];
+        foreach ($userIds as $userId) {
+            $registration = TournamentRegistration::create([
                 'tournament_id' => $tournament->id,
-                'tournament_name' => $tournament->name,
-                'message' => "You've been registered for {$tournament->name}.",
+                'user_id' => $userId,
+                'registered_by' => $request->user()->id,
+                'status' => 'pending',
             ]);
+
+            if ((int) $userId !== $request->user()->id) {
+                NotificationService::send($userId, 'tournament_update', [
+                    'tournament_id' => $tournament->id,
+                    'tournament_name' => $tournament->name,
+                    'message' => "You've been registered for {$tournament->name}.",
+                ]);
+            }
+
+            $registrations[] = $registration;
         }
 
-        $registration->setAttribute('payment_receipt', $this->paymentReceipt($tournament, $registration, $request->user()->id));
+        $primaryRegistration = $registrations[0];
+        $totalFee = $tournament->registration_fee !== null ? (float) $tournament->registration_fee * count($registrations) : null;
+        $primaryRegistration->setAttribute('payment_receipt', $this->paymentReceipt($tournament, $primaryRegistration, $request->user()->id, $totalFee));
 
-        return response()->json($registration->load('user:id,name,email', 'tournament:id,name'), 201);
+        return response()->json([
+            'created_count' => count($registrations),
+            'payment_receipt' => $primaryRegistration->payment_receipt,
+            'registrations' => collect($registrations)->map(fn ($registration) => $registration->load('user:id,name,email', 'tournament:id,name')),
+        ], 201);
     }
 
     public function storeTeam(Request $request, Tournament $tournament)
@@ -349,7 +383,7 @@ class TournamentRegistrationController extends Controller
     // prompt keys off this — present only when the pair's chosen venue+time
     // actually got auto-reserved" rationale: the receipt card only appears
     // when there's a real payment to arrange, never for a $0 registration.
-    private function paymentReceipt(Tournament $tournament, TournamentRegistration $registration, int $coachId): ?array
+    private function paymentReceipt(Tournament $tournament, TournamentRegistration $registration, int $coachId, ?float $totalFee = null): ?array
     {
         if ($tournament->registration_fee === null) {
             return null;
@@ -373,7 +407,7 @@ class TournamentRegistrationController extends Controller
 
         return [
             'tournament_name' => $tournament->name,
-            'registration_fee' => $tournament->registration_fee,
+            'registration_fee' => (string) ($totalFee ?? (float) $tournament->registration_fee),
             'conversation_id' => $conversation->id,
             'organizer' => [
                 'id' => $organizer->id,
