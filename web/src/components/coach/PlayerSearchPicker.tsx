@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { searchPlayers, type PlayerSearchResult } from '../../lib/coachApi'
 import { input } from '../../lib/formStyles'
+import { Avatar } from '../layout/Avatar'
 
 export function PlayerSearchPicker({
   selected,
@@ -27,11 +28,14 @@ export function PlayerSearchPicker({
 
   if (selected) {
     return (
-      <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-        <span className="font-medium text-slate-800">
-          {selected.name} <span className="font-normal text-slate-500">({selected.email})</span>
-        </span>
-        <button type="button" onClick={() => onSelect(null)} className="text-xs font-medium text-red-600 hover:text-red-700">
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Avatar name={selected.name} url={selected.avatar_url ?? null} size="sm" />
+          <span className="min-w-0 truncate font-medium text-slate-800">
+            {selected.name} <span className="font-normal text-slate-500">({selected.email})</span>
+          </span>
+        </div>
+        <button type="button" onClick={() => onSelect(null)} className="shrink-0 text-xs font-medium text-red-600 hover:text-red-700">
           Change
         </button>
       </div>
@@ -57,9 +61,12 @@ export function PlayerSearchPicker({
                   onSelect(player)
                   setSearch('')
                 }}
-                className="w-full rounded-md px-2.5 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-100"
+                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-100"
               >
-                {player.name} <span className="text-slate-400">({player.email})</span>
+                <Avatar name={player.name} url={player.avatar_url ?? null} size="sm" />
+                <span className="min-w-0 flex-1 truncate">
+                  {player.name} <span className="text-slate-400">({player.email})</span>
+                </span>
               </button>
             </li>
           ))}

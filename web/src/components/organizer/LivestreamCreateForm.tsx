@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createLivestream, fetchBracket, type Tournament } from '../../lib/organizerApi'
 import { buttonPrimary, fieldGroup, input, label, select } from '../../lib/formStyles'
@@ -18,6 +18,12 @@ export function LivestreamCreateForm({ tournaments }: { tournaments: Tournament[
     enabled: tournamentId !== '',
   })
   const candidateMatches = (bracket?.matches ?? []).filter((m) => m.status !== 'completed')
+
+  useEffect(() => {
+    if (matchId !== '' && !candidateMatches.some((m) => m.id === matchId)) {
+      setMatchId('')
+    }
+  }, [candidateMatches, matchId])
 
   const mutation = useMutation({
     mutationFn: () => createLivestream({
@@ -76,6 +82,7 @@ export function LivestreamCreateForm({ tournaments }: { tournaments: Tournament[
               value={matchId}
               onChange={(e) => setMatchId(e.target.value ? Number(e.target.value) : '')}
               className={select}
+              disabled={candidateMatches.length === 0}
             >
               <option value="">Whole tournament (no specific game)</option>
               {candidateMatches.map((m) => (

@@ -3,7 +3,7 @@ import type { Sport } from './venueApi'
 import type { SkillLevelTier } from './skillLevels'
 import type { EvaluationCriteria } from './evaluationCriteria'
 
-export type PlayerSearchResult = { id: number; name: string; email: string }
+export type PlayerSearchResult = { id: number; name: string; email: string; avatar_url?: string | null }
 
 export type Tournament = {
   id: number
