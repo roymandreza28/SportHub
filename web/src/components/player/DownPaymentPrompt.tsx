@@ -1,5 +1,3 @@
-import { useMutation } from '@tanstack/react-query'
-import { startDirectConversation } from '../../lib/chatApi'
 import { useChatUI } from '../../lib/ChatUIContext'
 import type { MatchmakingRequestItem } from '../../lib/playerApi'
 import { formatPeso } from '../../lib/venueApi'
@@ -16,10 +14,6 @@ export function DownPaymentPrompt({ req }: { req: MatchmakingRequestItem }) {
     (new Date(reservation.ends_at).getTime() - new Date(reservation.starts_at).getTime()) / (1000 * 60 * 60)
   )
   const facilitator = reservation.facilitator
-  const messageMutation = useMutation({
-    mutationFn: () => startDirectConversation(facilitator!.id),
-    onSuccess: (conversation) => openChatWindow(conversation.id),
-  })
 
   if (isCreatedMatch) {
     return (
@@ -67,17 +61,6 @@ export function DownPaymentPrompt({ req }: { req: MatchmakingRequestItem }) {
           )}
         </div>
 
-        {facilitator && (
-          <button
-            type="button"
-            onClick={() => messageMutation.mutate()}
-            disabled={messageMutation.isPending || !facilitator.id}
-            className="w-full rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {messageMutation.isPending ? 'Opening chat...' : 'Message facilitator'}
-          </button>
-        )}
-
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="font-semibold text-slate-700">Facilitator QR code</p>
           {facilitator?.qr_code_url ? (
@@ -88,6 +71,17 @@ export function DownPaymentPrompt({ req }: { req: MatchmakingRequestItem }) {
             <p className="mt-2 text-xs text-slate-500">No QR code available yet — the facilitator can upload one in their account settings.</p>
           )}
         </div>
+
+        {facilitator && (
+          <button
+            type="button"
+            onClick={() => reservation.conversation_id && openChatWindow(reservation.conversation_id)}
+            disabled={!reservation.conversation_id}
+            className="w-full rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Message facilitator
+          </button>
+        )}
 
         {reservation.status === 'pending' && (
           <p className="text-xs text-slate-500">This match is reserved and waiting for venue confirmation.</p>
