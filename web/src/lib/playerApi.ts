@@ -65,7 +65,7 @@ export type MatchmakingRequestItem = {
     // Powers the down-payment receipt card (DownPaymentPrompt.tsx).
     // qr_code_url is null until the facilitator uploads one in their own
     // account settings.
-    facilitator: { name: string; phone: string | null; qr_code_url: string | null } | null
+    facilitator: { id: number; name: string; phone: string | null; qr_code_url: string | null } | null
   }
 }
 

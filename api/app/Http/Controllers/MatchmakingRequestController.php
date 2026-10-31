@@ -78,6 +78,7 @@ class MatchmakingRequestController extends Controller
                         // AuthController::updateQrCode()), null until
                         // they've uploaded one.
                         'facilitator' => $facilitator ? [
+                            'id' => $facilitator->id,
                             'name' => $facilitator->name,
                             'phone' => $facilitator->phone,
                             'qr_code_url' => $facilitator->qr_code_url,
