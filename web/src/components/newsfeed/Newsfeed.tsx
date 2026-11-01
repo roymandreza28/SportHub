@@ -29,6 +29,7 @@ export function Newsfeed() {
   const { hasRole, user } = useAuth()
   const { data: news, isLoading } = useQuery({ queryKey: ['newsfeed'], queryFn: fetchNewsFeed })
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<number>>(() => new Set())
   const [sharingItem, setSharingItem] = useState<NewsItem | null>(null)
   const [askCoachId, setAskCoachId] = useState<number | null>(null)
   const [registerTournament, setRegisterTournament] = useState<Tournament | null>(null)
@@ -107,6 +108,7 @@ export function Newsfeed() {
         const isActuallyLive = liveStream?.status === 'live'
         const isAuthor = !!user && item.author.id === user.id
         const isEditing = editingId === item.id
+        const isDescriptionExpanded = expandedDescriptions.has(item.id)
 
         return (
         <article
@@ -196,7 +198,32 @@ export function Newsfeed() {
                   </p>
                 )}
 
-                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700">{item.body}</p>
+                <p
+                  id={`news-description-${item.id}`}
+                  className={`mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700 ${
+                    isDescriptionExpanded ? '' : 'line-clamp-2'
+                  }`}
+                >
+                  {item.body}
+                </p>
+                {item.body.length > 120 && (
+                  <button
+                    type="button"
+                    aria-expanded={isDescriptionExpanded}
+                    aria-controls={`news-description-${item.id}`}
+                    onClick={() =>
+                      setExpandedDescriptions((current) => {
+                        const next = new Set(current)
+                        if (next.has(item.id)) next.delete(item.id)
+                        else next.add(item.id)
+                        return next
+                      })
+                    }
+                    className="mt-1 text-sm font-semibold text-slate-500 hover:text-teal-700"
+                  >
+                    {isDescriptionExpanded ? 'See less' : 'See more'}
+                  </button>
+                )}
               </>
             )}
 
