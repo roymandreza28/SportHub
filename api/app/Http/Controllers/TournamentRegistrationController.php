@@ -108,15 +108,12 @@ class TournamentRegistrationController extends Controller
             }
 
             if ($tournament->min_age !== null || $tournament->max_age !== null) {
-                $dateOfBirth = $player && $player->playerProfile ? $player->playerProfile->date_of_birth : ($player ? $player->birthday : null);
-
-                if (! $dateOfBirth) {
+                $age = $this->playerAge($player);
+                if ($age === null) {
                     throw ValidationException::withMessages([
-                        'user_id' => ['This tournament requires a date of birth on the player profile.'],
+                        'user_id' => ['This tournament requires a registered date of birth for each player.'],
                     ]);
                 }
-
-                $age = $dateOfBirth->diffInYears(now());
 
                 if ($tournament->min_age !== null && $age < $tournament->min_age) {
                     throw ValidationException::withMessages([
@@ -219,15 +216,9 @@ class TournamentRegistrationController extends Controller
                 ->with('user.playerProfile:id,user_id,date_of_birth')
                 ->get()
                 ->first(function ($member) use ($tournament) {
-                    $user = $member->user;
-                    $dateOfBirth = $user?->playerProfile?->date_of_birth ?? $user?->birthday;
-                    if (! $dateOfBirth) {
-                        return true;
-                    }
+                    $age = $this->playerAge($member->user);
 
-                    $age = $dateOfBirth->diffInYears(now());
-
-                    if ($tournament->min_age !== null && $age < $tournament->min_age) {
+                    if ($age === null || ($tournament->min_age !== null && $age < $tournament->min_age)) {
                         return true;
                     }
 
@@ -316,6 +307,13 @@ class TournamentRegistrationController extends Controller
         $registration->setAttribute('payment_receipt', $this->paymentReceipt($tournament, $registration, $request->user()->id));
 
         return response()->json($registration->load('team.members.user:id,name,email', 'tournament:id,name'), 201);
+    }
+
+    private function playerAge(?User $player): ?int
+    {
+        $dateOfBirth = $player?->birthday ?? $player?->playerProfile?->date_of_birth;
+
+        return $dateOfBirth?->age;
     }
 
     // The organizer/facilitator's actual accept/reject call on a

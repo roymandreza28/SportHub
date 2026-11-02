@@ -3,6 +3,8 @@
 use App\Models\PlayerProfile;
 use App\Models\Sport;
 use App\Models\SportFormat;
+use App\Models\Team;
+use App\Models\TeamMember;
 use App\Models\Tournament;
 
 it('rejects an individual tournament for a team-category sport', function () {
@@ -123,6 +125,62 @@ it('rejects a player whose age falls outside the tournament age range', function
     $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", [
         'user_id' => $player->id,
     ])->assertStatus(422)->assertJsonValidationErrors('user_id');
+});
+
+it('calculates an individual player age from their registered birthday', function () {
+    $organizer = userWithRole('organizer');
+    $coach = userWithRole('coach');
+    $player = userWithRole('player');
+    $sport = Sport::create(['name' => 'Registered Birthday Sport']);
+    $player->update(['birthday' => now()->subYears(18)->toDateString()]);
+    PlayerProfile::create(['user_id' => $player->id]);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $organizer->id,
+        'sport_id' => $sport->id,
+        'name' => 'Adult Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(),
+        'status' => 'registration',
+        'min_age' => 18,
+    ]);
+
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/registrations", [
+        'user_id' => $player->id,
+    ])->assertCreated();
+});
+
+it('calculates every team member age from their registered birthday', function () {
+    $organizer = userWithRole('organizer');
+    $coach = userWithRole('coach');
+    $player = userWithRole('player');
+    $sport = Sport::create(['name' => 'Registered Birthday Team Sport', 'category' => 'team']);
+    $format = SportFormat::create(['sport_id' => $sport->id, 'name' => 'Squad', 'players_per_side' => 1]);
+    $player->update(['birthday' => now()->subYears(18)->toDateString()]);
+    PlayerProfile::create(['user_id' => $player->id]);
+
+    $team = Team::create([
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+        'captain_id' => $coach->id,
+        'status' => 'ready',
+    ]);
+    TeamMember::create(['team_id' => $team->id, 'user_id' => $player->id, 'status' => 'accepted']);
+
+    $tournament = Tournament::create([
+        'organizer_id' => $organizer->id,
+        'sport_id' => $sport->id,
+        'sport_format_id' => $format->id,
+        'name' => 'Adult Team Cup',
+        'format' => 'single_elimination',
+        'starts_at' => now()->addWeek(),
+        'status' => 'registration',
+        'min_age' => 18,
+    ]);
+
+    $this->actingAs($coach)->postJson("/api/tournaments/{$tournament->id}/team-registrations", [
+        'team_id' => $team->id,
+    ])->assertCreated();
 });
 
 it('allows a team-category sport tournament when sport_format_id is given', function () {

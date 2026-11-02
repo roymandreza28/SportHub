@@ -331,6 +331,9 @@ export function TournamentWizard({
               ? 'Open to all ages.'
               : `Age range: ${minAge === '' ? 'Any' : minAge} to ${maxAge === '' ? 'Any' : maxAge}.`}
           </p>
+          <p className="text-xs text-slate-500">
+            Each player&apos;s current age is calculated from their registered birthday when they register.
+          </p>
           {!hasValidAgeRange && <p className="text-xs text-red-600">Minimum age must be less than or equal to maximum age.</p>}
         </div>
         <div className={`${fieldGroup} sm:col-span-2`}>
