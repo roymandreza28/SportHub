@@ -62,6 +62,7 @@ class ProfileController extends Controller
                 'name' => $user->name,
                 'roles' => $user->getRoleNames()->values(),
                 'bio' => $user->playerProfile?->bio,
+                'birthday' => $user->birthday?->toDateString(),
                 'primary_sport' => $user->playerProfile?->primarySport?->name,
                 'avatar_url' => $user->avatar_url,
                 'cover_url' => $user->cover_url,

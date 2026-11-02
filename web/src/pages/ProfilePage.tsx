@@ -173,6 +173,16 @@ export function ProfilePage() {
             ) : (
               <p className="mt-3 text-sm text-slate-400">{isSelf ? 'Add a bio from Edit profile.' : 'No bio yet.'}</p>
             )}
+            {user.birthday && (
+              <p className="mt-3 flex items-center gap-2 text-sm text-slate-600">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Date of birth</span>
+                {new Date(`${user.birthday}T00:00:00`).toLocaleDateString(undefined, {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </p>
+            )}
             {user.primary_sport && (
               <p className="mt-3 flex items-center gap-2 text-sm text-slate-600">
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Primary sport</span>

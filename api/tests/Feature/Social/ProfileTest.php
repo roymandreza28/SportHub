@@ -31,8 +31,9 @@ it('reports friendship_status as self, none, pending_sent, pending_received, and
     $this->actingAs($me)->getJson("/api/social/users/{$friend->id}")->assertJsonPath('friendship_status', 'friends');
 });
 
-it('reports friends_count and primary_sport on the profile response', function () {
+it('reports friends_count, birthday, and primary_sport on the profile response', function () {
     $me = userWithRole('player');
+    $me->update(['birthday' => '2000-05-15']);
     $friendA = userWithRole('player');
     $friendB = userWithRole('coach');
 
@@ -52,6 +53,7 @@ it('reports friends_count and primary_sport on the profile response', function (
 
     $response->assertOk();
     $response->assertJsonPath('user.friends_count', 2);
+    $response->assertJsonPath('user.birthday', '2000-05-15');
     $response->assertJsonPath('user.primary_sport', 'Basketball');
     $response->assertJsonPath('user.bio', 'Hoops enjoyer');
 });
